@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}관리자 대시보드 – 랜딩헬프{% endblock %}
+{% block content %}
+{% if user.is_staff %}
+<div class="card" style="margin-bottom: 1.5rem;">
+  <h2 style="margin-top: 0;">관리 메뉴</h2>
+  <ul style="line-height: 2; padding-left: 1.25rem;">
+    <li><a href="{% url 'member_list' %}">가입자</a> — 회원 목록, 비밀번호 리셋</li>
+      <li><a href="{% url 'admin:content_carouselslide_changelist' %}">캐러셀 슬라이드 (목록)</a> — 수정·삭제</li>
+      <li><a href="{% url 'admin:content_carouselslide_add' %}" style="font-weight: 600;">➕ 캐러셀 슬라이드 추가</a></li>
+  </ul>
+</div>
+{% endif %}
+
+<div class="card">
+  <h1>{{ user.username }}님, 환영합니다</h1>
+  <p class="text-muted">관리자 계정입니다.</p>
+  <p><strong>내 플랜:</strong> {{ tier_label }}</p>
+  <p style="margin-top: 1rem;">
+    <a href="{% url 'content:list' %}" class="btn btn-primary">컨텐츠 보기</a>
+    {% if user.is_staff %}
+    <a href="/admin/" class="btn btn-outline" style="margin-left: 0.5rem;">Django Admin</a>
+    {% endif %}
+  </p>
+</div>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ content.title }}{% endblock %}
+{% block content %}
+<article>
+  <h1>{{ content.title }}</h1>
+  {% if content.category %}<p class="meta">카테고리: {{ content.category }}</p>{% endif %}
+  <p class="meta">수정일: {{ content.updated_at|date:"Y-m-d" }}</p>
+  {% if content.summary %}<p class="summary">{{ content.summary }}</p>{% endif %}
+  <div class="body">{{ content.body|linebreaks }}</div>
+</article>
+<p><a href="{% url 'content:list' %}">← 목록으로</a></p>
+{% endblock %}

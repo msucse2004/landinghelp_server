@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}랜딩헬프{% endblock %}</title>
+  <style>
+    :root {
+      --max-w: 980px;
+      --space: clamp(1rem, 4vw, 1.5rem);
+      --gap: clamp(1rem, 3vw, 2rem);
+      --radius: 8px;
+      --color-text: #1a1a1a;
+      --color-muted: #555;
+      --color-border: #ddd;
+      --color-bg: #f8f9fa;
+      --color-primary: #2563eb;
+      --color-primary-hover: #1d4ed8;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+      font-size: clamp(15px, 2vw, 16px);
+      line-height: 1.6;
+      color: var(--color-text);
+      margin: 0;
+      background: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .container {
+      width: 100%;
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 0 var(--space);
+    }
+    nav {
+      background: #fff;
+      border-bottom: 1px solid var(--color-border);
+      padding: var(--space) 0 0 0;
+    }
+    nav .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: var(--gap);
+    }
+    .brand {
+      font-weight: 700;
+      font-size: clamp(1.1rem, 2.5vw, 1.25rem);
+      color: var(--color-text);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+    }
+    .brand-logo {
+      height: 72px;
+      max-width: 320px;
+      object-fit: contain;
+      object-position: left center;
+      display: block;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: clamp(0.5rem, 2vw, 1rem);
+      flex-wrap: wrap;
+    }
+    .nav-links a {
+      color: var(--color-muted);
+      text-decoration: none;
+      padding: 0.5rem 0.75rem;
+      border-radius: var(--radius);
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .nav-links a:hover { color: var(--color-primary); background: var(--color-bg); }
+    .nav-links .btn { min-height: 44px; padding: 0.6rem 1.25rem; }
+    .nav-links .btn-primary { color: #fff; }
+    .nav-links .btn-primary:hover { color: #fff; }
+    main { flex: 1; padding: clamp(2rem, 6vw, 4rem) 0; }
+    .card {
+      background: #fff;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      padding: var(--gap);
+      margin-bottom: var(--gap);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.75rem 1.5rem;
+      min-height: 44px;
+      font-size: 1rem;
+      font-weight: 500;
+      text-decoration: none;
+      border-radius: var(--radius);
+      border: none;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-primary {
+      background: var(--color-primary);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--color-primary-hover); }
+    .btn-outline {
+      background: transparent;
+      color: var(--color-primary);
+      border: 2px solid var(--color-primary);
+    }
+    .btn-outline:hover { background: var(--color-bg); }
+    .btn-block { width: 100%; }
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    textarea {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      min-height: 44px;
+      font-size: 16px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      margin-bottom: 1rem;
+    }
+    textarea { min-height: 100px; resize: vertical; }
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+    }
+    label {
+      display: block;
+      margin-bottom: 0.35rem;
+      font-weight: 500;
+      color: var(--color-text);
+    }
+    .form-group { margin-bottom: 1.25rem; }
+    .form-errors { color: #dc2626; margin-bottom: 1rem; font-size: 0.9rem; }
+    .form-errors ul { margin: 0; padding-left: 1.25rem; }
+    h1 { font-size: clamp(1.5rem, 4vw, 2.25rem); margin: 0 0 0.5em; line-height: 1.3; }
+    h2 { font-size: clamp(1.25rem, 3vw, 1.5rem); margin: 0 0 0.5em; }
+    .text-muted, .meta, .summary { color: var(--color-muted); font-size: 0.95rem; }
+    .body { margin-top: 1rem; line-height: 1.6; }
+    ul.content-list { list-style: none; padding: 0; }
+    ul.content-list li { margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--color-border); }
+    .user-info-bar {
+      background: var(--color-bg);
+      border-bottom: 1px solid var(--color-border);
+      padding: 0.5rem var(--space);
+      font-size: 0.9rem;
+      color: var(--color-muted);
+    }
+    .user-info-bar .container {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+    }
+    .user-info-bar strong { color: var(--color-text); }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <header class="user-info-bar">
+    <div class="container">
+      {% if user.is_authenticated %}
+        <span><strong>ID</strong>: {{ user_id }}</span>
+        <span style="margin: 0 1rem;">|</span>
+        <span><strong>플랜</strong>: {{ user_plan_display }}</span>
+      {% else %}
+        <span><strong>Guest</strong></span>
+      {% endif %}
+    </div>
+  </header>
+  <nav>
+    <div class="container">
+      <a href="{% url 'home' %}" class="brand">
+        {% load static %}
+        <img src="{% static 'images/logo.png' %}" alt="Landing Help - 미국 정착의 시작" class="brand-logo">
+      </a>
+      <div class="nav-links">
+        {% if user.is_authenticated %}
+          <a href="{% url 'app_entry' %}">App</a>
+          <a href="{% url 'content:list' %}">컨텐츠</a>
+          {% if user.is_staff %}
+          <a href="/admin/">관리</a>
+          {% endif %}
+          <form action="{% url 'logout' %}" method="post" style="display:inline; margin:0;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline">로그아웃</button>
+          </form>
+        {% else %}
+          <a href="{% url 'login' %}">로그인</a>
+          <a href="{% url 'signup' %}" class="btn btn-primary">회원가입</a>
+        {% endif %}
+      </div>
+    </div>
+  </nav>
+  {% block below_nav %}{% endblock %}
+  <main>
+    <div class="container">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</body>
+</html>

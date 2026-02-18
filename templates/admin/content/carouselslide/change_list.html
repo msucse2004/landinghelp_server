@@ -1,0 +1,18 @@
+{% extends "adminsortable2/change_list.html" %}
+{% load i18n admin_urls admin_list %}
+
+{% block object-tools-items %}
+    {# Add 버튼 제거 - 저장 버튼 옆으로 이동 #}
+{% endblock %}
+
+{% block pagination %}
+<div class="changelist-footer" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+  <div style="flex: 1;">{% pagination cl %}</div>
+  <div style="display: flex; align-items: center; gap: 0.5rem;">
+    <a href="{% url cl.opts|admin_urlname:'add' %}" class="addlink" style="display: inline-block; padding: 0.5rem 0.75rem; text-decoration: none; background: var(--button-bg, #417690); color: var(--button-fg, #fff); border-radius: 4px;">{% translate 'Add' %} {{ cl.opts.verbose_name }}</a>
+    {% if cl.formset and cl.result_count %}
+    <input type="submit" name="_save" class="default" value="{% translate 'Save' %}">
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

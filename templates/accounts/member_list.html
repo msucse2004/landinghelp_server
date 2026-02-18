@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}가입자 목록 – 랜딩헬프{% endblock %}
+{% block content %}
+<h1>가입자 목록</h1>
+{% if messages %}
+<div class="card" style="margin-bottom: 1rem;">
+  {% for m in messages %}
+  <p style="margin: 0; color: {% if m.tags == 'error' %}#dc2626{% else %}#16a34a{% endif %};">{{ m }}</p>
+  {% endfor %}
+</div>
+{% endif %}
+<div class="card" style="overflow-x: auto;">
+  {% if users %}
+  <table style="width:100%; min-width: 600px; border-collapse: collapse;">
+    <thead>
+      <tr style="border-bottom: 2px solid var(--color-border); text-align: left;">
+        <th style="padding: 0.75rem;">이름</th>
+        <th style="padding: 0.75rem;">성별</th>
+        <th style="padding: 0.75rem;">아이디</th>
+        <th style="padding: 0.75rem;">이메일</th>
+        <th style="padding: 0.75rem;">역할</th>
+        <th style="padding: 0.75rem;">상태</th>
+        <th style="padding: 0.75rem;">플랜</th>
+        <th style="padding: 0.75rem;">가입일</th>
+        <th style="padding: 0.75rem;">관리</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr style="border-bottom: 1px solid var(--color-border);">
+        <td style="padding: 0.75rem;">{{ u.first_name|default:"-" }}</td>
+        <td style="padding: 0.75rem;">{{ u.get_gender_display|default:"-" }}</td>
+        <td style="padding: 0.75rem;">{{ u.username }}</td>
+        <td style="padding: 0.75rem;">{{ u.email|default:"-" }}</td>
+        <td style="padding: 0.75rem;">{{ u.get_role_display }}</td>
+        <td style="padding: 0.75rem;">{{ u.get_status_display }}</td>
+        <td style="padding: 0.75rem;">{{ u.plan_display }}</td>
+        <td style="padding: 0.75rem;">{{ u.date_joined|date:"Y-m-d H:i" }}</td>
+        <td style="padding: 0.75rem;">
+          <a href="{% url 'member_password_reset' u.id %}" class="btn btn-outline" style="padding: 0.35rem 0.6rem; min-height: 32px; font-size: 0.85rem;">비밀번호 리셋</a>
+          {% if u != user and not u.is_superuser %}
+          <form action="{% url 'member_delete' u.id %}" method="post" style="display: inline; margin-left: 0.25rem;">
+            {% csrf_token %}
+            <button type="submit" class="btn" onclick="return confirm('정말 삭제하시겠습니까?');" style="padding: 0.35rem 0.6rem; min-height: 32px; font-size: 0.85rem; background: #dc2626; color: #fff; border: none; border-radius: 8px;">삭제</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="text-muted">가입자가 없습니다.</p>
+  {% endif %}
+</div>
+{% endblock %}

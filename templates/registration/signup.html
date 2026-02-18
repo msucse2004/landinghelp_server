@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}회원가입 – 랜딩헬프{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 420px; margin: 0 auto;">
+  <h2>회원가입</h2>
+  {% if form.errors %}
+  <div class="form-errors">
+    {% for field, errors in form.errors.items %}
+      {% for error in errors %}
+        <p>{{ error }}</p>
+      {% endfor %}
+    {% endfor %}
+  </div>
+  {% endif %}
+  <form method="post" action="{% url 'signup' %}">
+    {% csrf_token %}
+    <div class="form-group">
+      <label for="id_first_name">이름</label>
+      <input type="text" name="first_name" id="id_first_name" value="{{ form.first_name.value|default:'' }}" required autofocus autocomplete="given-name" maxlength="150">
+    </div>
+    <div class="form-group">
+      <label for="id_birth_date">생년월일</label>
+      <input type="date" name="birth_date" id="id_birth_date" value="{{ form.birth_date.value|default:'' }}" required>
+    </div>
+    <div class="form-group">
+      <label for="id_gender">성별</label>
+      <select name="gender" id="id_gender" style="width:100%; padding:0.75rem 1rem; min-height:44px; font-size:16px; border:1px solid #ddd; border-radius:8px; margin-bottom:0; background:#fff;">
+        <option value="">선택하세요</option>
+        <option value="M" {% if form.gender.value == 'M' %}selected{% endif %}>남성</option>
+        <option value="F" {% if form.gender.value == 'F' %}selected{% endif %}>여성</option>
+        <option value="O" {% if form.gender.value == 'O' %}selected{% endif %}>기타</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="id_username">아이디</label>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <input type="text" name="username" id="id_username" value="{{ form.username.value|default:'' }}" required autocomplete="username" maxlength="150" style="flex: 1; margin-bottom: 0;">
+        <span id="username-status" aria-live="polite"></span>
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="id_email">이메일</label>
+      <input type="email" name="email" id="id_email" value="{{ form.email.value|default:'' }}" required autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label for="id_password1">비밀번호</label>
+      <input type="password" name="password1" id="id_password1" required autocomplete="new-password">
+    </div>
+    <div class="form-group">
+      <label for="id_password2">비밀번호 확인</label>
+      <input type="password" name="password2" id="id_password2" required autocomplete="new-password">
+    </div>
+    <div class="form-group">
+      <label for="id_role">계정 유형</label>
+      <select name="role" id="id_role" required style="width:100%; padding:0.75rem 1rem; min-height:44px; font-size:16px; border:1px solid #ddd; border-radius:8px; margin-bottom:0; background:#fff;">
+        <option value="">선택하세요</option>
+        <option value="CUSTOMER" {% if form.role.value == 'CUSTOMER' %}selected{% endif %}>고객 (Customer)</option>
+        <option value="AGENT" {% if form.role.value == 'AGENT' %}selected{% endif %}>에이전트 (Agent)</option>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary btn-block">가입하기</button>
+  </form>
+</div>
+{% block extra_head %}
+<style>
+  .username-ok { color: #16a34a; font-size: 1.25rem; }
+  .username-dup { color: #dc2626; font-size: 1.25rem; }
+  .username-checking { color: #94a3b8; font-size: 0.9rem; }
+</style>
+{% endblock %}
+<script>
+(function(){
+  var input = document.getElementById('id_username');
+  var status = document.getElementById('username-status');
+  var timer = null;
+  if (!input || !status) return;
+
+  function check() {
+    var val = (input.value || '').trim();
+    status.textContent = '';
+    status.className = '';
+    if (val.length < 2) return;
+    status.textContent = '확인 중...';
+    status.className = 'username-checking';
+    fetch('/api/check-username/?username=' + encodeURIComponent(val))
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if (data.available === true) {
+          status.textContent = '\u2713';  /* ✓ */
+          status.className = 'username-ok';
+        } else if (data.available === false) {
+          status.textContent = '\u2717';  /* ✗ */
+          status.className = 'username-dup';
+        } else {
+          status.textContent = '';
+          status.className = '';
+        }
+      })
+      .catch(function(){ status.textContent = ''; status.className = ''; });
+  }
+
+  input.addEventListener('blur', function(){ if ((input.value||'').trim().length>=2) check(); });
+  input.addEventListener('input', function(){
+    clearTimeout(timer);
+    var val = (input.value||'').trim();
+    if (val.length < 2) { status.textContent = ''; status.className = ''; return; }
+    timer = setTimeout(check, 400);
+  });
+})();
+</script>
+{% endblock %}

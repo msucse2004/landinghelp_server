@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+{% block title %}랜딩헬프 – 기본 정보부터 시작하세요{% endblock %}
+{% block extra_head %}
+{% load static %}
+<style>
+  .intro-carousel {
+    width: 100vw;
+    margin-left: calc(-50vw + 50%);
+    margin-top: 0;
+    margin-bottom: clamp(2rem, 5vw, 3rem);
+    overflow: hidden;
+    cursor: grab;
+    user-select: none;
+    position: relative;
+  }
+  .intro-carousel:active { cursor: grabbing; }
+  .intro-carousel-track {
+    display: flex;
+    transition: transform 0.35s ease-out;
+  }
+  .intro-carousel-slide {
+    flex: 0 0 100%;
+    min-width: 100%;
+    height: clamp(200px, 40vw, 320px);
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .intro-carousel-slide::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(30, 58, 95, 0.5);
+  }
+  .intro-carousel-slide h2,
+  .intro-carousel-slide p {
+    position: relative;
+    z-index: 1;
+    color: #fff;
+    text-align: center;
+    margin: 0;
+    padding: 0 1.5rem;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  .intro-carousel-slide h2 {
+    font-size: clamp(1.25rem, 3.5vw, 1.75rem);
+    margin-bottom: 0.5rem;
+  }
+  .intro-carousel-slide p {
+    font-size: clamp(0.9rem, 2vw, 1rem);
+    opacity: 0.95;
+  }
+  .intro-carousel-dots {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .intro-carousel-dots button {
+    pointer-events: auto;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.2s;
+    padding: 0;
+  }
+  .intro-carousel-dots button.active {
+    background: #fff;
+  }
+</style>
+{% endblock %}
+{% block below_nav %}
+{% if carousel_slides %}
+<div class="intro-carousel" id="introCarousel" role="region" aria-label="소개 캐러셀" data-auto-interval="3000">
+  <div class="intro-carousel-track" id="introCarouselTrack">
+    {# 클론: 마지막 슬라이드 (처음으로 prev 시 자연스러운 전환) #}
+    {% with slide=carousel_slides|last %}
+    <div class="intro-carousel-slide intro-carousel-clone" data-clone="last" style="{% if slide.background_type == 'IMAGE' and slide.image %}background-image: url('{{ slide.image.url }}');{% elif slide.gradient_css %}background-image: {{ slide.gradient_css }};{% else %}background-image: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);{% endif %}">
+      <h2>{{ slide.title }}</h2>
+      {% if slide.subtitle %}<p>{{ slide.subtitle }}</p>{% endif %}
+    </div>
+    {% endwith %}
+    {% for slide in carousel_slides %}
+    <div class="intro-carousel-slide" style="{% if slide.background_type == 'IMAGE' and slide.image %}background-image: url('{{ slide.image.url }}');{% elif slide.gradient_css %}background-image: {{ slide.gradient_css }};{% else %}background-image: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);{% endif %}">
+      <h2>{{ slide.title }}</h2>
+      {% if slide.subtitle %}<p>{{ slide.subtitle }}</p>{% endif %}
+    </div>
+    {% endfor %}
+    {# 클론: 첫 슬라이드 (마지막에서 next 시 자연스러운 전환) #}
+    {% with slide=carousel_slides|first %}
+    <div class="intro-carousel-slide intro-carousel-clone" data-clone="first" style="{% if slide.background_type == 'IMAGE' and slide.image %}background-image: url('{{ slide.image.url }}');{% elif slide.gradient_css %}background-image: {{ slide.gradient_css }};{% else %}background-image: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);{% endif %}">
+      <h2>{{ slide.title }}</h2>
+      {% if slide.subtitle %}<p>{{ slide.subtitle }}</p>{% endif %}
+    </div>
+    {% endwith %}
+  </div>
+  <div class="intro-carousel-dots" id="introCarouselDots"></div>
+</div>
+{% endif %}
+{% endblock %}
+{% block content %}
+{% if carousel_slides %}
+<script>
+(function() {
+  var carousel = document.getElementById('introCarousel');
+  var track = document.getElementById('introCarouselTrack');
+  var dotsContainer = document.getElementById('introCarouselDots');
+  var slides = track.querySelectorAll('.intro-carousel-slide');
+  var total = slides.length;
+  var realCount = total - 2;
+  var current = 0;
+  var startX = null, deltaX = 0;
+  var isAnimating = false;
+
+  for (var i = 0; i < realCount; i++) {
+    var btn = document.createElement('button');
+    btn.setAttribute('aria-label', (i + 1) + '번째 슬라이드');
+    btn.addEventListener('click', function(idx) {
+      return function() { goTo(idx); };
+    }(i));
+    if (i === 0) btn.classList.add('active');
+    dotsContainer.appendChild(btn);
+  }
+
+  function updateDots() {
+    dotsContainer.querySelectorAll('button').forEach(function(b, i) {
+      b.classList.toggle('active', i === current);
+    });
+  }
+  function goTo(idx) {
+    if (isAnimating) return;
+    current = Math.max(0, Math.min(idx, realCount - 1));
+    track.style.transition = 'transform 0.35s ease-out';
+    track.style.transform = 'translateX(-' + ((current + 1) * 100) + '%)';
+    updateDots();
+  }
+  function goNext() {
+    if (isAnimating) return;
+    if (current === realCount - 1) {
+      isAnimating = true;
+      track.style.transition = 'transform 0.35s ease-out';
+      track.style.transform = 'translateX(-' + (total * 100) + '%)';
+      track.addEventListener('transitionend', function onEnd() {
+        track.removeEventListener('transitionend', onEnd);
+        track.style.transition = 'none';
+        current = 0;
+        track.style.transform = 'translateX(-100%)';
+        updateDots();
+        track.offsetHeight;
+        track.style.transition = 'transform 0.35s ease-out';
+        isAnimating = false;
+      }, { once: true });
+    } else {
+      current++;
+      track.style.transition = 'transform 0.35s ease-out';
+      track.style.transform = 'translateX(-' + ((current + 1) * 100) + '%)';
+      updateDots();
+    }
+  }
+  function goPrev() {
+    if (isAnimating) return;
+    if (current === 0) {
+      isAnimating = true;
+      track.style.transition = 'transform 0.35s ease-out';
+      track.style.transform = 'translateX(0%)';
+      track.addEventListener('transitionend', function onEnd() {
+        track.removeEventListener('transitionend', onEnd);
+        track.style.transition = 'none';
+        current = realCount - 1;
+        track.style.transform = 'translateX(-' + (realCount * 100) + '%)';
+        updateDots();
+        track.offsetHeight;
+        track.style.transition = 'transform 0.35s ease-out';
+        isAnimating = false;
+      }, { once: true });
+    } else {
+      current--;
+      track.style.transition = 'transform 0.35s ease-out';
+      track.style.transform = 'translateX(-' + ((current + 1) * 100) + '%)';
+      updateDots();
+    }
+  }
+  var autoInterval = parseInt(carousel.getAttribute('data-auto-interval') || '0', 10);
+  var autoTimer = null;
+  if (autoInterval > 0) {
+    autoTimer = setInterval(goNext, autoInterval);
+    carousel.addEventListener('mousedown', function() { clearInterval(autoTimer); });
+    carousel.addEventListener('touchstart', function() { clearInterval(autoTimer); }, { passive: true });
+  }
+
+  track.style.transform = 'translateX(-100%)';
+
+  function onPointerUp() {
+    if (startX === null) return;
+    track.style.transition = 'transform 0.35s ease-out';
+    var threshold = track.offsetWidth * 0.15;
+    if (deltaX > threshold) {
+      if (current > 0) goTo(current - 1);
+      else goPrev();
+    } else if (deltaX < -threshold) {
+      if (current < realCount - 1) goTo(current + 1);
+      else goNext();
+    } else {
+      goTo(current);
+    }
+    startX = null;
+    deltaX = 0;
+  }
+
+  carousel.addEventListener('mousedown', function(e) {
+    if (e.button === 0) {
+      startX = e.clientX;
+      track.style.transition = 'none';
+      deltaX = 0;
+    }
+  });
+  carousel.addEventListener('mousemove', function(e) {
+    if (startX !== null) {
+      deltaX = e.clientX - startX;
+      var base = (current + 1) * 100;
+      var maxDrag = track.offsetWidth * 0.3;
+      var dx = Math.max(-maxDrag, Math.min(maxDrag, deltaX));
+      track.style.transform = 'translateX(calc(-' + base + '% + ' + dx + 'px))';
+    }
+  });
+  carousel.addEventListener('mouseup', function(e) { if (e.button === 0) onPointerUp(); });
+  carousel.addEventListener('mouseleave', function(e) { if (e.buttons === 0) onPointerUp(); });
+  carousel.addEventListener('touchstart', function(e) {
+    startX = e.touches[0].clientX;
+    track.style.transition = 'none';
+    deltaX = 0;
+  }, { passive: true });
+  carousel.addEventListener('touchmove', function(e) {
+    if (startX !== null) {
+      deltaX = e.touches[0].clientX - startX;
+      var base = (current + 1) * 100;
+      var maxDrag = track.offsetWidth * 0.3;
+      var dx = Math.max(-maxDrag, Math.min(maxDrag, deltaX));
+      track.style.transform = 'translateX(calc(-' + base + '% + ' + dx + 'px))';
+    }
+  }, { passive: true });
+  carousel.addEventListener('touchend', function(e) {
+    if (e.changedTouches) onPointerUp();
+  });
+})();
+</script>
+{% endif %}
+
+<section class="hero">
+  <h1>랜딩헬프</h1>
+  <p class="text-muted" style="font-size: clamp(1rem, 2.5vw, 1.15rem); margin-bottom: clamp(1.5rem, 4vw, 2.5rem);">
+    랜딩 페이지에 필요한 기본 정보를 쉽게 확인하고 활용하세요.
+  </p>
+  <div style="display: flex; flex-wrap: wrap; gap: clamp(0.75rem, 2vw, 1rem);">
+    <a href="{% url 'signup' %}" class="btn btn-primary" style="min-height: 48px;">회원가입</a>
+    <a href="{% url 'login' %}" class="btn btn-outline" style="min-height: 48px;">로그인</a>
+  </div>
+</section>
+
+<section class="card" style="margin-top: clamp(2rem, 5vw, 3rem);">
+  <p class="text-muted" style="margin: 0; font-size: 0.95rem;">
+    <strong>Basic</strong> 플랜으로도 기본 정보 접근이 가능합니다.
+  </p>
+</section>
+{% endblock %}

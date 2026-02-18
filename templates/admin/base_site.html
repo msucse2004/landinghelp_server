@@ -1,0 +1,16 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block branding %}
+{{ site_header|default:_('Django administration') }}
+{% if user.is_anonymous %}
+{% include "admin/color_theme_toggle.html" %}
+{% endif %}
+{% endblock %}
+
+{% block nav-global %}
+{% if user.is_authenticated %}
+<a href="{% url 'home' %}" style="margin-right: 1rem; color: #417690;">홈페이지</a>
+{% endif %}
+{% endblock %}

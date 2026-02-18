@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}접근 제한{% endblock %}
+{% block content %}
+<h1>접근이 제한되었습니다</h1>
+<p>이 컨텐츠를 보시려면 <strong>업그레이드</strong>가 필요합니다.</p>
+<p>더 높은 등급의 플랜으로 업그레이드하시면 이용하실 수 있습니다.</p>
+<p><a href="{% url 'content:list' %}">← 목록으로</a></p>
+{% endblock %}

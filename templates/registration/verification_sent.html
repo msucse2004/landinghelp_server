@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}이메일 인증 안내 – 랜딩헬프{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 480px; margin: 0 auto;">
+  <h2>이메일을 확인해주세요</h2>
+  <p>입력하신 이메일 주소로 인증 링크를 보냈습니다.</p>
+  <p class="text-muted">이메일의 링크를 클릭하면 가입이 완료됩니다. 링크는 24시간 동안 유효합니다.</p>
+  <p><a href="{% url 'home' %}" class="btn btn-primary">홈으로</a></p>
+</div>
+{% endblock %}

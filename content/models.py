@@ -75,7 +75,7 @@ class CarouselSlide(models.Model):
 
     title = models.CharField(max_length=200, verbose_name='제목')
     subtitle = models.CharField(max_length=300, blank=True, verbose_name='부제목')
-    order = models.PositiveIntegerField(default=0, verbose_name='순서')
+    order = models.PositiveIntegerField(default=0, verbose_name='정렬')
     is_active = models.BooleanField(default=True, verbose_name='표시')
     background_type = models.CharField(
         max_length=20,

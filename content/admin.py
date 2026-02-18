@@ -10,10 +10,10 @@ class CarouselSlideAdmin(SortableAdminMixin, admin.ModelAdmin):
     list_display = ('order_index', 'title', 'subtitle', 'background_type', 'is_active', 'updated_at')
 
     def order_index(self, obj):
-        """1-based 순서 표시"""
+        """1-based 순서 표시 (드래그 후 JS로 자동 갱신)"""
         return obj.order + 1
 
-    order_index.short_description = '순서'
+    order_index.short_description = 'No.'
     list_editable = ('is_active',)
     list_display_links = ('title',)
     list_filter = ('background_type', 'is_active')

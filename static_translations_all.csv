@@ -1,0 +1,323 @@
+key,ko,en,es,zh-hans,zh-hant,vi
+1~5점,1~5점,1 to 5 points,1 a 5 puntos,1 至 5 分,1 至 5 點,1~5 điểm
+24시간 미수락 시 에이전트에게 보낸 독촉 메시지 발송 시각,24시간 미수락 시 에이전트에게 보낸 독촉 메시지 발송 시각,time of nudge message sent to agent after 24 hours of nonacceptance,hora de envío del mensaje nudge al agente tras 24 horas de no recepciones,24 小时未接收后向代理发送提示信息的时间,24 小時未接收訊息後，傳送給代理的推薦訊息時間,thời gian gửi tin nhắn nhắc nhở đến đại lý khi không nhận được trong vòng 24 giờ
+AI 서비스 추천 / 스케줄 생성,AI 서비스 추천 / 스케줄 생성,Create AI service recommendations/schedules,Recomendación de servicios y creación de calendarios mediante IA,人工智能服务推荐/日程创建,AI 服務推薦/排程建立,Đề xuất dịch vụ AI / Tạo lịch trình
+AI 서비스 추천은 스탠다드 이상 등급에서 이용 가능합니다.,AI 서비스 추천은 스탠다드 이상 등급에서 이용 가능합니다.,AI service recommendations are available on Standard and above.,Las recomendaciones del servicio AI están disponibles a partir de la versión Estándar.,标准版及以上版本可提供人工智能服务建议。,AI 服務建議適用於 Standard 及以上版本。,Dịch vụ đề xuất AI có thể sử dụng ở cấp độ tiêu chuẩn trở lên.
+AI 추천 및 에이전트 도움을 원하시면 상위 요금제로 업그레이드하세요.,AI 추천 및 에이전트 도움을 원하시면 상위 요금제로 업그레이드하세요.,Upgrade to a higher plan for AI recommendations and agent assistance.,Actualice a un plan superior para obtener recomendaciones de IA y asistencia de agentes.,升级到更高级计划，可获得人工智能建议和代理协助。,升級至更高的方案，以獲得 AI 建議和代理協助。,"Nếu bạn muốn nhận được đề xuất từ AI và sự trợ giúp từ đại lý, hãy nâng cấp lên gói cước cao hơn."
+AI 추천 사용,AI 추천 사용,Using AI recommendations,Recomendaciones de la IA,使用人工智能建议,使用 AI 建議,Sử dụng đề xuất AI
+Accept rate (수락률),Accept rate (수락률),Accept rate,Tasa de aceptación,接受率,接受率,Tỷ lệ chấp nhận (Accept rate)
+Agent,Agent,Agent,Agente,代理,代理,Đại lý
+Agent 가격,Agent 가격,Agent pricing,Precios de los agentes,代理定价,代理定價,Giá đại lý
+Agent 목록을 불러올 수 없습니다.,Agent 목록을 불러올 수 없습니다.,Unable to retrieve the Agent list.,No se puede recuperar la lista de agentes.,无法检索代理列表。,無法擷取 Agent 清單。,Không thể tải danh sách đại lý.
+Agent 선택 필요,Agent 선택 필요,Requires Agent selection,Requiere selección de Agente,需要选择代理,需要選擇代理,Cần chọn đại lý
+Agent 신청 항목 · 과금,Agent 신청 항목 · 과금,Agent application topics - Billing,Tema de la solicitud de agente - Facturación,代理申请主题 - 账单,代理申請主題 - 帳單,Đăng ký đại lý · Thanh toán
+Checkout 합계,Checkout 합계,Checkout total,Total de la caja,结账总额,結帳總額,Tổng số tiền thanh toán
+Customer 가격,Customer 가격,Customer pricing,Precios para los clientes,客户定价,客戶定價,Giá khách hàng
+"EMAIL_HOST_USER, EMAIL_HOST_PASSWORD 환경변수가 설정되지 않았습니다.","EMAIL_HOST_USER, EMAIL_HOST_PASSWORD 환경변수가 설정되지 않았습니다.","The EMAIL_HOST_USER, EMAIL_HOST_PASSWORD environment variables are not set.",Las variables de entorno EMAIL_HOST_USER y EMAIL_HOST_PASSWORD no están definidas.,未设置 EMAIL_HOST_USER 和 EMAIL_HOST_PASSWORD 环境变量。,EMAIL_HOST_USER 和 EMAIL_HOST_PASSWORD 環境變數未設定。,Biến môi trường EMAIL_HOST_USER và EMAIL_HOST_PASSWORD chưa được thiết lập.
+EN English,EN English,EN English,ES Inglés,EN 英语,EN 英文,EN Tiếng Anh
+ES Español,ES Español,ES Español,ES English,ES 西班牙语,ES 西班牙語,ES Tiếng Tây Ban Nha
+KR 한국어,KR 한국어,KR Korean,KR Coreano,KR 韩语,KR 韓文,KR Tiếng Hàn
+LifeAI USA와 함께 비즈니스를 성장시키세요.,LifeAI USA와 함께 비즈니스를 성장시키세요.,Grow your business with LifeAI USA.,Haga crecer su negocio con LifeAI USA.,与 LifeAI USA 一起发展您的业务。,與 LifeAI USA 一起發展您的業務。,Hãy phát triển doanh nghiệp của bạn cùng LifeAI USA.
+VI Tiếng Việt,VI Tiếng Việt,VI Tiếng Việt,VI Tiếng Việt,VI Tiếng Việt,VI Tiếng Việt,VI Tiếng Việt
+ZH 中文(简体),ZH 中文(简体),ZH 中文(简体),ZH 中文(简体),ZH 中文（简体）,ZH 中文(簡體),ZH Tiếng Trung (Giản thể)
+ZH 中文(繁體),ZH 中文(繁體),ZH 中文(繁體),ZH 中文(繁體),ZH 中文(繁體),ZH 中文(繁體),ZH Tiếng Trung (Phồn thể)
+"{""YYYY-MM-DD"": [{""code"":""X"",""label"":""Y""}, ...]}","{""YYYY-MM-DD"": [{""code"":""X"",""label"":""Y""}, ...]}","{""YYYY-MM-DD"": [{""code"":""X"",""label"":""Y""}, ...]}","{""AAAA-MM-DD"": [{""code"":""X"",""label"":""Y""}, ...]}","{""YYYY-MM-DD""：[{""code"":""X"",""label"":""Y""}, ...]}","{""YYYY-MM-DD""：[{""code"":""X"",""label"":""Y""}, ...]}","{""YYYY-MM-DD"": [{""code"":""X"",""label"":""Y""}, ...]}"
+가능한 Agent,가능한 Agent,possible Agents,posibles agentes,可能的代理,可能的代理商,đại lý có thể
+가입 시 사용한 이메일,가입 시 사용한 이메일,the email you used to sign up,la dirección de correo electrónico que utilizó para registrarse,您注册时使用的电子邮件,您註冊時使用的電子郵件,email used when registering
+가입하기,가입하기,sign up,inscríbete,注册,註冊,đăng ký
+각 지역 게시판에서 다양한 정보를 찾아보세요.,각 지역 게시판에서 다양한 정보를 찾아보세요.,find a wealth of information on your local message board.,encuentre abundante información en los tablones de anuncios de su localidad.,在当地的留言板上可以找到丰富的信息。,在您當地的留言板上可以找到豐富的資訊。,hãy tìm kiếm các thông tin đa dạng trên bảng thông báo của từng khu vực.
+건,건,guns,armas,枪支,槍,건
+견적 신청,견적 신청,request a quote,solicitar un presupuesto,索取报价,要求報價,yêu cầu báo giá
+견적/스케줄 식별용 (예: DRIVERS_LICENSE). 비어있으면 id 사용,견적/스케줄 식별용 (예: DRIVERS_LICENSE). 비어있으면 id 사용,"for quote/schedule identification (e.g. DRIVERS_LICENSE). if empty, use ID","para la identificación de citas/programas (por ejemplo, DRIVERS_LICENSE). si está vacío, utilice ID",用于引用/计划标识（如 DRIVERS_LICENSE）。如果为空，则使用 ID,用於引用/排程識別 (例如 DRIVERS_LICENSE)。如果為空，請使用 ID,"dùng để xác định báo giá/lịch trình (ví dụ: DRIVERS_LICENSE). Nếu trống, sử dụng id"
+결재 대기,결재 대기,waiting for payment,a la espera del pago,等待付款,等待付款,đang chờ phê duyệt
+결재 대기중,결재 대기중,waiting for payment,a la espera del pago,等待付款,等待付款,đang chờ phê duyệt
+결제 처리에 실패했습니다.,결제 처리에 실패했습니다.,payment processing failed.,no se ha podido procesar el pago.,付款处理失败。,付款處理失敗。,thanh toán không thành công.
+결제를 완료하면 에이전트에게 약속이 전달됩니다.,결제를 완료하면 에이전트에게 약속이 전달됩니다.,"after you complete the payment, the appointment is delivered to the agent.","una vez efectuado el pago, la cita se entrega al agente.",付款后，预约将交付给代理。,付款後，預約將交付給代理。,"khi hoàn tất thanh toán, cuộc hẹn sẽ được chuyển đến đại lý."
+결제하기,결제하기,make a payment,realizar un pago,付款,付款,thanh toán
+결제하시겠습니까?,결제하시겠습니까?,want to pay?,¿Quiere pagar?,要付钱吗？,要付款嗎？,quý khách có muốn thanh toán không?
+계정 유형,계정 유형,account types,tipo de cuenta,账户类型,帳戶類型,loại tài khoản
+고객 (Customer),고객 (Customer),customer,cliente,客户,客戶,khách hàng (Customer)
+고객 평가,고객 평가,customer reviews,testimonios de clientes,客户评价,客戶推薦,đánh giá của khách hàng
+고객 평가 내역,고객 평가 내역,customer review history,historial de opiniones de clientes,客户评价历史,客戶評論記錄,lịch sử đánh giá của khách hàng
+공항픽업,공항픽업,airport pickup,recogida en el aeropuerto,机场接送,機場接送,đón tại sân bay
+관련 서비스를 찾지 못했습니다. 직접 선택해 주세요.,관련 서비스를 찾지 못했습니다. 직접 선택해 주세요.,"no related services found, please select your own.","no se han encontrado servicios relevantes, por favor seleccione el suyo.",未找到相关服务，请自行选择。,未找到相關服務，請自行選擇。,không tìm thấy dịch vụ liên quan. Vui lòng chọn trực tiếp.
+관리,관리,Admin,Administrar,管理,管理,Quản lý
+광고 등 클릭 시 이동할 URL,광고 등 클릭 시 이동할 URL,"uRL to go to when clicking on an ad, etc","uRL a la que ir al hacer clic en un anuncio, etc",点击广告时要转到的 URL 等。,點選廣告時要前往的 URL 等。,"uRL chuyển hướng khi nhấp vào quảng cáo, v.v"
+광고 등록 신청,광고 등록 신청,apply to list an ad,solicite el registro de su anuncio,申请注册您的广告,申請註冊您的廣告,đăng ký quảng cáo
+광고 문의,광고 문의,advertising inquiries,consultas publicitarias,广告咨询,廣告查詢,quảng cáo
+광고 부제목,광고 부제목,ad subheadings,subtítulos de anuncios,广告小标题,廣告副標題,tiêu đề phụ quảng cáo
+광고 제목,광고 제목,ad title,título del anuncio,广告标题,廣告標題,tiêu đề quảng cáo
+그라데이션 CSS,그라데이션 CSS,gradient CSS,gradiente CSS,渐变 CSS,漸層 CSS,gradient CSS
+금,금,Fri,oro,金色,黃金,vàng
+기본 메뉴얼을 참고하여 직접 진행할 수 있는 서비스를 제공합니다.,기본 메뉴얼을 참고하여 직접 진행할 수 있는 서비스를 제공합니다.,we provide a basic manual to help you get started.,le ofrecemos servicios que puede realizar usted mismo consultando el manual principal.,我们提供的服务，您可以参照主手册自行操作。,我們提供的服務，您可以參考主手冊自行操作。,chúng tôi cung cấp dịch vụ mà bạn có thể tự thực hiện bằng cách tham khảo hướng dẫn cơ bản.
+기본 메뉴얼을 보고 따라 할 수 있는 서비스를 제공합니다.,기본 메뉴얼을 보고 따라 할 수 있는 서비스를 제공합니다.,We provide services that you can follow using the basic manual.,Ofrecemos servicios que puede seguir con el manual básico.,我们提供可按照基本手册操作的服务。,我們提供可依基本手冊操作之服務。,Chúng tôi cung cấp dịch vụ mà bạn có thể làm theo bằng sổ tay cơ bản.
+기본 정보부터 시작하세요,기본 정보부터 시작하세요,Start with the basics,empezar por lo básico,从基础做起,從基本開始,bắt đầu từ thông tin cơ bản
+기업 광고,기업 광고,enterprise Ads,publicidad corporativa,企业广告,企業廣告,quảng cáo doanh nghiệp
+기업서비스,기업서비스,Corporate Services,Servicios corporativos,企业服务,企業服務,Dịch vụ doanh nghiệp
+기타,기타,other,其他,其他,其他,khác
+교통/차량,교통/차량,Transportation / Vehicle,Transporte / Vehículo,交通/车辆,交通/車輛,Giao thông / Xe
+주거/임대,주거/임대,Housing / Rental,Vivienda / Alquiler,住房/租赁,住房/租賃,Nhà ở / Thuê
+생활편의,생활편의,Daily convenience,Vida cotidiana,生活便利,生活便利,Sinh hoạt
+의료/교육,의료/교육,Medical / Education,Médico / Educación,医疗/教育,醫療/教育,Y tế / Giáo dục
+행정/문서,행정/문서,Administration / Documents,Administración / Documentos,行政/文件,行政/文件,Hành chính / Tài liệu
+"날짜별 서비스: {""YYYY-MM-DD"": [""SERVICE_CODE"", ...]}","날짜별 서비스: {""YYYY-MM-DD"": [""SERVICE_CODE"", ...]}","service by date: {""YYYY-MM-DD"": [""SERVICE_CODE"", ...]}","servicio por fecha: {""AAAA-MM-DD"": [""CÓDIGO_SERVICIO"", ...]}","按日期提供服务： {""YYYY-MM-DD""：[""服务代码"", ...]}","按日期提供服務： {""YYYY-MM-DD""：[「服務編號」, ...]}","dịch vụ theo ngày: {""YYYY-MM-DD"": [""SERVICE_CODE"", ...]}"
+남성,남성,male,hombre,男,男性,nam giới
+내 정착 플랜,내 정착 플랜,My settlement plan,mi plan de liquidación,我的和解计划,我的和解計劃,kế hoạch định cư của tôi
+네트워크 오류가 발생했을 수 있습니다. 다시 시도해 주세요.,네트워크 오류가 발생했을 수 있습니다. 다시 시도해 주세요.,there may have been a network error. please try again.,"es posible que se haya producido un error en la red. por favor, inténtelo de nuevo.",可能出现网络错误。请重试。,可能發生網路錯誤。請再試一次。,có thể đã xảy ra lỗi mạng. Vui lòng thử lại.
+년,년,year,año,年,年,năm
+1월,1월,Jan,Ene,1月,1月,Tháng 1
+2월,2월,Feb,Feb,2月,2月,Tháng 2
+3월,3월,Mar,Mar,3月,3月,Tháng 3
+4월,4월,Apr,Abr,4月,4月,Tháng 4
+5월,5월,May,May,5月,5月,Tháng 5
+6월,6월,Jun,Jun,6月,6月,Tháng 6
+7월,7월,Jul,Jul,7月,7月,Tháng 7
+8월,8월,Aug,Ago,8月,8月,Tháng 8
+9월,9월,Sep,Sep,9月,9月,Tháng 9
+10월,10월,Oct,Oct,10月,10月,Tháng 10
+11월,11월,Nov,Nov,11月,11月,Tháng 11
+12월,12월,Dec,Dic,12月,12月,Tháng 12
+노출 위치,노출 위치,exposure position,posición de exposición,曝光位置,曝光位置,vị trí phơi sáng
+다양한 게시판에서 경험을 나누고 질문하세요.,다양한 게시판에서 경험을 나누고 질문하세요.,share your experiences and ask questions on the various boards.,comparta sus experiencias y haga preguntas en los distintos foros.,在各个板块上分享您的经验并提出问题。,在各個討論區分享您的經驗並提出問題。,hãy chia sẻ kinh nghiệm và đặt câu hỏi trên các diễn đàn khác nhau.
+다음,다음,next,siguiente,下一页,下一頁,tiếp theo
+닫기,닫기,Close,Cerrar,关闭,關閉,Đóng
+달력에 서비스를 드래그하고 Agent를 선택하면 결제할 항목이 여기에 표시됩니다. (이미 결제한 항목은 표시되지 않습니다.),달력에 서비스를 드래그하고 Agent를 선택하면 결제할 항목이 여기에 표시됩니다. (이미 결제한 항목은 표시되지 않습니다.),"when you drag a service to the calendar and select Agent, the items you want to pay for appear here. (Items that you've already paid for don't appear.)","cuando arrastra un servicio al calendario y selecciona Agente, los elementos que desea pagar aparecen aquí (los elementos que ya ha pagado no aparecen)",当您把服务拖到日历上并选择代理时，您要支付的项目就会出现在这里（已经支付的项目不会出现）。,當您將服務拖曳到行事曆上並選擇代理時，您要付款的項目就會出現在這裡 (已付款的項目不會出現)。,"kéo dịch vụ vào lịch và chọn Agent, các mục thanh toán sẽ hiển thị ở đây. (Các mục đã thanh toán sẽ không hiển thị.)"
+달력에서 서비스 카드를 클릭해 Agent를 선택한 항목만 과금되며 여기에 표시됩니다.,달력에서 서비스 카드를 클릭해 Agent를 선택한 항목만 과금되며 여기에 표시됩니다.,only the items for which you selected Agent by clicking the service card in the calendar will be billed and displayed here.,sólo se facturarán y mostrarán aquí los elementos para los que haya seleccionado Agente haciendo clic en una tarjeta de servicio en el calendario.,只有通过点击日历中的服务卡选择代理的项目才会在此计费和显示。,只有您透過按一下行事曆中的服務卡選擇代理的項目，才會在此處計費和顯示。,chỉ những mục được chọn bằng cách nhấp vào thẻ dịch vụ trên lịch và chọn Agent mới được tính phí và hiển thị ở đây.
+담당자명,담당자명,contact name,nombre de contacto,联系人姓名,聯絡人姓名,tên người phụ trách
+도시,도시,city,ciudad,城市,城市,thành phố
+등록된 도시가 없습니다.,등록된 도시가 없습니다.,no cities are listed.,no hay ciudades registradas.,没有城市注册。,沒有城市註冊。,không có thành phố nào được đăng ký.
+등록된 서비스가 없습니다.,등록된 서비스가 없습니다.,no services are registered.,no se registra ningún servicio.,没有登记任何服务。,未登記任何服務。,không có dịch vụ nào được đăng ký.
+랜딩헬프와 함께 새로운 삶을 준비하세요.,랜딩헬프와 함께 새로운 삶을 준비하세요.,get ready for a new life with LandingHelp.,prepárate para una nueva vida con LandingHelp.,准备好与 LandingHelp 一起迎接新生活。,與 LandingHelp 一起準備迎接新生活。,hãy chuẩn bị cho cuộc sống mới cùng Landing Help.
+로그아웃,로그아웃,Log out,Cerrar sesión,退出登录,登出,Đăng xuất
+로그인,로그인,Log in,Iniciar sesión,登录,登入,Đăng nhập
+로딩 중...,로딩 중...,loading...,cargando...,正在加载...,載入中...,đang tải...
+링크 URL,링크 URL,link URL,enlace URL,链接网址,連結網址,uRL liên kết
+메시지,메시지,message,mensaje,留言,訊息,thông điệp
+메시지 보내기,메시지 보내기,send a message,enviar un mensaje,发送信息,傳送訊息,gửi tin nhắn
+메시지 함,메시지 함,Messages,Mensajes,消息,訊息,Tin nhắn
+메시지함으로 이동,메시지함으로 이동,Go to Messages,Ir a mensajes,前往消息,前往訊息,Đến hộp thư
+모든 항목에 에이전트가 도움을 드립니다.,모든 항목에 에이전트가 도움을 드립니다.,agents are here to help with everything.,los agentes están aquí para ayudarle en todo.,代理们将为您提供一切帮助。,代理可幫助您解決一切問題。,đại lý sẽ hỗ trợ bạn trong tất cả các mục.
+목,목,Thu,cuello,颈项,脖子,cổ
+목록으로,목록으로,to list,enumerar,列出,列出,vào danh sách
+무료,무료,free,gratis,免费,免費,miễn phí
+무료 Agent 서비스,무료 Agent 서비스,free Agent service,servicio de agente gratuito,免费代理服务,免費代理服務,dịch vụ đại lý miễn phí
+미국 정착의 시작,미국 정착의 시작,the beginning of settling in the United States,el comienzo de la colonización estadounidense,美国定居的开始,美國人定居的開始,bắt đầu định cư tại Mỹ
+배경 이미지,배경 이미지,background image,imagen de fondo,背景图片,背景圖片,hình nền
+번째 슬라이드,번째 슬라이드,first slide,primera diapositiva,第一张幻灯片,第一張幻燈片,slide thứ
+별점,별점,star rating,clasificación por estrellas,星级,星級,đánh giá sao
+병원방문,병원방문,hospital visits,visitas al hospital,医院就诊,醫院探訪,thăm bệnh viện
+부제목,부제목,subheadings,subrúbricas,小标题,副標題,tiêu đề phụ
+비밀번호,비밀번호,Password,contraseña,密码,密碼,mật khẩu
+비밀번호 찾기,비밀번호 찾기,Reset password,contraseña olvidada,找回密码,找回密碼,tìm mật khẩu
+비밀번호가 일치하지 않습니다.,비밀번호가 일치하지 않습니다.,the passwords don't match.,las contraseñas no coinciden.,密码不匹配,密碼不匹配。,mật khẩu không khớp.
+사용자,사용자,user,usuario,用户,使用者,người dùng
+사용자 정착 플랜,사용자 정착 플랜,user settlement plans,planes de liquidación de usuarios,用户结算计划,使用者結算計劃,kế hoạch định cư của người dùng
+사용자들,사용자들,users,usuarios,用户,使用者,người dùng
+사진 선택,사진 선택,select a photo,seleccione una foto,选择照片,選擇相片,chọn ảnh
+삭제,삭제,delete,borrar,删除,刪除,xóa
+상태,상태,status,estado,现状,狀態,trạng thái
+새 메시지가 도착했습니다,새 메시지가 도착했습니다,You have new messages,Tienes nuevos mensajes,您有新消息,您有新訊息,Bạn có tin nhắn mới
+새 비밀번호,새 비밀번호,new password,nueva contraseña,新密码,新密碼,mật khẩu mới
+새 비밀번호 확인,새 비밀번호 확인,confirm your new password,confirme su nueva contraseña,确认新密码,確認您的新密碼,xác nhận mật khẩu mới
+생년월일,생년월일,date of birth,fecha de nacimiento,出生日期,出生日期,ngày sinh
+서비스,서비스,services,servicios,服务,服務,dịch vụ
+서비스 customer_price 합계,서비스 customer_price 합계,service customer_price total,servicio cliente_precio total,客户服务_价格总额,服務客戶_價格總計,tổng giá dịch vụ customer_price
+서비스 선택,서비스 선택,select a service,seleccione un servicio,选择一项服务,選擇服務,chọn dịch vụ
+서비스 선택 (복수 선택),서비스 선택 (복수 선택),select services (multiple selections),seleccionar servicios (selección múltiple),选择服务（多种选择）,選擇服務（多重選擇）,lựa chọn dịch vụ (chọn nhiều)
+서비스 일정,서비스 일정,service Schedule,horario de servicio,服务时间表,服務時間表,lịch trình dịch vụ
+"서비스 추천: ""이사 직후 운전면허, 은행 필요해요"" — 스케줄 생성: ""2주일 동안 아래 선택된 항목들의 스캐쥴 짜줘"" (위 이주 예정일 입력 후)","서비스 추천: ""이사 직후 운전면허, 은행 필요해요"" — 스케줄 생성: ""2주일 동안 아래 선택된 항목들의 스캐쥴 짜줘"" (위 이주 예정일 입력 후)","service recommendation: ""I need a driver's license and bank right after I move"" - Schedule creation: ""Schedule the items selected below for 2 weeks"" (after entering the move date above)","recomendación de servicio: ""Necesito un permiso de conducir y un banco justo después de la mudanza"" - Creación de horario: ""Programe los elementos seleccionados a continuación para dentro de 2 semanas"" (después de introducir la fecha de la mudanza más arriba)","服务建议：""我需要在搬家后立即办理驾驶执照和银行业务"" - 创建日程表：""将以下所选项目安排在 2 周内""（在输入上述搬家日期后）",服務推薦：「我需要在搬家後馬上申請駕駛執照和銀行」 - 建立排程：「將下面選定的項目排程為 2 週」（在輸入上面的搬家日期之後）,"dịch vụ đề xuất: ""Sau khi chuyển nhà, cần bằng lái xe và tài khoản ngân hàng"" — Tạo lịch trình: ""Lập lịch trình cho các mục đã chọn dưới đây trong vòng 2 tuần"" (sau khi nhập ngày dự kiến chuyển nhà)"
+서비스 코드,서비스 코드,service code,código de servicio,服务代码,服務代碼,mã dịch vụ
+서비스 항목,서비스 항목,service items,artículos de servicio,服务项目,服務項目,danh mục dịch vụ
+서비스별 Customer 가격 기준,서비스별 Customer 가격 기준,based on Customer pricing by service,basado en el precio al cliente por servicio,基于每项服务的客户定价,根據每項服務的客戶定價,giá cho khách hàng theo từng dịch vụ
+선택 서비스,선택 서비스,select Services,servicios opcionales,可选服务,選購服務,dịch vụ tùy chọn
+선택된 도시,선택된 도시,selected cities,ciudades seleccionadas,部分城市,選定城市,thành phố được chọn
+선택하세요,선택하세요,please select,seleccione una opción,请选择,請選擇,hãy chọn
+선택한 서비스가 입국일 기준 2주 일정으로 달력에 배치되었습니다.,선택한 서비스가 입국일 기준 2주 일정으로 달력에 배치되었습니다.,the selected service has been placed on the calendar with a two-week schedule based on the entry date.,el servicio seleccionado se ha incluido en el calendario con un horario de dos semanas a partir de la fecha de entrada.,所选服务已被列入日历，自输入之日起为期两周。,所選服務已列入行事曆中，自輸入日期起，排程為兩週。,dịch vụ đã chọn đã được sắp xếp vào lịch theo lịch trình 2 tuần kể từ ngày nhập cảnh.
+선호 언어,선호 언어,preferred language,lengua preferida,首选语言,首選語言,ngôn ngữ ưa thích
+성별,성별,gender,género,性别,性別,giới tính
+소개 캐러셀,소개 캐러셀,Intro carousel,carrusel de introducción,介绍旋转木马,簡介旋轉木馬,giới thiệu Carousel
+소셜번호 신청,소셜번호 신청,apply for a social number,solicitar un número social,申请社会编号,申請社會號碼,đăng ký số an sinh xã hội
+수,수,Wed,número,数量,數量,số
+수락 독촉 알림 발송 시각,수락 독촉 알림 발송 시각,when acceptance prompts are sent,cuando se envían las solicitudes de aceptación,发送接受提示时,發送接受提示時,thời gian gửi thông báo nhắc nhở chấp nhận
+수락률,수락률,acceptance rate,tasa de aceptación,接受率,接受率,tỷ lệ chấp nhận
+수정,수정,modify,modifique,修改,修改,sửa đổi
+수정에 실패했습니다.,수정에 실패했습니다.,the modification failed.,la modificación fracasó.,修改失败。,修改失敗。,sửa đổi không thành công.
+수정일,수정일,modification Date,fecha de modificación,修改日期,修改日期,ngày sửa đổi
+스케줄 사용자,스케줄 사용자,schedule users,programar usuarios,安排用户,排定使用者,người dùng lịch trình
+스케줄 생성 전에 아래에서 서비스 카드를 클릭해 선택해 주세요.,스케줄 생성 전에 아래에서 서비스 카드를 클릭해 선택해 주세요.,"before creating a schedule, click and select a service card below.","antes de crear un horario, haga clic en una tarjeta de servicio para seleccionarla.",创建计划表前，请单击下面的服务卡进行选择。,建立排程之前，請按一下下面的服務卡來選擇。,"trước khi tạo lịch trình, vui lòng nhấp vào thẻ dịch vụ bên dưới để chọn."
+스케줄 생성 중...,스케줄 생성 중...,creating a schedule...,crear un horario...,创建时间表...,建立排程...,đang tạo lịch trình...
+스케줄 생성에 실패했습니다.,스케줄 생성에 실패했습니다.,schedule creation failed.,error en la creación del programa.,计划创建失败。,排程建立失敗。,lỗi tạo lịch trình.
+스케줄 생성은 스탠다드 이상 등급에서 이용 가능합니다.,스케줄 생성은 스탠다드 이상 등급에서 이용 가능합니다.,schedule creation is available on Standard and above.,la creación de horarios está disponible en los niveles Estándar y superiores.,标准和更高级别可创建时间表。,標準及更高層級可建立排程。,tạo lịch trình có thể sử dụng ở cấp độ Standard trở lên.
+스케줄 요청에 실패했습니다.,스케줄 요청에 실패했습니다.,the schedule request failed.,solicitud de horario fallida.,计划请求失败。,排程請求失敗。,yêu cầu lịch trình không thành công.
+스케줄이 저장되었습니다. 예상 Checkout: %(total)s원,스케줄이 저장되었습니다. 예상 Checkout: %(total)s원,the schedule has been saved. Estimated Checkout: %(total)s,el horario ha sido guardado. Checkout estimado: %(total)s,计划已保存。 预计结账：%（总数）s,已儲存排程。 預計結帳：%(總計)s,lịch trình đã được lưu. Dự kiến thanh toán: %(total)s won
+신청 일시,신청 일시,application Date,fecha de solicitud,申请日期,申請日期,thời gian nộp đơn
+신청에 실패했습니다.,신청에 실패했습니다.,the application failed.,su solicitud ha fallado.,您的申请失败。,您的申請失敗。,đăng ký không thành công.
+신청자,신청자,applicant,solicitante,申请人,申請人,người nộp đơn
+실행,실행,run,ejecutar,运行,運行,thực hiện
+아이디,아이디,Username,id,用户名,用戶名,iD
+아이디 찾기,아이디 찾기,Find username,encuentre su DNI,找回用户名,找回用戶名,tìm ID
+아이디와 비밀번호를 확인해주세요.,아이디와 비밀번호를 확인해주세요.,Please check your username and password.,confirme su nombre de usuario y contraseña.,请检查您的用户名和密码。,請檢查您的用戶名和密碼。,vui lòng xác nhận ID và mật khẩu của bạn.
+약속 상세,약속 상세,appointment details,detalles de la cita,预约详情,預約詳情,chi tiết hẹn
+약속 신청,약속 신청,request an appointment,solicitar una cita,申请预约,要求預約,đăng ký hẹn
+약속 신청이 완료되었습니다.,약속 신청이 완료되었습니다.,your appointment request is complete.,su solicitud de cita está completa.,您的预约申请已完成。,您的預約請求已完成。,đăng ký hẹn đã hoàn tất.
+약속 취소 요청에 실패했습니다.,약속 취소 요청에 실패했습니다.,your request to cancel an appointment failed.,su solicitud de anulación de cita ha fallado.,您取消预约的请求失败。,您取消預約的請求失敗。,yêu cầu hủy hẹn đã thất bại.
+약속 취소에 실패했습니다.,약속 취소에 실패했습니다.,failed to cancel appointment.,no canceló la cita.,未能取消预约。,未能取消預約。,hủy bỏ cuộc hẹn không thành công.
+에서 메뉴얼을 확인하세요.,에서 메뉴얼을 확인하세요.,for the manual.,para el manual.,手册。,手冊。,hãy kiểm tra hướng dẫn sử dụng.
+에이전트 (Agent),에이전트 (Agent),agent,agente,代理,代理,đại lý (Agent)
+에이전트 가입 시 선택한 SettlementService ID 목록,에이전트 가입 시 선택한 SettlementService ID 목록,list of SettlementService IDs selected when joining the agent,lista de los SettlementService ID seleccionados al unirse al agente,加入代理时选择的结算服务 ID 列表,加入代理時選擇的 SettlementService ID 清單,danh sách SettlementService ID đã chọn khi đăng ký đại lý
+에이전트 별점,에이전트 별점,agent star ratings,clasificación por estrellas de los agentes,代理星级评定,代理星級評定,đánh giá của đại lý
+에이전트 서비스 (가입 시 선택),에이전트 서비스 (가입 시 선택),agent services (selected at signup),servicios de agente (seleccionados al registrarse),代理服务（注册时选择）,代理服務（註冊時選擇）,dịch vụ đại lý (chọn khi đăng ký)
+에이전트 전체 약속 수락률. 예: 0.85 = 85%. 비워두면 서비스별 통계에서 계산해 표시.,에이전트 전체 약속 수락률. 예: 0.85 = 85%. 비워두면 서비스별 통계에서 계산해 표시.,"agent-wide appointment acceptance rate. example: 0.85 = 85%. if left blank, calculated and displayed by service-specific statistics.","tasa de aceptación de citas de todo el agente. ejemplo: 0.85 = 85%. si se deja en blanco, se calcula y muestra mediante estadísticas específicas del servicio.",整个代理机构的预约接受率。例如 0.85 = 85%.如果留空，则由特定服务的统计数据计算和显示。,全代理的預約接受率。例如： 0.85 = 85%.如果留空，則由特定服務統計計算並顯示。,"tỷ lệ chấp nhận tất cả các cuộc hẹn của đại lý. Ví dụ: 0,85 = 85%. Nếu để trống, sẽ được tính toán và hiển thị trong thống kê theo từng dịch vụ."
+에이전트가 커버하는 도시 Area ID 목록,에이전트가 커버하는 도시 Area ID 목록,list of cities Area IDs covered by the agent,lista de ciudades ID de área cubiertas por el agente,代理覆盖的城市区域 ID 列表,代理覆蓋的城市區域 ID 清單,danh sách mã vùng (Area ID) mà đại lý phụ trách
+"에이전트가 커버하는 주 코드 목록 (예: NC, CA, TX)","에이전트가 커버하는 주 코드 목록 (예: NC, CA, TX)","list of state codes covered by the agent (e.g., NC, CA, TX)","lista de códigos estatales cubiertos por el agente (por ejemplo, NC, CA, TX)",代理覆盖的州代码列表（如 NC、CA、TX）,代理商涵蓋的州代碼清單（例如 NC、CA、TX）,"danh sách mã chính mà đại lý bao phủ (ví dụ: NC, CA, TX)"
+에이전트별 별점,에이전트별 별점,star ratings by agent,clasificación por estrellas de los agentes,按代理机构分列的星级,按代理的星級評分,đánh giá theo đại lý
+여성,여성,女性,女性,女性,女性,phụ nữ
+연락처,연락처,contact,póngase en contacto con,联系方式,聯絡人,liên hệ
+연락처 이름,연락처 이름,contact name,nombre de contacto,联系人姓名,聯絡人姓名,tên liên hệ
+연락처 이메일,연락처 이메일,contact email,correo electrónico de contacto,联系电子邮件,聯絡電子郵件,email liên hệ
+예: 60 = 1시간,예: 60 = 1시간,example: 60 = 1 hour,ejemplo: 60 = 1 hora,例如60 = 1 小时,範例：60 = 1 小時,ví dụ: 60 = 1 giờ
+예: Los Angeles,예: Los Angeles,example: Los Angeles,ejemplo: Los Ángeles,例如：洛杉矶洛杉矶,範例：洛杉磯,ví dụ: Los Angeles
+"예: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)","예: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)","example: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)","ejemplo: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)","示例：linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)","範例：linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)","ví dụ: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)"
+예: 오전 10시,예: 오전 10시,example: 10 a.m,ejemplo: 10 de la mañana,例如上午 10 时,例如：上午 10 點,ví dụ: 10 giờ sáng
+"예: 오전 10시, 오후 2시","예: 오전 10시, 오후 2시","example: 10 a.m., 2 p.m","ejemplo: 10h, 14h",例如上午 10 点，下午 2 点,例如：上午 10 點、下午 2 點,"ví dụ: 10 giờ sáng, 2 giờ chiều"
+예상 Checkout,예상 Checkout,Estimated checkout,pago previsto,预期结账,預期結帳,dự kiến thanh toán
+예상 Checkout 합계,예상 Checkout 합계,estimated checkout total,total estimado de la compra,预计结账总额,預計結帳總額,tổng số tiền thanh toán dự kiến
+"예상 일정, 지역, 특별 요청사항 등을 적어주세요.","예상 일정, 지역, 특별 요청사항 등을 적어주세요.","please include your expected timeline, location, and any special requests.","incluya el plazo previsto, el lugar y cualquier petición especial.",请注明您的预期时间、地点和任何特殊要求。,請包括您的預期時間、地點及任何特殊要求。,"vui lòng ghi rõ lịch trình dự kiến, khu vực, yêu cầu đặc biệt, v.v."
+요청에 실패했습니다.,요청에 실패했습니다.,the request failed.,la solicitud ha fallado.,请求失败。,請求失敗。,yêu cầu không thành công.
+운전면허시험,운전면허시험,driver's license test,examen de conducir,驾驶考试,駕駛考試,kỳ thi lấy bằng lái xe
+원,원, KRW,círculo,圆圈,圓形,vòng tròn
+월,월,month,mes,月,月,tháng
+유틸리티 개통,유틸리티 개통,opening utilities,utilidades de apertura,开放式公用设施,開啟公用程式,khai trương tiện ích
+은행계좌 개설,은행계좌 개설,open a bank account,abrir una cuenta bancaria,开设银行账户,開立銀行帳戶,mở tài khoản ngân hàng
+"이 서비스는 유료입니다. 결제를 완료하시면 에이전트에게 약속이 전달됩니다. 아래 ""결제하기"" 버튼을 눌러 주세요.","이 서비스는 유료입니다. 결제를 완료하시면 에이전트에게 약속이 전달됩니다. 아래 ""결제하기"" 버튼을 눌러 주세요.","this service is paid. Once you complete the payment, your appointment will be forwarded to the agent. please press the ""Make payment"" button below.","este servicio es de pago. Una vez efectuado el pago, su cita será transmitida al agente. por favor, pulse el botón ""Realizar pago"" a continuación.","这项服务是付费的，一旦您完成付款，您的预约将被转发给代理。请点击下面的 ""付款 ""按钮。",這項服務是付費的，完成付款後，您的預約將會轉寄給經紀人。請按下方的「付款」按鈕。,"dịch vụ này là dịch vụ trả phí. Sau khi hoàn tất thanh toán, cuộc hẹn sẽ được chuyển đến đại lý. Vui lòng nhấp vào nút ""Thanh toán"" bên dưới."
+이 약속을 취소하시겠습니까?,이 약속을 취소하시겠습니까?,are you sure you want to cancel this appointment?,¿Está seguro de que desea anular esta cita?,您确定要取消预约吗？,您確定要取消此預約嗎？,bạn có muốn hủy bỏ cam kết này không?
+이름,이름,name,nombre,名称,名稱,tên
+이메일,이메일,email,correo electrónico,电子邮件,電子郵件,email
+이메일 발송이 동작하지 않습니다.,이메일 발송이 동작하지 않습니다.,sending emails doesn't work.,el envío de correos electrónicos no funciona.,发送电子邮件不起作用。,發送電子郵件不起作用。,gửi email không hoạt động.
+이메일 설정 경고,이메일 설정 경고,email settings warning,advertencia sobre la configuración del correo electrónico,电子邮件设置警告,電子郵件設定警告,cảnh báo cài đặt email
+"이메일 설정 경고: EMAIL_HOST_USER, EMAIL_HOST_PASSWORD 환경변수가 설정되지 않았습니다. 이메일 발송이 동작하지 않습니다.","이메일 설정 경고: EMAIL_HOST_USER, EMAIL_HOST_PASSWORD 환경변수가 설정되지 않았습니다. 이메일 발송이 동작하지 않습니다.","email setup warning: The EMAIL_HOST_USER, EMAIL_HOST_PASSWORD environment variables are not set. Sending email will not work.","advertencia sobre la configuración del correo electrónico: Las variables de entorno EMAIL_HOST_USER, EMAIL_HOST_PASSWORD no están configuradas. El envío de correos electrónicos no funcionará.",电子邮件设置警告：EMAIL_HOST_USER 和 EMAIL_HOST_PASSWORD 环境变量未设置。 发送电子邮件将无法正常工作。,"電子郵件設定警告：EMAIL_HOST_USER, EMAIL_HOST_PASSWORD 環境變數未設定。 傳送電子郵件將無法運作。","cảnh báo cài đặt email: Biến môi trường EMAIL_HOST_USER, EMAIL_HOST_PASSWORD chưa được thiết lập. Chức năng gửi email không hoạt động."
+"이사, 학교, 의료 등 지역별 실질적 정보를 제공합니다.","이사, 학교, 의료 등 지역별 실질적 정보를 제공합니다.","provide practical information by neighborhood, such as moving, schools, healthcare, and more.","proporciona información práctica por áreas, como mudanzas, colegios, asistencia sanitaria, etc.",提供各领域的实用信息，如搬家、学校、医疗保健等。,按地區提供實用資訊，例如搬家、學校、醫療保健等。,"cung cấp thông tin thực tế theo khu vực như chuyển nhà, trường học, y tế, v.v."
+이사가는 동네의 지역정보는?,이사가는 동네의 지역정보는?,what about the neighborhood you're moving to?,¿Cuál es la información local del barrio al que te vas a mudar?,您要搬去的社区有哪些当地信息？,您要搬到的社區有哪些當地資訊？,thông tin về khu vực nơi chuyển đến là gì?
+이전,이전,previous,anterior,上一页,上一頁,trước đây
+이주 State,이주 State,migration State,estado de migración,移民国家,移民國家,di cư State
+이주 정보,이주 정보,migration information,información sobre migración,迁移信息,遷移資訊,thông tin di cư
+이주할 State,이주할 State,state to move to,estado al que trasladarse,将迁往的国家,移至的國家,tiểu bang di cư
+일,일,Sun,día,日,日,ngày
+요일_일,일,Sun,Dom,日,日,CN
+요일_월,월,Mon,Lun,一,一,T2
+요일_화,화,Tue,Mar,二,二,T3
+요일_수,수,Wed,Mié,三,三,T4
+요일_목,목,Thu,Jue,四,四,T5
+요일_금,금,Fri,Vie,五,五,T6
+요일_토,토,Sat,Sáb,六,六,T7
+일자,일자,date,fecha,日期,日期,ngày
+일정 달력,일정 달력,calendar of events,calendario de actos,活动日历,活動行事曆,lịch trình
+읽지 않은 메시지,읽지 않은 메시지,unread messages,mensajes no leídos,未读信息,未讀訊息,tin nhắn chưa đọc
+읽지 않은 메시지 %(count)s건이 있습니다. 메시지함에서 확인하세요.,읽지 않은 메시지 %(count)s건이 있습니다. 메시지함에서 확인하세요.,You have %(count)s unread message(s). Check your inbox.,Tienes %(count)s mensaje(s) sin leer. Revisa tu bandeja de entrada.,您有 %(count)s 条未读消息，请在收件箱中查看。,您有 %(count)s 則未讀訊息，請在收件匣中查看。,Bạn có %(count)s tin nhắn chưa đọc. Vui lòng kiểm tra hộp thư.
+임대계약,임대계약,lease agreements,contratos de arrendamiento,租赁协议,租賃協議,hợp đồng thuê
+임대승인 코디네이션,임대승인 코디네이션,coordinate lease approvals,coordinar las aprobaciones de arrendamientos,协调租赁审批,協調租約核准,phối hợp phê duyệt cho thuê
+임대지원,임대지원,lease support,apoyo al arrendamiento financiero,租赁支持,租賃支援,hỗ trợ thuê nhà
+입국 예정,입국 예정,Entry date,próximas llegadas,即将抵达,即將抵達,dự kiến nhập cảnh
+입국 예정일을 입력해 주세요.,입국 예정일을 입력해 주세요.,please enter your expected date of arrival.,"por favor, introduzca su fecha prevista de llegada.",请输入您的预计抵达日期。,請輸入您的預計抵達日期。,vui lòng nhập ngày dự kiến nhập cảnh.
+입국/이주 예정일,입국/이주 예정일,expected date of arrival/movement,fecha prevista de llegada/movimiento,预计抵达/搬迁日期,預計抵達/搬遷日期,ngày dự kiến nhập cảnh/di cư
+입력값을 확인해 주세요.,입력값을 확인해 주세요.,confirm your input.,confirme sus entradas.,确认您的参赛作品。,確認您的參賽項目。,vui lòng kiểm tra giá trị nhập vào.
+자녀학교 방문,자녀학교 방문,visit your child's school,visite la escuela de su hijo,参观您孩子的学校,參觀您孩子的學校,thăm trường học của con cái
+저장,저장,save,guardar,节省,節省,lưu trữ
+저장 중...,저장 중...,saving...,ahorrar...,节约...,節省...,đang lưu...
+저장되었습니다.,저장되었습니다.,saved.,salvados.,得救了,已保存。,đã lưu.
+저장된 일정이 있습니다,저장된 일정이 있습니다,You have a saved schedule,tengo una agenda guardada,我有一个保存的时间表,我有儲存的排程,có lịch trình đã lưu
+저장에 실패했습니다.,저장에 실패했습니다.,the save failed.,guardar falló.,保存失败。,儲存失敗。,lưu trữ không thành công.
+전송 중...,전송 중...,sending...,enviando...,发送...,發送...,đang truyền...
+전화개통/배송,전화개통/배송,call opening/delivery,apertura/entrega de llamadas,电话开通/交付,電話開啟/傳送,kích hoạt điện thoại/Giao hàng
+"접근 허용 역할 (GUEST=비로그인, CUSTOMER, AGENT, ADMIN)","접근 허용 역할 (GUEST=비로그인, CUSTOMER, AGENT, ADMIN)","access allowed roles (GUEST=Non-login, CUSTOMER, AGENT, ADMIN)","roles de acceso permitidos (GUEST=Non-login, CUSTOMER, AGENT, ADMIN)",允许访问的角色（GUEST=非登录、客户、代理、管理员）,"允許存取的角色 (GUEST=Non-login, CUSTOMER, AGENT, ADMIN)","vai trò cho phép truy cập (GUEST=không đăng nhập, CUSTOMER, AGENT, ADMIN)"
+정렬,정렬,sort,clasificación,分类,分類,sắp xếp
+정착 서비스 소개,정착 서비스 소개,introduction to settlement services,introducción a los servicios de liquidación,结算服务简介,結算服務簡介,giới thiệu dịch vụ định cư
+미국 이민·정착을 위한 맞춤 서비스를 소개합니다.,미국 이민·정착을 위한 맞춤 서비스를 소개합니다.,We introduce customized services for US immigration and settlement.,Presentamos servicios personalizados para inmigración y asentamiento en EE. UU.,我们介绍美国移民与安居定制服务。,我們介紹美國移民與安居定制服務。,Chúng tôi giới thiệu dịch vụ định cư và nhập cư Hoa Kỳ theo nhu cầu.
+(준비 중),(준비 중),(Coming soon),(Próximamente),(准备中),(準備中),(Đang chuẩn bị)
+정착서비스를 이용하신 고객님들의 후기입니다.,정착서비스를 이용하신 고객님들의 후기입니다.,Reviews from customers who used our settlement services.,Reseñas de clientes que utilizaron nuestros servicios de liquidación.,使用过安居服务的客户评价。,使用過安居服務的客戶評價。,Đánh giá từ khách hàng đã sử dụng dịch vụ định cư.
+직접 정착하실 경우 예상 비용을 계산해 보세요.,직접 정착하실 경우 예상 비용을 계산해 보세요.,Estimate the cost of settling on your own.,Calcule el costo estimado si se establece por su cuenta.,估算自助安居的费用。,估算自助安居的費用。,Ước tính chi phí khi tự định cư.
+정착 서비스를 제공합니다.,정착 서비스를 제공합니다.,provide settlement services.,prestar servicios de liquidación.,提供结算服务。,提供結算服務。,chúng tôi cung cấp dịch vụ định cư.
+정착 플랜,정착 플랜,settlement plans,planes de liquidación,和解计划,和解計劃,kế hoạch định cư
+정착 플랜 수정,정착 플랜 수정,Edit settlement plan,modificar su plan de liquidación,修改您的和解计划,修改您的和解計劃,sửa đổi kế hoạch định cư
+정착서비스,정착서비스,Settlement Services,Servicios de asentamiento,安家服务,安家服務,Dịch vụ định cư
+미국 이민·정착 관련 서비스를 제공합니다.,미국 이민·정착 관련 서비스를 제공합니다.,We provide US immigration and settlement-related services.,Ofrecemos servicios relacionados con la inmigración y el asentamiento en EE. UU.,我们提供美国移民和安居相关服务。,我們提供美國移民與安居相關服務。,Chúng tôi cung cấp dịch vụ liên quan đến nhập cư và định cư tại Hoa Kỳ.
+1. 정착 서비스 소개,1. 정착 서비스 소개,1. Introduction to settlement services,1. Introducción a los servicios de liquidación,1. 结算服务简介,1. 結算服務簡介,1. Giới thiệu dịch vụ định cư
+2. 정착 플랜,2. 정착 플랜,2. Settlement plans,2. Planes de liquidación,2. 和解计划,2. 和解計劃,2. Kế hoạch định cư
+3. 고객 후기,3. 고객 후기,3. Customer reviews,3. Reseñas de clientes,3. 客户评价,3. 客戶評價,3. Đánh giá của khách hàng
+4. 셀프 정착 비용 예상,4. 셀프 정착 비용 예상,4. Self-settlement cost estimate,4. Estimación del costo de autoliquidación,4. 自助结算费用估算,4. 自助結算費用估算,4. Ước tính chi phí tự định cư
+정착에 필요한 정보,정착에 필요한 정보,information you need to get settled,información necesaria para instalarse,您定居所需的信息,安居所需的資訊,thông tin cần thiết để định cư
+제공 서비스,제공 서비스,services offered,servicios ofrecidos,提供的服务,提供的服務,dịch vụ cung cấp
+제공할 서비스를 선택하세요.,제공할 서비스를 선택하세요.,choose the services you want to offer.,elija los servicios que desea ofrecer.,选择您想提供的服务。,選擇您想要提供的服務。,chọn dịch vụ bạn muốn cung cấp.
+제목,제목,title,título,标题,標題,tiêu đề
+주(State) 선택,주(State) 선택,select a state,seleccione un estado,选择一个州,選擇狀態,chọn tiểu bang
+주(State)를 선택한 후 해당 주의 도시를 선택하세요. 여러 주에서 도시를 선택할 수 있습니다.,주(State)를 선택한 후 해당 주의 도시를 선택하세요. 여러 주에서 도시를 선택할 수 있습니다.,"select a state, and then select a city in that state. you can select a city from multiple states.","seleccione un estado y, a continuación, una ciudad de ese estado. puede seleccionar una ciudad de varios estados.",选择一个州，然后选择该州的一个城市。您可以从多个州中选择一个城市。,選取一個州，然後再選取該州的一個城市。您可以從多個州選取一個城市。,"sau khi chọn tiểu bang, hãy chọn thành phố trong tiểu bang đó. Bạn có thể chọn thành phố ở nhiều tiểu bang."
+주를 선택하세요,주를 선택하세요,select a state,seleccione un estado,选择一个州,選擇狀態,chọn chủ
+"주별 도시 ID: {""NC"": [1,2,3], ""CA"": [10,11]}","주별 도시 ID: {""NC"": [1,2,3], ""CA"": [10,11]}","city IDs by state: {""NC"": [1,2,3], ""CA"": [10,11]}","ciudades por estado: {""NC"": [1,2,3], ""CA"": [10,11]}","各州的城市 ID： {""NC""：[1,2,3], ""CA""：[10,11]}","各州的城市 ID： {""NC""：[1,2,3], ""CA""：[10,11]}","iD thành phố theo bang: {""NC"": [1,2,3], ""CA"": [10,11]}"
+주택 영상촬영,주택 영상촬영,videotaping your home,videografía residencial,住宅摄像,住宅攝錄,quay phim nhà ở
+주택조사,주택조사,home inspections,inspecciones de viviendas,房屋检查,房屋檢查,khảo sát nhà ở
+주택투어,주택투어,home Tours,visitas a domicilio,首页游览,首頁導覽,tham quan nhà ở
+지역 게시판,지역 게시판,Community,Comunidad,社区,社區,Cộng đồng
+지역투어,지역투어,local Tours,visitas locales,当地旅游,當地旅遊,tour du lịch địa phương
+차량구매,차량구매,purchase a vehicle,comprar un vehículo,购买车辆,購買車輛,mua xe
+차량등록,차량등록,vehicle registration,matriculación de vehículos,车辆登记,車輛登記,đăng ký xe
+차량렌트,차량렌트,rent a car,alquiler de coches,租车,租車,thuê xe
+추가 문의사항,추가 문의사항,additional questions,más preguntas,更多问题,更多問題,các câu hỏi bổ sung
+추가 요청사항,추가 요청사항,additional requests,solicitudes adicionales,其他要求,額外要求,yêu cầu bổ sung
+추가 요청사항을 적어주세요.,추가 요청사항을 적어주세요.,please include any additional requests.,"por favor, incluya cualquier solicitud adicional.",请注明任何其他要求。,請包括任何其他要求。,vui lòng ghi thêm yêu cầu bổ sung.
+"추천 서비스가 선택되었습니다. 달력에 드래그하거나 ""2주일 스캐쥴 짜줘""로 자동 배치하세요.","추천 서비스가 선택되었습니다. 달력에 드래그하거나 ""2주일 스캐쥴 짜줘""로 자동 배치하세요.","your recommended service has been selected. drag it to your calendar or automatically place it with ""Schedule me for 2 weeks"".","su servicio recomendado ha sido seleccionado. arrástrelo a su calendario o colóquelo automáticamente con ""Programarme para 2 semanas"".","您的推荐服务已选定。将其拖动到您的日历上，或自动设置为 ""安排我 2 周""。",您的推薦服務已被選中。將其拖曳至您的行事曆，或自動以「為我安排 2 週」來放置。,"dịch vụ đề xuất đã được chọn. Kéo vào lịch hoặc đặt tự động bằng cách chọn ""Lập lịch trình cho 2 tuần""."
+추천 요청에 실패했습니다.,추천 요청에 실패했습니다.,the recommendation request failed.,su solicitud de remisión ha fallado.,您的转介请求失败。,您的轉介請求失敗。,yêu cầu đề xuất không thành công.
+추천 중...,추천 중...,recommended by...,recomendado por...,推荐人...,由推薦...,đang đề xuất...
+취소,취소,cancel,取消,取消,取消,hủy bỏ
+취소 사유,취소 사유,reasons for cancellation,motivos de anulación,取消的原因,取消的原因,lý do hủy bỏ
+"취소 시 사유. 예: 사용자 취소, Agent 취소","취소 시 사유. 예: 사용자 취소, Agent 취소","reason for cancellation. examples: user canceled, Agent canceled","motivo de la cancelación. ejemplos: anulación del usuario, Anulación del agente",取消原因。例如用户取消、代理取消,取消原因。範例：使用者取消、代理人取消,"lý do hủy bỏ. Ví dụ: Người dùng hủy bỏ, Đại lý hủy bỏ"
+취소됨,취소됨,canceled,cancelado,已取消,已取消,bị hủy bỏ
+취소에 실패했습니다.,취소에 실패했습니다.,the cancel failed.,la cancelación fracasó.,取消行动失败。,取消行動失敗。,hủy bỏ không thành công.
+카드를 날짜 칸에 드래그하여 배치하세요. 서비스 카드를 클릭해 Agent를 선택한 뒤 저장하면 예상 결제 금액이 홈·대시보드에 표시됩니다. 월/연도를 변경할 수 있습니다.,카드를 날짜 칸에 드래그하여 배치하세요. 서비스 카드를 클릭해 Agent를 선택한 뒤 저장하면 예상 결제 금액이 홈·대시보드에 표시됩니다. 월/연도를 변경할 수 있습니다.,"drag the card to the date field to place it. click the service card, select Agent, and save, and the estimated payment amount will appear in Home-Dashboard. you can change the month/year.","arrastre la tarjeta al campo de fecha para colocarla. haga clic en la tarjeta de servicio, seleccione Agente, guarde y el importe estimado del pago aparecerá en el Panel de Inicio. puede cambiar el mes/año.",将服务卡拖到日期字段中。单击服务卡，选择代理，保存，预估付款金额将显示在 Home-Dashboard 中。您可以更改月份/年份。,將卡片拖曳到日期欄位來放置。按一下服務卡，選擇代理，儲存，預估付款金額就會出現在 Home-Dashboard 中。您可以變更月份/年份。,"kéo thẻ vào ô ngày để đặt. Nhấp vào thẻ dịch vụ, chọn Agent, sau đó lưu lại, số tiền thanh toán dự kiến sẽ hiển thị trên trang chủ/bảng điều khiển. Bạn có thể thay đổi tháng/năm."
+"카드를 클릭해 선택/해제하고, 드래그하여 달력에 놓으세요. ""2주일 스캐쥴 짜줘"" 입력 시 선택된 항목이 자동 배치됩니다.","카드를 클릭해 선택/해제하고, 드래그하여 달력에 놓으세요. ""2주일 스캐쥴 짜줘"" 입력 시 선택된 항목이 자동 배치됩니다.","click on a card to select/clear it, and drag it to drop it on your calendar. when you type ""Schedule me for 2 weeks"", the selected items will be placed automatically.","haga clic en las tarjetas para marcarlas o desmarcarlas, y arrástrelas y suéltelas en su calendario. cuando escribas ""Programarme para 2 semanas"", los elementos seleccionados se colocarán automáticamente.","点击卡片打钩/不打钩，然后拖放到日历上。当您键入 ""为我安排 2 周的日程 ""时，所选项目将自动放置。",按一下卡片來勾選/取消勾選，然後拖放到行事曆上。當您輸入「Schedule me for 2 weeks」時，選取的項目將會自動放置。,"nhấp vào thẻ để chọn/hủy chọn, sau đó kéo và thả vào lịch. Khi nhập ""Lập lịch trình cho 2 tuần"", các mục đã chọn sẽ được tự động sắp xếp."
+카테고리,카테고리,categories,categorías,类别,類別,thể loại
+캐러셀 (광고),캐러셀 (광고),carousel (ads),carrusel (Anuncios),旋转木马（广告）,旋轉木馬 (廣告),carousel (Quảng cáo)
+캐러셀 (기업서비스),캐러셀 (기업서비스),carousel (Enterprise Services),carrusel (Servicios para empresas),旋转木马（企业服务）,Carousel (企業服務),carousel (Dịch vụ doanh nghiệp)
+캐러셀 (정착서비스),캐러셀 (정착서비스),carousel (settlement service),carrusel (servicio de liquidación),旋转木马（结算服务）,旋轉木馬（結算服務）,carousel (Dịch vụ định cư)
+캐러셀 (홈인트로),캐러셀 (홈인트로),carousel (home intro),carrusel (introducción),旋转木马（主页介绍）,旋轉木馬 (首頁介紹),carousel (Home Intro)
+캐러셀 슬라이드,캐러셀 슬라이드,carousel slides,carrusel de toboganes,旋转木马幻灯片,旋轉式滑軌,carousel slide
+커뮤니티와 함께,커뮤니티와 함께,with the community,con la comunidad,与社区,與社區,cùng với cộng đồng
+커버 도시,커버 도시,cover cities,ciudades de portada,封面城市,封面城市,thành phố bìa
+커버 도시 (복수 선택),커버 도시 (복수 선택),cover cities (select multiple),ciudades de cobertura (seleccione varias),覆盖城市（选择多个）,覆蓋城市（選擇多個）,thành phố bìa (chọn nhiều)
+커버 도시 (주별),커버 도시 (주별),covered cities (by state),ciudades cubiertas (por estado),覆盖城市（按州）,涵蓋城市（按州劃分）,cover City (theo tuần)
+커버 주(State),커버 주(State),cover State,estado de portada,封面国家,封面狀態,bìa (State)
+커버 지역,커버 지역,coverage area,área de cobertura,覆盖面积,覆蓋範圍,khu vực phủ sóng
+컨텐츠,컨텐츠,content,contenido,内容,內容,nội dung
+컨텐츠 목록,컨텐츠 목록,content list,lista de contenidos,内容列表,內容清單,danh sách nội dung
+클릭하여 선택 해제,클릭하여 선택 해제,click to deselect,haga clic para anular la selección,点击取消选择,按一下以取消選擇,nhấp để hủy chọn
+토,토,Sat,sAT,SAT,SAT,đất
+평가 대상 (Agent),평가 대상 (Agent),evaluation Target (Agent),evaluado por (Agente),评估人（代理人）,由 (代理人) 評估,đối tượng đánh giá (Agent)
+평가 없음,평가 없음,no ratings,sin valoración,没有评级,無評級,không có đánh giá
+평가자 (Customer),평가자 (Customer),evaluator (Customer),evaluador (Cliente),评估员（客户）,評估員（客戶）,người đánh giá (Khách hàng)
+표시,표시,show,mostrar,显示,顯示,hiển thị
+표시할 컨텐츠가 없습니다.,표시할 컨텐츠가 없습니다.,there is no content to display.,no hay contenido que mostrar.,没有要显示的内容。,沒有要顯示的內容。,không có nội dung để hiển thị.
+프로필 사진,프로필 사진,profile photo,foto de perfil,个人照片,個人照片,ảnh đại diện
+프로필에 표시될 사진을 등록하세요.,프로필에 표시될 사진을 등록하세요.,register a photo to appear on your profile.,registre una foto para que aparezca en su perfil.,注册一张照片，显示在您的个人主页上。,註冊一張顯示在您個人資料上的照片。,đăng ký ảnh sẽ hiển thị trên hồ sơ của bạn.
+플랜,플랜,Plan,Plan,套餐,方案,Gói
+"필요 시 에이전트의 도움을 받을 수 있으며, 패키지 또는 단일 항목으로 계약 가능합니다.","필요 시 에이전트의 도움을 받을 수 있으며, 패키지 또는 단일 항목으로 계약 가능합니다.","you can get help from an agent when you need it, and it can be contracted as a package or as a single item.","puede obtener ayuda de un agente cuando la necesite, y puede contratarse como paquete o como elemento único.",您可以在需要的时候得到代理的帮助，而且可以作为一个套餐或单个项目签约。,您可以在需要的時候獲得代理的幫助，而且可以以套餐或單項的形式簽約。,"khi cần thiết, bạn có thể nhận được sự hỗ trợ từ đại lý và có thể ký hợp đồng theo gói hoặc theo từng mục riêng lẻ."
+필요 시간(분),필요 시간(분),time required (in minutes),tiempo necesario (en minutos),所需时间（分钟）,所需時間 (分鐘),thời gian cần thiết (phút)
+필요한 서비스를 입력해 주세요.,필요한 서비스를 입력해 주세요.,enter the service you need.,"por favor, introduzca el servicio que necesita.",请输入您需要的服务。,請輸入您需要的服務。,vui lòng nhập dịch vụ cần thiết.
+"필요한 서비스를 한글로 입력하거나, 2주일 스캐쥴 짜줘 입력","필요한 서비스를 한글로 입력하거나, 2주일 스캐쥴 짜줘 입력","enter the service you need in Korean, or enter a 2-week schedule",introduzca el servicio que necesita en coreano o cree un horario de 2 semanas,用韩语输入您需要的服务或创建两周的日程表,輸入您需要的韓語服務或建立 2 週的排程表,nhập dịch vụ cần thiết bằng tiếng Hàn hoặc nhập lịch trình 2 tuần
+한줄평,한줄평,one-line reviews,revisiones de una línea,单行评论,單行審查,đánh giá một dòng
+합계,합계,total,total,总计,總計,tổng cộng
+항목이름,항목이름,item name,nombre del artículo,项目名称,項目名稱,tên mục
+해당 지역·서비스를 담당하는 Agent가 없습니다.,해당 지역·서비스를 담당하는 Agent가 없습니다.,there is no Agent covering your region-service.,no hay ningún Agente que cubra su región-servicio.,没有代理为您提供区域服务。,您的區域服務沒有代理。,không có đại lý phụ trách khu vực/dịch vụ này.
+현재 등급,현재 등급,current rating,clasificación actual,当前评级,目前評級,hạng hiện tại
+화,화,Tue,tUE,TUE,TUE,hoa
+확인,확인,confirm,confirme,确认,確認,xác nhận
+확인 중...,확인 중...,checking...,comprobando...,检查...,檢查...,đang xác nhận...
+활성,활성,active,activo,活跃,活躍,hoạt động
+회사/업체명,회사/업체명,company/business name,empresa/nombre comercial,公司/企业名称,公司/企業名稱,tên công ty/doanh nghiệp
+회원가입,회원가입,Sign up,Registrarse,注册,註冊,Đăng ký
+희망 시간,희망 시간,desired time,hora deseada,期望时间,期望時間,thời gian mong muốn
+희망 시간대,희망 시간대,preferred time zone,zona horaria preferida,首选时区,首選時區,thời gian mong muốn
+희망 일자,희망 일자,desired date,fecha deseada,期望日期,期望日期,ngày mong muốn
+Add %(name)s,%(name)s 추가,Add %(name)s,Añadir %(name)s,添加 %(name)s,新增 %(name)s,Thêm %(name)s
+Models in the %(name)s application,%(name)s 앱의 모델,Models in the %(name)s application,Modelos en la aplicación %(name)s,%(name)s 应用中的模型,%(name)s 應用中的模型,Mô hình trong ứng dụng %(name)s
+Select %s to change,%s 선택하여 변경,Select %s to change,Seleccionar %s para cambiar,选择 %s 以更改,選擇 %s 以變更,Chọn %s để thay đổi
+Select all %(total_count)s %(module_name)s,%(total_count)s개 %(module_name)s 전체 선택,Select all %(total_count)s %(module_name)s,Seleccionar todos los %(total_count)s %(module_name)s,选择全部 %(total_count)s 个 %(module_name)s,選擇全部 %(total_count)s 個 %(module_name)s,Chọn tất cả %(total_count)s %(module_name)s
+Select all objects on this page for an action,이 페이지의 모든 항목을 작업에 선택,Select all objects on this page for an action,Seleccionar todos los objetos de esta página para una acción,选择本页全部对象以执行操作,選擇本頁全部物件以執行操作,Chọn tất cả đối tượng trên trang này để thực hiện hành động

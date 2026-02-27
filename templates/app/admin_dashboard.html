@@ -1,13 +1,19 @@
 {% extends "base.html" %}
-{% block title %}관리자 대시보드 – 랜딩헬프{% endblock %}
+{% block title %}관리자 대시보드 – LifeAI US{% endblock %}
 {% block content %}
 {% if user.is_staff %}
 <div class="card" style="margin-bottom: 1.5rem;">
   <h2 style="margin-top: 0;">관리 메뉴</h2>
   <ul style="line-height: 2; padding-left: 1.25rem;">
     <li><a href="{% url 'member_list' %}">가입자</a> — 회원 목록, 비밀번호 리셋</li>
-      <li><a href="{% url 'admin:content_carouselslide_changelist' %}">캐러셀 슬라이드 (목록)</a> — 수정·삭제</li>
-      <li><a href="{% url 'admin:content_carouselslide_add' %}" style="font-weight: 600;">➕ 캐러셀 슬라이드 추가</a></li>
+    <li><strong>캐러셀</strong> — 슬라이드 추가·수정·삭제
+      <ul style="margin: 0.25rem 0 0 1rem; padding-left: 1rem;">
+        <li><a href="{% url 'admin:content_homeintroslide_changelist' %}">홈인트로</a></li>
+        <li><a href="{% url 'admin:content_settlementcarouselslide_changelist' %}">정착서비스</a></li>
+        <li><a href="{% url 'admin:content_corporatecarouselslide_changelist' %}">기업서비스</a></li>
+        <li><a href="{% url 'admin:content_adcarouselslide_changelist' %}">광고</a></li>
+      </ul>
+    </li>
   </ul>
 </div>
 {% endif %}

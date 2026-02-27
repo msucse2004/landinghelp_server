@@ -5,8 +5,20 @@
 set -e
 cd "$(dirname "$0")"
 
+if [ ! -f "venv/bin/activate" ]; then
+    echo "오류: venv가 없습니다. 먼저 ./setup_venv.sh 를 실행하세요."
+    exit 1
+fi
+
 export DB_HOST=localhost
 
 # venv 활성화 및 실행
 source venv/bin/activate
+
+if [ -z "${VIRTUAL_ENV:-}" ]; then
+    echo "경고: VIRTUAL_ENV가 설정되지 않았습니다. venv가 활성화되지 않은 것 같습니다."
+else
+    echo "venv 사용 중: $VIRTUAL_ENV"
+fi
+
 python manage.py runserver 0.0.0.0:8000

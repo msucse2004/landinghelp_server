@@ -57,21 +57,69 @@ def member_list(request):
     users = User.objects.prefetch_related('subscriptions__plan').order_by('-date_joined')
     for u in users:
         sub = next((s for s in u.subscriptions.all() if s.status == 'ACTIVE'), None)
-        u.plan_display = sub.plan.get_code_display() if sub and sub.plan else '-'
+        u.plan_display = sub.plan.get_display_name() if sub and sub.plan else '-'
     return render(request, 'accounts/member_list.html', {'users': users})
 
 
 def signup(request):
+    from settlement.constants import CATEGORY_ORDER
+    from settlement.models import SettlementService
+    from community.models import Area
+
     if request.user.is_authenticated:
         return redirect('home')
+    services_qs = SettlementService.objects.filter(is_active=True).order_by('category', 'name')
+    services_list = list(services_qs.values('id', 'name', 'category', 'agent_price'))
+    services_by_category = {}
+    for s in services_list:
+        cat = s['category']
+        services_by_category.setdefault(cat, []).append(s)
+    services_by_category = {c: services_by_category.get(c, []) for c in CATEGORY_ORDER if c in services_by_category}
+    areas_by_state = {}
+    for a in Area.objects.order_by('state_code', 'order', 'id'):
+        key = a.state_code
+        if key not in areas_by_state:
+            areas_by_state[key] = {'name': a.state_name or a.state_code, 'cities': []}
+        areas_by_state[key]['cities'].append({'id': a.id, 'name': a.city_name})
     if request.method == 'POST':
-        form = SignUpForm(request.POST)
+        form = SignUpForm(request.POST, request.FILES)
         if form.is_valid():
             try:
                 with transaction.atomic():
                     user = form.save(commit=False)
                     user.is_active = False
                     user.status = User.Status.UNVERIFIED
+                    if user.role == User.Role.AGENT:
+                        # 서비스 ID: DB에 존재하는 활성 서비스만 저장
+                        raw_service_ids = [int(x) for x in request.POST.getlist('agent_services') if x.isdigit()]
+                        valid_services = list(SettlementService.objects.filter(
+                            id__in=raw_service_ids, is_active=True
+                        ).values_list('id', flat=True))
+                        user.agent_services = valid_services
+
+                        # 도시 ID: DB에 존재하는 Area만 저장
+                        raw_city_ids = [int(x) for x in request.POST.getlist('agent_cities') if x.isdigit()]
+                        areas = Area.objects.filter(id__in=raw_city_ids)
+                        user.agent_cities = list(areas.values_list('id', flat=True))
+
+                        # State: 선택된 도시들의 주 코드 목록 (중복 제거)
+                        user.agent_states = list(areas.values_list('state_code', flat=True).distinct())
+
+                        # 주별 도시: {"NC": [1,2,3], "CA": [10,11]}
+                        by_state = {}
+                        for a in areas.values('id', 'state_code'):
+                            sc = a['state_code']
+                            by_state.setdefault(sc, []).append(a['id'])
+                        user.agent_cities_by_state = by_state
+
+                        # 프로필 사진 (에이전트만)
+                        if request.FILES.get('agent_profile_image'):
+                            user.profile_image = request.FILES['agent_profile_image']
+                    else:
+                        user.agent_services = []
+                        user.agent_states = []
+                        user.agent_cities = []
+                        user.agent_cities_by_state = {}
                     user.save()
                     send_verification_email(user, request)
             except Exception:
@@ -79,7 +127,11 @@ def signup(request):
             return redirect('verification_sent')
     else:
         form = SignUpForm()
-    return render(request, 'registration/signup.html', {'form': form})
+    return render(request, 'registration/signup.html', {
+        'form': form,
+        'services_by_category': services_by_category,
+        'areas_by_state': areas_by_state,
+    })
 
 
 def verification_sent(request):

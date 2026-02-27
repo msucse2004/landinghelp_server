@@ -1,0 +1,14 @@
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+{% block object-tools-items %}
+  <li>
+    <a href="{% url 'admin:translations_statictranslation_sync_keys_and_csv' %}">키 동기화 및 CSV 반영</a>
+  </li>
+  <li>
+    <a href="{% url 'admin:translations_statictranslation_export_csv' %}">전체 언어 CSV 내보내기</a>
+  </li>
+  <li>
+    <a href="{% url 'admin:translations_statictranslation_import_csv' %}">CSV 가져오기</a>
+  </li>
+  {{ block.super }}
+{% endblock %}

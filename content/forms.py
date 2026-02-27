@@ -1,25 +1,24 @@
 from django import forms
-from .models import Content
+from .models import Content, CorporateAdRequest
 
 
 class ContentAdminForm(forms.ModelForm):
-    """Admin용: allowed_roles를 체크박스로"""
-
-    allowed_roles = forms.MultipleChoiceField(
-        choices=Content.ROLE_CHOICES,
-        widget=forms.CheckboxSelectMultiple,
-        required=False,
-    )
-
     class Meta:
         model = Content
         fields = '__all__'
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if self.instance and self.instance.pk:
-            self.initial['allowed_roles'] = self.instance.allowed_roles or []
 
-    def clean_allowed_roles(self):
-        data = self.cleaned_data.get('allowed_roles', [])
-        return list(data) if data else []
+class CorporateAdRequestForm(forms.ModelForm):
+    class Meta:
+        model = CorporateAdRequest
+        fields = ('company_name', 'contact_name', 'email', 'phone', 'ad_title', 'ad_subtitle', 'link_url', 'memo')
+        widgets = {
+            'company_name': forms.TextInput(attrs={'placeholder': '회사 또는 업체명', 'class': 'form-input'}),
+            'contact_name': forms.TextInput(attrs={'placeholder': '담당자 이름', 'class': 'form-input'}),
+            'email': forms.EmailInput(attrs={'placeholder': 'example@company.com', 'class': 'form-input'}),
+            'phone': forms.TextInput(attrs={'placeholder': '010-0000-0000', 'class': 'form-input'}),
+            'ad_title': forms.TextInput(attrs={'placeholder': '광고에 표시할 제목', 'class': 'form-input'}),
+            'ad_subtitle': forms.TextInput(attrs={'placeholder': '광고에 표시할 부제목 (선택)', 'class': 'form-input'}),
+            'link_url': forms.URLInput(attrs={'placeholder': 'https://', 'class': 'form-input'}),
+            'memo': forms.Textarea(attrs={'placeholder': '추가 요청사항', 'rows': 4, 'class': 'form-input'}),
+        }

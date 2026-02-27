@@ -1,0 +1,13 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p>가져오기 완료.</p>
+<ul>
+  <li>새로 추가: {{ created }}건</li>
+  <li>업데이트: {{ updated }}건</li>
+</ul>
+<p><a href="{% url 'admin:translations_statictranslation_changelist' %}">고정 번역 목록으로 돌아가기</a></p>
+<p><a href="{% url 'admin:translations_statictranslation_import_csv' %}">다시 가져오기</a></p>
+{% endblock %}

@@ -1,0 +1,9 @@
+{% extends "services/settlement_base.html" %}
+{% block title %}{{ settlement_intro.title|default:"정착 서비스 소개" }} – LifeAI US{% endblock %}
+{% block settlement_content %}
+<section class="card">
+  <h1>{{ settlement_intro.title|default:"정착 서비스 소개" }}</h1>
+  <p class="text-muted">{{ settlement_intro.subtitle|default:"미국 이민·정착을 위한 맞춤 서비스를 소개합니다." }}</p>
+  <p>{{ settlement_intro.preparing|default:"(준비 중)" }}</p>
+</section>
+{% endblock %}

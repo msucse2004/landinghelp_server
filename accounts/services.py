@@ -2,6 +2,7 @@
 from urllib.parse import quote
 
 from django.core.signing import TimestampSigner, SignatureExpired, BadSignature
+from django.views.decorators.debug import sensitive_variables
 from django.core.mail import send_mail
 from django.conf import settings
 from django.urls import reverse
@@ -26,6 +27,7 @@ def verify_token(token):
     return None
 
 
+@sensitive_variables('email')
 def send_username_reminder(email, usernames, login_url=None):
     """
     아이디 찾기: 해당 이메일로 등록된 아이디(들) 발송.
@@ -52,6 +54,7 @@ def send_username_reminder(email, usernames, login_url=None):
     )
 
 
+@sensitive_variables('request')
 def send_verification_email(user, request):
     """가입 확인 이메일 발송"""
     token = generate_verification_token(user)

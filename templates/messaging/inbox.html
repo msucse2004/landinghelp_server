@@ -1,0 +1,342 @@
+{% extends "base.html" %}
+{% block title %}메시지 함 – LifeAI US{% endblock %}
+{% block content %}
+{% csrf_token %}
+<style>
+  .inbox-wrap { display: flex; gap: 1rem; margin-top: 1rem; min-height: 360px; }
+  .inbox-list { width: 280px; flex-shrink: 0; border: 1px solid var(--color-border); border-radius: var(--radius); background: #fff; overflow: hidden; }
+  .inbox-list h3 { margin: 0; padding: 0.75rem 1rem; font-size: 1rem; border-bottom: 1px solid var(--color-border); background: #f8fafc; }
+  .inbox-list ul { list-style: none; margin: 0; padding: 0; max-height: 400px; overflow-y: auto; }
+  .inbox-list li { padding: 0.75rem 1rem; border-bottom: 1px solid #eee; cursor: pointer; }
+  .inbox-list li:hover { background: #f1f5f9; }
+  .inbox-list li.active { background: #e0e7ff; }
+  .inbox-list li .conv-title { font-weight: 500; }
+  .inbox-list li .conv-preview { font-size: 0.85rem; color: var(--color-muted); margin-top: 0.25rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .inbox-list li .conv-meta { font-size: 0.75rem; color: var(--color-muted); margin-top: 0.2rem; }
+  .inbox-list li .unread-badge { display: inline-block; min-width: 1.2em; padding: 0.1em 0.4em; font-size: 0.75rem; background: #dc2626; color: #fff; border-radius: 999px; margin-left: 0.35rem; }
+  .inbox-detail { flex: 1; border: 1px solid var(--color-border); border-radius: var(--radius); background: #fff; display: flex; flex-direction: column; min-width: 0; }
+  .inbox-detail-empty { padding: 2rem; text-align: center; color: var(--color-muted); }
+  .inbox-detail h3 { margin: 0; padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); font-size: 1rem; }
+  .inbox-messages { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+  .inbox-msg { max-width: 85%; padding: 0.6rem 0.9rem; border-radius: var(--radius); font-size: 0.95rem; }
+  .inbox-msg.mine { align-self: flex-end; background: #dbeafe; }
+  .inbox-msg.theirs { align-self: flex-start; background: #f1f5f9; }
+  .inbox-msg .msg-meta { font-size: 0.75rem; color: var(--color-muted); margin-top: 0.25rem; display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+  .inbox-msg .msg-read-status { display: inline-flex; align-items: center; margin-left: 0.2rem; }
+  .inbox-msg .msg-read-status svg { width: 14px; height: 14px; opacity: 0.85; flex-shrink: 0; }
+  .inbox-msg .msg-read-status svg:first-child + svg { margin-left: -4px; }
+  .inbox-msg .msg-read-status.read { color: #2563eb; }
+  .inbox-msg .msg-read-status.sent { color: var(--color-muted); }
+  .inbox-send { padding: 0.75rem 1rem; border-top: 1px solid var(--color-border); display: flex; align-items: center; gap: 0.5rem; }
+  .inbox-send-attach-wrap { position: relative; flex-shrink: 0; }
+  .inbox-attach-btn { width: 40px; height: 40px; padding: 0; border: 1px solid var(--color-border); border-radius: var(--radius); background: #fff; color: var(--color-muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem; line-height: 1; }
+  .inbox-attach-btn:hover { background: #f1f5f9; color: var(--color-primary); }
+  .inbox-attach-menu { position: absolute; bottom: 100%; left: 0; margin-bottom: 4px; background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius); box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 0.35rem 0; min-width: 160px; display: none; z-index: 20; }
+  .inbox-attach-menu.open { display: block; }
+  .inbox-attach-menu button { display: block; width: 100%; padding: 0.5rem 1rem; border: none; background: none; text-align: left; cursor: pointer; font-size: 0.9rem; color: var(--color-text); }
+  .inbox-attach-menu button:hover { background: #f1f5f9; }
+  .inbox-send input[type="text"] { flex: 1; padding: 0.5rem 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius); min-width: 0; }
+  .inbox-send input[type="file"] { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
+  .inbox-send button.btn-primary { padding: 0.5rem 1rem; }
+  .inbox-msg .msg-image { max-width: 100%; max-height: 280px; border-radius: var(--radius); display: block; margin-bottom: 0.35rem; }
+  .inbox-msg .msg-body-text { word-break: break-word; }
+  .inbox-loading { padding: 2rem; text-align: center; color: var(--color-muted); }
+  .inbox-appointment-actions { padding: 0.5rem 1rem; border-bottom: 1px solid var(--color-border); background: #f8fafc; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+  .inbox-appointment-actions .btn { padding: 0.4rem 0.8rem; font-size: 0.9rem; }
+</style>
+<div class="card">
+  <h1>메시지 함</h1>
+  <p class="text-muted">약속 요청·공지에 대한 대화를 확인하고 답장할 수 있습니다.</p>
+  <div class="inbox-wrap">
+    <div class="inbox-list">
+      <h3>대화 목록</h3>
+      <ul id="inboxConversations">
+        <li class="inbox-loading">불러오는 중...</li>
+      </ul>
+    </div>
+    <div class="inbox-detail" id="inboxDetail">
+      <div class="inbox-detail-empty" id="inboxDetailEmpty">왼쪽에서 대화를 선택하세요.</div>
+      <div id="inboxDetailContent" style="display:none;">
+        <h3 id="inboxDetailTitle"></h3>
+        <div class="inbox-appointment-actions" id="inboxAppointmentActions" style="display:none;">
+          <button type="button" class="btn btn-primary" id="inboxAppointmentAcceptBtn">수락</button>
+          <button type="button" class="btn btn-secondary" id="inboxAppointmentRequestChangeBtn">수정요청</button>
+        </div>
+        <div class="inbox-messages" id="inboxMessages"></div>
+        <div class="inbox-send">
+          <div class="inbox-send-attach-wrap">
+            <button type="button" class="inbox-attach-btn" id="inboxAttachBtn" title="사진 첨부" aria-label="사진 첨부">+</button>
+            <div class="inbox-attach-menu" id="inboxAttachMenu">
+              <button type="button" id="inboxAttachGallery">앨범에서 선택</button>
+              <button type="button" id="inboxAttachCamera">카메라로 촬영</button>
+            </div>
+            <input type="file" id="inboxFileGallery" accept="image/*" tabindex="-1">
+            <input type="file" id="inboxFileCamera" accept="image/*" capture="environment" tabindex="-1">
+          </div>
+          <input type="text" id="inboxMessageInput" placeholder="메시지를 입력하세요..." maxlength="2000">
+          <button type="button" class="btn btn-primary" id="inboxSendBtn">전송</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  var API_BASE = '/api/messaging';
+  var csrfEl = document.querySelector('[name=csrfmiddlewaretoken]');
+  var csrf = csrfEl ? csrfEl.value : '';
+  function getHeaders(method) {
+    var h = { 'Accept': 'application/json', 'X-CSRFToken': csrf };
+    if (method === 'POST') h['Content-Type'] = 'application/json';
+    return h;
+  }
+  var currentConvId = null;
+  var currentUserId = {{ user.id|default:0 }};
+
+  function readStatusIcon(readByOthers) {
+    var cls = readByOthers ? 'read' : 'sent';
+    var title = readByOthers ? '읽음' : '전송됨';
+    var check = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
+    if (readByOthers) {
+      return '<span class="msg-read-status ' + cls + '" title="' + title + '" aria-label="' + title + '">' + check + check + '</span>';
+    }
+    return '<span class="msg-read-status ' + cls + '" title="' + title + '" aria-label="' + title + '">' + check + '</span>';
+  }
+
+  function escapeHtml(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function messageBodyHtml(m) {
+    var parts = [];
+    if (m.image_url) parts.push('<img src="' + escapeHtml(m.image_url) + '" alt="첨부 이미지" class="msg-image">');
+    if (m.body && m.body !== '[사진]') parts.push('<div class="msg-body-text">' + escapeHtml(m.body).replace(/\n/g, '<br>') + '</div>');
+    return parts.length ? parts.join('') : '<div class="msg-body-text">' + escapeHtml(m.body || '') + '</div>';
+  }
+
+  function loadConversations() {
+    var ul = document.getElementById('inboxConversations');
+    return fetch(API_BASE + '/conversations/', { method: 'GET', headers: getHeaders('GET'), credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var list = data.conversations || [];
+        if (list.length === 0) {
+          ul.innerHTML = '<li class="inbox-loading">대화가 없습니다.</li>';
+          return;
+        }
+        ul.innerHTML = list.map(function(c) {
+          var title = c.display_title || (c.type === 'NOTICE' ? (c.subject || '공지') : (c.appointment_id ? '약속 #' + c.appointment_id : '대화'));
+          var preview = (c.last_message && c.last_message.body) ? c.last_message.body : '';
+          var meta = (c.last_message && c.last_message.created_at) ? c.last_message.created_at.slice(0, 10) : c.updated_at.slice(0, 10);
+          var unread = (c.unread_count && c.unread_count > 0) ? '<span class="unread-badge">' + c.unread_count + '</span>' : '';
+          var safeTitle = (title || '').replace(/"/g, '&quot;');
+          return '<li data-id="' + c.id + '" data-type="' + (c.type || '') + '" data-display-title="' + safeTitle + '" data-appointment-id="' + (c.appointment_id || '') + '">' +
+            '<span class="conv-title">' + title + unread + '</span>' +
+            '<div class="conv-preview">' + (preview.replace(/</g, '&lt;').replace(/>/g, '&gt;')) + '</div>' +
+            '<div class="conv-meta">' + meta + '</div></li>';
+        }).join('');
+        ul.querySelectorAll('li').forEach(function(li) {
+          li.addEventListener('click', function() { selectConversation(parseInt(li.dataset.id, 10)); });
+        });
+        if (window.updateHeaderUnreadCount) window.updateHeaderUnreadCount();
+      })
+      .catch(function() { ul.innerHTML = '<li class="inbox-loading">목록을 불러올 수 없습니다.</li>'; });
+  }
+  function getQueryParam(name) {
+    var m = new RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  var currentAppointmentId = null;
+
+  function selectConversation(convId) {
+    currentConvId = convId;
+    currentAppointmentId = null;
+    document.querySelectorAll('#inboxConversations li[data-id]').forEach(function(li) {
+      li.classList.toggle('active', parseInt(li.dataset.id, 10) === convId);
+    });
+    document.getElementById('inboxDetailEmpty').style.display = 'none';
+    document.getElementById('inboxDetailContent').style.display = 'flex';
+    document.getElementById('inboxDetailContent').style.flexDirection = 'column';
+    var li = document.querySelector('#inboxConversations li[data-id="' + convId + '"]');
+    var displayTitle = li ? (li.getAttribute('data-display-title') || '').replace(/&quot;/g, '"') : ('대화 #' + convId);
+    document.getElementById('inboxDetailTitle').textContent = displayTitle || ('대화 #' + convId);
+    document.getElementById('inboxAppointmentActions').style.display = 'none';
+    document.getElementById('inboxMessages').innerHTML = '<div class="inbox-loading">불러오는 중...</div>';
+    Promise.all([
+      fetch(API_BASE + '/conversations/' + convId + '/', { method: 'GET', headers: getHeaders('GET'), credentials: 'same-origin' }).then(function(r) { return r.json(); }),
+      fetch(API_BASE + '/conversations/' + convId + '/messages/', { method: 'GET', headers: getHeaders('GET'), credentials: 'same-origin' }).then(function(r) { return r.json(); })
+    ])
+      .then(function(results) {
+        var detail = results[0];
+        var data = results[1];
+        if (detail.display_title) document.getElementById('inboxDetailTitle').textContent = detail.display_title;
+        if (detail.appointment && detail.appointment.can_accept) {
+          currentAppointmentId = detail.appointment.id;
+          document.getElementById('inboxAppointmentActions').style.display = 'flex';
+        }
+        var msgs = data.messages || [];
+        var box = document.getElementById('inboxMessages');
+        if (msgs.length === 0) box.innerHTML = '<p class="text-muted">아직 메시지가 없습니다.</p>';
+        else {
+          box.innerHTML = msgs.map(function(m) {
+            var cls = m.sender_id === currentUserId ? 'mine' : 'theirs';
+            var meta = m.sender_username + ' · ' + (m.created_at ? m.created_at.replace('T', ' ').slice(0, 16) : '');
+            var readIcon = (m.sender_id === currentUserId && m.read_by_others !== undefined)
+              ? readStatusIcon(m.read_by_others) : '';
+            return '<div class="inbox-msg ' + cls + '">' +
+              '<div>' + messageBodyHtml(m) + '</div>' +
+              '<div class="msg-meta">' + meta + readIcon + '</div></div>';
+          }).join('');
+          box.scrollTop = box.scrollHeight;
+        }
+        fetch(API_BASE + '/conversations/' + convId + '/read/', { method: 'POST', headers: getHeaders('POST'), body: '{}', credentials: 'same-origin' });
+        loadConversations();
+      })
+      .catch(function() { document.getElementById('inboxMessages').innerHTML = '<p class="text-muted">메시지를 불러올 수 없습니다.</p>'; });
+  }
+
+  document.getElementById('inboxAppointmentAcceptBtn').addEventListener('click', function() {
+    if (!currentAppointmentId) return;
+    var btn = this;
+    btn.disabled = true;
+    fetch('/api/settlement/appointment/' + currentAppointmentId + '/accept/', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrf, 'Accept': 'application/json' },
+      body: new FormData(),
+      credentials: 'same-origin',
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.ok) {
+          alert(res.message || '약속을 수락했습니다.');
+          document.getElementById('inboxAppointmentActions').style.display = 'none';
+          currentAppointmentId = null;
+          loadConversations();
+        } else alert(res.error || '수락에 실패했습니다.');
+      })
+      .catch(function() { alert('수락 요청에 실패했습니다.'); })
+      .finally(function() { btn.disabled = false; });
+  });
+  document.getElementById('inboxAppointmentRequestChangeBtn').addEventListener('click', function() {
+    if (!currentConvId || !currentAppointmentId) return;
+    var defaultBody = '일정 수정을 요청드립니다. 가능한 시간을 알려주세요.';
+    fetch(API_BASE + '/conversations/' + currentConvId + '/messages/', {
+      method: 'POST',
+      headers: getHeaders('POST'),
+      body: JSON.stringify({ body: defaultBody }),
+      credentials: 'same-origin',
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(msg) {
+        if (msg.id) {
+          var box = document.getElementById('inboxMessages');
+          var p = box.querySelector('p.text-muted');
+          if (p) p.remove();
+          var meta = (msg.sender_username || '') + ' · ' + (msg.created_at ? msg.created_at.replace('T', ' ').slice(0, 16) : '');
+          var readIcon = readStatusIcon(false);
+          box.insertAdjacentHTML('beforeend', '<div class="inbox-msg mine">' +
+            '<div>' + messageBodyHtml(msg) + '</div>' +
+            '<div class="msg-meta">' + meta + readIcon + '</div></div>');
+          box.scrollTop = box.scrollHeight;
+          loadConversations();
+        } else if (msg.error) alert(msg.error);
+      })
+      .catch(function() { alert('메시지 전송에 실패했습니다.'); });
+  });
+
+  document.getElementById('inboxSendBtn').addEventListener('click', function() {
+    if (!currentConvId) return;
+    var input = document.getElementById('inboxMessageInput');
+    var body = (input.value || '').trim();
+    if (!body) return;
+    input.value = '';
+    fetch(API_BASE + '/conversations/' + currentConvId + '/messages/', {
+      method: 'POST',
+      headers: getHeaders('POST'),
+      body: JSON.stringify({ body: body }),
+      credentials: 'same-origin',
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(msg) {
+        if (msg.id) {
+          var box = document.getElementById('inboxMessages');
+          var p = box.querySelector('p.text-muted');
+          if (p) p.remove();
+          var meta = (msg.sender_username || '') + ' · ' + (msg.created_at ? msg.created_at.replace('T', ' ').slice(0, 16) : '');
+          var readIcon = readStatusIcon(msg.read_by_others === true);
+          box.insertAdjacentHTML('beforeend', '<div class="inbox-msg mine">' +
+            '<div>' + messageBodyHtml(msg) + '</div>' +
+            '<div class="msg-meta">' + meta + readIcon + '</div></div>');
+          box.scrollTop = box.scrollHeight;
+          loadConversations();
+        } else if (msg.error) alert(msg.error);
+      })
+      .catch(function() { alert('전송에 실패했습니다.'); });
+  });
+  document.getElementById('inboxMessageInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('inboxSendBtn').click(); }
+  });
+
+  (function attachHandlers() {
+    var attachBtn = document.getElementById('inboxAttachBtn');
+    var menu = document.getElementById('inboxAttachMenu');
+    var fileGallery = document.getElementById('inboxFileGallery');
+    var fileCamera = document.getElementById('inboxFileCamera');
+    if (!attachBtn || !menu) return;
+    attachBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      menu.classList.toggle('open');
+    });
+    document.addEventListener('click', function() { menu.classList.remove('open'); });
+    menu.addEventListener('click', function(e) { e.stopPropagation(); });
+    document.getElementById('inboxAttachGallery').addEventListener('click', function() {
+      menu.classList.remove('open');
+      fileGallery.value = '';
+      fileGallery.click();
+    });
+    document.getElementById('inboxAttachCamera').addEventListener('click', function() {
+      menu.classList.remove('open');
+      fileCamera.value = '';
+      fileCamera.click();
+    });
+    function sendImageFile(file) {
+      if (!currentConvId) return;
+      if (!file || !file.type.match(/^image\//)) { alert('이미지 파일만 전송할 수 있습니다.'); return; }
+      var fd = new FormData();
+      fd.append('image', file);
+      fd.append('body', document.getElementById('inboxMessageInput').value.trim());
+      fd.append('csrfmiddlewaretoken', csrf);
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', API_BASE + '/conversations/' + currentConvId + '/messages/');
+      xhr.setRequestHeader('X-CSRFToken', csrf);
+      xhr.onload = function() {
+        if (xhr.status !== 201) {
+          try { var err = JSON.parse(xhr.responseText); alert(err.error || '전송에 실패했습니다.'); } catch(e) { alert('전송에 실패했습니다.'); }
+          return;
+        }
+        var msg = JSON.parse(xhr.responseText);
+        var box = document.getElementById('inboxMessages');
+        var p = box.querySelector('p.text-muted');
+        if (p) p.remove();
+        var meta = (msg.sender_username || '') + ' · ' + (msg.created_at ? msg.created_at.replace('T', ' ').slice(0, 16) : '');
+        var readIcon = readStatusIcon(msg.read_by_others === true);
+        box.insertAdjacentHTML('beforeend', '<div class="inbox-msg mine">' +
+          '<div>' + messageBodyHtml(msg) + '</div>' +
+          '<div class="msg-meta">' + meta + readIcon + '</div></div>');
+        box.scrollTop = box.scrollHeight;
+        loadConversations();
+      };
+      xhr.onerror = function() { alert('전송에 실패했습니다.'); };
+      xhr.send(fd);
+    }
+    fileGallery.addEventListener('change', function() { if (this.files && this.files[0]) sendImageFile(this.files[0]); });
+    fileCamera.addEventListener('change', function() { if (this.files && this.files[0]) sendImageFile(this.files[0]); });
+  })();
+
+  var openConv = getQueryParam('conversation');
+  if (openConv) {
+    loadConversations().then(function() { selectConversation(parseInt(openConv, 10)); });
+  } else {
+    loadConversations();
+  }
+})();
+</script>
+{% endblock %}

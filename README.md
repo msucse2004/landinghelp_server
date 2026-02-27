@@ -76,6 +76,20 @@ python manage.py seed_plans
 
 `run_local.*` 스크립트는 `DB_HOST=localhost`로 설정 후 venv를 활성화하고 서버를 실행합니다.
 
+#### 5. 이메일 환경변수 (SMTP 사용 시)
+
+`EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL`은 `.env`에 두지 않고 시스템 환경변수로 설정합니다.
+
+**Windows:**
+```powershell
+.\set_email_env.ps1
+# 프롬프트에 따라 이메일 주소, 비밀번호 입력 (사용자 수준에 영구 등록)
+```
+
+**수동 설정:** 제어판 → 시스템 → 고급 시스템 설정 → 환경 변수 → 사용자 변수에서 추가
+
+**확인:** `python manage.py check_email_env` 로 설정 여부 확인
+
 ---
 
 ### B. Docker (전체 컨테이너)

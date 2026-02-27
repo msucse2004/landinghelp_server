@@ -1,5 +1,7 @@
 {% extends "base.html" %}
-{% block title %}랜딩헬프 – 기본 정보부터 시작하세요{% endblock %}
+{% load i18n %}
+{% block title %}LifeAI US – {% trans "기본 정보부터 시작하세요" %}{% endblock %}
+{% block body_class %}page-home{% endblock %}
 {% block extra_head %}
 {% load static %}
 <style>
@@ -80,30 +82,32 @@
   .intro-carousel-dots button.active {
     background: #fff;
   }
+  body.page-home .main-content { padding: 0; }
+  body.page-home .main-content .container { padding: 0; max-width: none; }
 </style>
 {% endblock %}
 {% block below_nav %}
 {% if carousel_slides %}
-<div class="intro-carousel" id="introCarousel" role="region" aria-label="소개 캐러셀" data-auto-interval="3000">
+<div class="intro-carousel" id="introCarousel" role="region" aria-label="{% trans '소개 캐러셀' %}" data-aria-label-key="소개 캐러셀" data-auto-interval="3000">
   <div class="intro-carousel-track" id="introCarouselTrack">
     {# 클론: 마지막 슬라이드 (처음으로 prev 시 자연스러운 전환) #}
     {% with slide=carousel_slides|last %}
     <div class="intro-carousel-slide intro-carousel-clone" data-clone="last" style="{% if slide.background_type == 'IMAGE' and slide.image %}background-image: url('{{ slide.image.url }}');{% elif slide.gradient_css %}background-image: {{ slide.gradient_css }};{% else %}background-image: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);{% endif %}">
-      <h2>{{ slide.title }}</h2>
-      {% if slide.subtitle %}<p>{{ slide.subtitle }}</p>{% endif %}
+      <h2 data-i18n-key="{{ slide.title|escapejs }}">{{ slide.title_display|default:slide.title }}</h2>
+      {% if slide.subtitle_display or slide.subtitle %}<p data-i18n-key="{{ slide.subtitle|escapejs }}">{{ slide.subtitle_display|default:slide.subtitle }}</p>{% endif %}
     </div>
     {% endwith %}
     {% for slide in carousel_slides %}
     <div class="intro-carousel-slide" style="{% if slide.background_type == 'IMAGE' and slide.image %}background-image: url('{{ slide.image.url }}');{% elif slide.gradient_css %}background-image: {{ slide.gradient_css }};{% else %}background-image: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);{% endif %}">
-      <h2>{{ slide.title }}</h2>
-      {% if slide.subtitle %}<p>{{ slide.subtitle }}</p>{% endif %}
+      <h2 data-i18n-key="{{ slide.title|escapejs }}">{{ slide.title_display|default:slide.title }}</h2>
+      {% if slide.subtitle_display or slide.subtitle %}<p data-i18n-key="{{ slide.subtitle|escapejs }}">{{ slide.subtitle_display|default:slide.subtitle }}</p>{% endif %}
     </div>
     {% endfor %}
     {# 클론: 첫 슬라이드 (마지막에서 next 시 자연스러운 전환) #}
     {% with slide=carousel_slides|first %}
     <div class="intro-carousel-slide intro-carousel-clone" data-clone="first" style="{% if slide.background_type == 'IMAGE' and slide.image %}background-image: url('{{ slide.image.url }}');{% elif slide.gradient_css %}background-image: {{ slide.gradient_css }};{% else %}background-image: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);{% endif %}">
-      <h2>{{ slide.title }}</h2>
-      {% if slide.subtitle %}<p>{{ slide.subtitle }}</p>{% endif %}
+      <h2 data-i18n-key="{{ slide.title|escapejs }}">{{ slide.title_display|default:slide.title }}</h2>
+      {% if slide.subtitle_display or slide.subtitle %}<p data-i18n-key="{{ slide.subtitle|escapejs }}">{{ slide.subtitle_display|default:slide.subtitle }}</p>{% endif %}
     </div>
     {% endwith %}
   </div>
@@ -125,6 +129,8 @@
   var startX = null, deltaX = 0;
   var isAnimating = false;
 
+  var singleSlide = realCount <= 1;
+  if (singleSlide && dotsContainer) dotsContainer.style.display = 'none';
   for (var i = 0; i < realCount; i++) {
     var btn = document.createElement('button');
     btn.setAttribute('aria-label', (i + 1) + '번째 슬라이드');
@@ -195,7 +201,7 @@
   }
   var autoInterval = parseInt(carousel.getAttribute('data-auto-interval') || '0', 10);
   var autoTimer = null;
-  if (autoInterval > 0) {
+  if (autoInterval > 0 && !singleSlide) {
     autoTimer = setInterval(goNext, autoInterval);
     carousel.addEventListener('mousedown', function() { clearInterval(autoTimer); });
     carousel.addEventListener('touchstart', function() { clearInterval(autoTimer); }, { passive: true });
@@ -203,6 +209,9 @@
 
   track.style.transform = 'translateX(-100%)';
 
+  if (singleSlide) {
+    carousel.style.cursor = 'default';
+  } else {
   function onPointerUp() {
     if (startX === null) return;
     track.style.transition = 'transform 0.35s ease-out';
@@ -255,24 +264,143 @@
   carousel.addEventListener('touchend', function(e) {
     if (e.changedTouches) onPointerUp();
   });
+  }
 })();
 </script>
 {% endif %}
 
-<section class="hero">
-  <h1>랜딩헬프</h1>
-  <p class="text-muted" style="font-size: clamp(1rem, 2.5vw, 1.15rem); margin-bottom: clamp(1.5rem, 4vw, 2.5rem);">
-    랜딩 페이지에 필요한 기본 정보를 쉽게 확인하고 활용하세요.
-  </p>
-  <div style="display: flex; flex-wrap: wrap; gap: clamp(0.75rem, 2vw, 1rem);">
-    <a href="{% url 'signup' %}" class="btn btn-primary" style="min-height: 48px;">회원가입</a>
-    <a href="{% url 'login' %}" class="btn btn-outline" style="min-height: 48px;">로그인</a>
+{% if user_plan %}
+<style>
+  .plan-card .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    font-size: 0.85rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    background: #fff;
+  }
+  .plan-card .calendar-weekday { text-align: center; padding: 0.35rem; color: var(--color-muted); font-weight: 500; }
+  .plan-card .calendar-day {
+    min-height: 60px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 0.35rem;
+    background: #fafafa;
+  }
+  .plan-card .calendar-day-num { font-weight: 600; margin-bottom: 0.25rem; color: var(--color-muted); font-size: 0.8rem; display: block; }
+  .plan-card .calendar-card {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.35rem;
+    background: var(--color-primary);
+    color: #fff;
+    border-radius: 4px;
+    margin-bottom: 0.2rem;
+  }
+  .plan-card .calendar-card-status {
+    display: block;
+    font-size: 0.6rem;
+    opacity: 0.9;
+    margin-top: 0.1rem;
+  }
+</style>
+<section style="padding: clamp(1rem, 4vw, 1.5rem);">
+  <div class="plan-card" style="border: 1px solid var(--color-border); border-radius: var(--radius); padding: 1.5rem; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);">
+    <h2 style="margin: 0 0 0.5rem; font-size: 1.15rem;">{{ home_plan_i18n.my_plan_title|default:"내 정착 플랜" }}</h2>
+    {% if user_plan.has_agent_assignment and user_plan.checkout_total and user_plan.checkout_total > 0 %}
+    <p style="font-weight: 600; margin-bottom: 0.5rem;"><span>{{ home_plan_i18n.estimated_checkout|default:"예상 Checkout" }}</span>: {{ user_plan.checkout_total|floatformat:0 }}{{ home_plan_i18n.won|default:"원" }}</p>
+    {% endif %}
+    <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1rem;">
+      {% if user_plan.state %}{{ user_plan.state }}{% endif %}
+      {% if user_plan.city %} {{ user_plan.city }}{% endif %}
+      {% if user_plan.entry_date %}({{ home_plan_i18n.entry_planned|default:"입국 예정" }}: {{ user_plan.entry_date|date:"Y-m-d" }}){% endif %}
+      {% if not user_plan.state and not user_plan.city and not user_plan.entry_date %}{{ home_plan_i18n.saved_schedule|default:"저장된 일정이 있습니다" }}{% endif %}
+    </p>
+    <div class="plan-calendar-wrap" style="margin-bottom: 1rem;">
+      {{ plan_calendar_i18n|json_script:"plan-calendar-i18n" }}
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+        <button type="button" class="plan-cal-prev btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.85rem;">◀</button>
+        <strong id="planCalTitle" style="font-size: 0.95rem;" data-year-suffix="{{ plan_calendar_year_suffix|default:'' }}" data-month-suffix="{{ plan_calendar_month_suffix|default:'' }}"></strong>
+        <button type="button" class="plan-cal-next btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.85rem;">▶</button>
+      </div>
+      <div id="planCalendarGrid" class="calendar-grid">
+        {% for w in calendar_weekdays %}<span class="calendar-weekday">{{ w }}</span>{% endfor %}
+      </div>
+    </div>
+    <a href="{% url 'settlement_quote' %}" class="btn btn-primary">{{ home_plan_i18n.edit_plan|default:"정착 플랜 수정" }}</a>
   </div>
 </section>
-
-<section class="card" style="margin-top: clamp(2rem, 5vw, 3rem);">
-  <p class="text-muted" style="margin: 0; font-size: 0.95rem;">
-    <strong>Basic</strong> 플랜으로도 기본 정보 접근이 가능합니다.
-  </p>
-</section>
+<script>
+(function() {
+  var schedule = {{ plan_schedule_json|safe }};
+  var grid = document.getElementById('planCalendarGrid');
+  var titleEl = document.getElementById('planCalTitle');
+  if (!grid || !titleEl) return;
+  var i18nEl = document.getElementById('plan-calendar-i18n');
+  var calI18n = i18nEl ? (function(){ try { return JSON.parse(i18nEl.textContent); } catch(e){ return {}; } })() : {};
+  var calLang = (calI18n && calI18n.lang) ? calI18n.lang : '';
+  function t(key) { return (calI18n && calI18n[key] != null) ? calI18n[key] : key; }
+  var today = new Date();
+  var calYear = today.getFullYear();
+  var calMonth = today.getMonth();
+  function padDate(y, m, d) {
+    m = (m + 1).toString();
+    d = d.toString();
+    return y + '-' + (m.length === 1 ? '0' + m : m) + '-' + (d.length === 1 ? '0' + d : d);
+  }
+  function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function render() {
+    var first = new Date(calYear, calMonth, 1);
+    var last = new Date(calYear, calMonth + 1, 0);
+    var startBlank = first.getDay();
+    var daysInMonth = last.getDate();
+    if (calLang === 'ko' || calLang === 'zh-hans' || calLang === 'zh-hant') {
+      var yearSuffix = (titleEl.getAttribute && titleEl.getAttribute('data-year-suffix')) || t('year') || '년';
+      var monthSuffix = (titleEl.getAttribute && titleEl.getAttribute('data-month-suffix')) || t('month') || '월';
+      titleEl.textContent = calYear + yearSuffix + ' ' + (calMonth + 1) + monthSuffix;
+    } else {
+      titleEl.textContent = (t('month_' + (calMonth + 1)) || (calMonth + 1)) + '. ' + calYear;
+    }
+    while (grid.children.length > 7) grid.removeChild(grid.lastChild);
+    for (var i = 0; i < startBlank; i++) {
+      var empty = document.createElement('div');
+      empty.className = 'calendar-day';
+      empty.style.background = '#f8fafc';
+      grid.appendChild(empty);
+    }
+    for (var d = 1; d <= daysInMonth; d++) {
+      var dateStr = padDate(calYear, calMonth, d);
+      var items = schedule[dateStr] || [];
+      var cell = document.createElement('div');
+      cell.className = 'calendar-day';
+      cell.innerHTML = '<span class="calendar-day-num">' + d + '</span>';
+        if (Array.isArray(items)) {
+          items.forEach(function(item) {
+            var label = (item && item.label) ? item.label : (item && item.code) ? item.code : '';
+            if (label) {
+              var statusLabel = (item && item.appointment_status_label) ? item.appointment_status_label : '';
+              var cardHtml = '<div class="calendar-card">' + esc(label) + (statusLabel ? '<span class="calendar-card-status">' + esc(statusLabel) + '</span>' : '') + '</div>';
+              cell.innerHTML += cardHtml;
+            }
+          });
+        }
+      grid.appendChild(cell);
+    }
+  }
+  render();
+  window.addEventListener('i18n-applied', function() { render(); });
+  document.querySelector('.plan-cal-prev').addEventListener('click', function() {
+    calMonth--;
+    if (calMonth < 0) { calMonth = 11; calYear--; }
+    render();
+  });
+  document.querySelector('.plan-cal-next').addEventListener('click', function() {
+    calMonth++;
+    if (calMonth > 11) { calMonth = 0; calYear++; }
+    render();
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}

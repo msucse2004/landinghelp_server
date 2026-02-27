@@ -1,0 +1,261 @@
+Total rows: 283
+Rows with missing translation(s): 258
+
+1~5점	en	1~5점
+24시간 미수락 시 에이전트에게 보낸 독촉 메시지 발송 시각	en	24시간 미수락 시 에이전트에게 보낸 독촉 메시지 발송 시각
+AI 서비스 추천 / 스케줄 생성	en	AI 서비스 추천 / 스케줄 생성
+AI 서비스 추천은 스탠다드 이상 등급에서 이용 가능합니다.	en	AI 서비스 추천은 스탠다드 이상 등급에서 이용 가능합니다.
+AI 추천 및 에이전트 도움을 원하시면 상위 요금제로 업그레이드하세요.	en	AI 추천 및 에이전트 도움을 원하시면 상위 요금제로 업그레이드하세요.
+AI 추천 사용	en	AI 추천 사용
+Accept rate (수락률)	en	Accept rate (수락률)
+Agent	en	Agent
+Agent 가격	en	Agent 가격
+Agent 목록을 불러올 수 없습니다.	en	Agent 목록을 불러올 수 없습니다.
+Agent 선택 필요	en	Agent 선택 필요
+Agent 신청 항목 · 과금	en	Agent 신청 항목 · 과금
+Checkout 합계	en	Checkout 합계
+Customer 가격	en	Customer 가격
+EMAIL_HOST_USER, EMAIL_HOST_PASSWORD 환경변수가 설정되지 않았습니다.	en	EMAIL_HOST_USER, EMAIL_HOST_PASSWORD 환경변수가 설정되지 않았습니다.
+EN English	en	EN English
+ES Español	en	ES Español
+KR 한국어	en	KR 한국어
+LifeAI USA와 함께 비즈니스를 성장시키세요.	en	LifeAI USA와 함께 비즈니스를 성장시키세요.
+VI Tiếng Việt	en	VI Tiếng Việt
+ZH 中文(简体)	en	ZH 中文(简体)
+ZH 中文(繁體)	en	ZH 中文(繁體)
+{"YYYY-MM-DD": [{"code":"X","label":"Y"}, ...]}	en	{"YYYY-MM-DD": [{"code":"X","label":"Y"}, ...]}
+가능한 Agent	en	가능한 Agent
+가입 시 사용한 이메일	en	가입 시 사용한 이메일
+가입하기	en	가입하기
+각 지역 게시판에서 다양한 정보를 찾아보세요.	en	각 지역 게시판에서 다양한 정보를 찾아보세요.
+건	en	건
+견적 신청	en	견적 신청
+견적/스케줄 식별용 (예: DRIVERS_LICENSE). 비어있으면 id 사용	en	견적/스케줄 식별용 (예: DRIVERS_LICENSE). 비어있으면 id 사용
+결재 대기	en	결재 대기
+결재 대기중	en	결재 대기중
+결제 처리에 실패했습니다.	en	결제 처리에 실패했습니다.
+결제를 완료하면 에이전트에게 약속이 전달됩니다.	en	결제를 완료하면 에이전트에게 약속이 전달됩니다.
+결제하기	en	결제하기
+결제하시겠습니까?	en	결제하시겠습니까?
+계정 유형	en	계정 유형
+고객 (Customer)	en	고객 (Customer)
+고객 평가	en	고객 평가
+고객 평가 내역	en	고객 평가 내역
+공항픽업	en	공항픽업
+관련 서비스를 찾지 못했습니다. 직접 선택해 주세요.	en	관련 서비스를 찾지 못했습니다. 직접 선택해 주세요.
+광고 등 클릭 시 이동할 URL	en	광고 등 클릭 시 이동할 URL
+광고 등록 신청	en	광고 등록 신청
+광고 문의	en	광고 문의
+광고 부제목	en	광고 부제목
+광고 제목	en	광고 제목
+그라데이션 CSS	en	그라데이션 CSS
+기본 메뉴얼을 참고하여 직접 진행할 수 있는 서비스를 제공합니다.	en	기본 메뉴얼을 참고하여 직접 진행할 수 있는 서비스를 제공합니다.
+기업 광고	en	기업 광고
+기타	en	기타
+날짜별 서비스: {"YYYY-MM-DD": ["SERVICE_CODE", ...]}	en	날짜별 서비스: {"YYYY-MM-DD": ["SERVICE_CODE", ...]}
+남성	en	남성
+네트워크 오류가 발생했을 수 있습니다. 다시 시도해 주세요.	en	네트워크 오류가 발생했을 수 있습니다. 다시 시도해 주세요.
+년	en	년
+노출 위치	en	노출 위치
+다양한 게시판에서 경험을 나누고 질문하세요.	en	다양한 게시판에서 경험을 나누고 질문하세요.
+다음	en	다음
+달력에 서비스를 드래그하고 Agent를 선택하면 결제할 항목이 여기에 표시됩니다. (이미 결제한 항목은 표시되지 않습니다.)	en	달력에 서비스를 드래그하고 Agent를 선택하면 결제할 항목이 여기에 표시됩니다. (이미 결제한 항목은 표시되지 않습니다.)
+달력에서 서비스 카드를 클릭해 Agent를 선택한 항목만 과금되며 여기에 표시됩니다.	en	달력에서 서비스 카드를 클릭해 Agent를 선택한 항목만 과금되며 여기에 표시됩니다.
+담당자명	en	담당자명
+도시	en	도시
+등록된 도시가 없습니다.	en	등록된 도시가 없습니다.
+등록된 서비스가 없습니다.	en	등록된 서비스가 없습니다.
+랜딩헬프와 함께 새로운 삶을 준비하세요.	en	랜딩헬프와 함께 새로운 삶을 준비하세요.
+로딩 중...	en	로딩 중...
+링크 URL	en	링크 URL
+메시지	en	메시지
+메시지 보내기	en	메시지 보내기
+모든 항목에 에이전트가 도움을 드립니다.	en	모든 항목에 에이전트가 도움을 드립니다.
+목록으로	en	목록으로
+무료	en	무료
+무료 Agent 서비스	en	무료 Agent 서비스
+미국 정착의 시작	en	미국 정착의 시작
+배경 이미지	en	배경 이미지
+번째 슬라이드	en	번째 슬라이드
+별점	en	별점
+병원방문	en	병원방문
+부제목	en	부제목
+비밀번호가 일치하지 않습니다.	en	비밀번호가 일치하지 않습니다.
+사용자	en	사용자
+사용자 정착 플랜	en	사용자 정착 플랜
+사용자들	en	사용자들
+사진 선택	en	사진 선택
+삭제	en	삭제
+상태	en	상태
+새 비밀번호	en	새 비밀번호
+새 비밀번호 확인	en	새 비밀번호 확인
+생년월일	en	생년월일
+서비스	en	서비스
+서비스 customer_price 합계	en	서비스 customer_price 합계
+서비스 선택	en	서비스 선택
+서비스 선택 (복수 선택)	en	서비스 선택 (복수 선택)
+서비스 일정	en	서비스 일정
+서비스 추천: "이사 직후 운전면허, 은행 필요해요" — 스케줄 생성: "2주일 동안 아래 선택된 항목들의 스캐쥴 짜줘" (위 이주 예정일 입력 후)	en	서비스 추천: "이사 직후 운전면허, 은행 필요해요" — 스케줄 생성: "2주일 동안 아래 선택된 항목들의 스캐쥴 짜줘" (위 이주 예정일 입력 후)
+서비스 코드	en	서비스 코드
+서비스 항목	en	서비스 항목
+서비스별 Customer 가격 기준	en	서비스별 Customer 가격 기준
+선택 서비스	en	선택 서비스
+선택된 도시	en	선택된 도시
+선택하세요	en	선택하세요
+선택한 서비스가 입국일 기준 2주 일정으로 달력에 배치되었습니다.	en	선택한 서비스가 입국일 기준 2주 일정으로 달력에 배치되었습니다.
+선호 언어	en	선호 언어
+성별	en	성별
+소셜번호 신청	en	소셜번호 신청
+수락 독촉 알림 발송 시각	en	수락 독촉 알림 발송 시각
+수락률	en	수락률
+수정	en	수정
+수정에 실패했습니다.	en	수정에 실패했습니다.
+수정일	en	수정일
+스케줄 사용자	en	스케줄 사용자
+스케줄 생성 전에 아래에서 서비스 카드를 클릭해 선택해 주세요.	en	스케줄 생성 전에 아래에서 서비스 카드를 클릭해 선택해 주세요.
+스케줄 생성 중...	en	스케줄 생성 중...
+스케줄 생성에 실패했습니다.	en	스케줄 생성에 실패했습니다.
+스케줄 생성은 스탠다드 이상 등급에서 이용 가능합니다.	en	스케줄 생성은 스탠다드 이상 등급에서 이용 가능합니다.
+스케줄 요청에 실패했습니다.	en	스케줄 요청에 실패했습니다.
+스케줄이 저장되었습니다. 예상 Checkout: %(total)s원	en	스케줄이 저장되었습니다. 예상 Checkout: %(total)s원
+신청 일시	en	신청 일시
+신청에 실패했습니다.	en	신청에 실패했습니다.
+신청자	en	신청자
+실행	en	실행
+약속 상세	en	약속 상세
+약속 신청	en	약속 신청
+약속 신청이 완료되었습니다.	en	약속 신청이 완료되었습니다.
+약속 취소 요청에 실패했습니다.	en	약속 취소 요청에 실패했습니다.
+약속 취소에 실패했습니다.	en	약속 취소에 실패했습니다.
+에서 메뉴얼을 확인하세요.	en	에서 메뉴얼을 확인하세요.
+에이전트 (Agent)	en	에이전트 (Agent)
+에이전트 가입 시 선택한 SettlementService ID 목록	en	에이전트 가입 시 선택한 SettlementService ID 목록
+에이전트 별점	en	에이전트 별점
+에이전트 서비스 (가입 시 선택)	en	에이전트 서비스 (가입 시 선택)
+에이전트 전체 약속 수락률. 예: 0.85 = 85%. 비워두면 서비스별 통계에서 계산해 표시.	en	에이전트 전체 약속 수락률. 예: 0.85 = 85%. 비워두면 서비스별 통계에서 계산해 표시.
+에이전트가 커버하는 도시 Area ID 목록	en	에이전트가 커버하는 도시 Area ID 목록
+에이전트가 커버하는 주 코드 목록 (예: NC, CA, TX)	en	에이전트가 커버하는 주 코드 목록 (예: NC, CA, TX)
+에이전트별 별점	en	에이전트별 별점
+여성	en	여성
+연락처	en	연락처
+연락처 이름	en	연락처 이름
+연락처 이메일	en	연락처 이메일
+예: 60 = 1시간	en	예: 60 = 1시간
+예: Los Angeles	en	예: Los Angeles
+예: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)	en	예: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)
+예: 오전 10시	en	예: 오전 10시
+예: 오전 10시, 오후 2시	en	예: 오전 10시, 오후 2시
+예상 Checkout 합계	en	예상 Checkout 합계
+예상 일정, 지역, 특별 요청사항 등을 적어주세요.	en,es,zh_hans,zh_hant,vi	예상 일정, 지역, 특별 요청사항 등을 적어주세요.
+요청에 실패했습니다.	en,es,zh_hans,zh_hant,vi	요청에 실패했습니다.
+운전면허시험	en,es,zh_hans,zh_hant,vi	운전면허시험
+원	es,zh_hans,zh_hant,vi	원
+월	es,zh_hans,zh_hant,vi	월
+유틸리티 개통	en,es,zh_hans,zh_hant,vi	유틸리티 개통
+은행계좌 개설	en,es,zh_hans,zh_hant,vi	은행계좌 개설
+이 서비스는 유료입니다. 결제를 완료하시면 에이전트에게 약속이 전달됩니다. 아래 "결제하기" 버튼을 눌러 주세요.	en,es,zh_hans,zh_hant,vi	이 서비스는 유료입니다. 결제를 완료하시면 에이전트에게 약속이 전달됩니다. 아래 "결제하기" 버튼을 눌러 주세요.
+이 약속을 취소하시겠습니까?	en,es,zh_hans,zh_hant,vi	이 약속을 취소하시겠습니까?
+이름	en,es,zh_hans,zh_hant,vi	이름
+이메일	en,es,zh_hans,zh_hant,vi	이메일
+이메일 발송이 동작하지 않습니다.	en,es,zh_hans,zh_hant,vi	이메일 발송이 동작하지 않습니다.
+이메일 설정 경고	en,es,zh_hans,zh_hant,vi	이메일 설정 경고
+이메일 설정 경고: EMAIL_HOST_USER, EMAIL_HOST_PASSWORD 환경변수가 설정되지 않았습니다. 이메일 발송이 동작하지 않습니다.	en,es,zh_hans,zh_hant,vi	이메일 설정 경고: EMAIL_HOST_USER, EMAIL_HOST_PASSWORD 환경변수가 설정되지 않았습니다. 이메일 발송이 동작하지 않습니다.
+이사, 학교, 의료 등 지역별 실질적 정보를 제공합니다.	en,es,zh_hans,zh_hant,vi	이사, 학교, 의료 등 지역별 실질적 정보를 제공합니다.
+이사가는 동네의 지역정보는?	en,es,zh_hans,zh_hant,vi	이사가는 동네의 지역정보는?
+이전	en,es,zh_hans,zh_hant,vi	이전
+이주 State	en,es,zh_hans,zh_hant,vi	이주 State
+이주 정보	en,es,zh_hans,zh_hant,vi	이주 정보
+이주할 State	en,es,zh_hans,zh_hant,vi	이주할 State
+일	es,zh_hans,zh_hant,vi	일
+일자	en,es,zh_hans,zh_hant,vi	일자
+일정 달력	en,es,zh_hans,zh_hant,vi	일정 달력
+읽지 않은 메시지	en,es,zh_hans,zh_hant,vi	읽지 않은 메시지
+임대계약	en,es,zh_hans,zh_hant,vi	임대계약
+임대승인 코디네이션	en,es,zh_hans,zh_hant,vi	임대승인 코디네이션
+임대지원	en,es,zh_hans,zh_hant,vi	임대지원
+입국 예정	es,zh_hans,zh_hant,vi	입국 예정
+입국 예정일을 입력해 주세요.	en,es,zh_hans,zh_hant,vi	입국 예정일을 입력해 주세요.
+입국/이주 예정일	en,es,zh_hans,zh_hant,vi	입국/이주 예정일
+입력값을 확인해 주세요.	en,es,zh_hans,zh_hant,vi	입력값을 확인해 주세요.
+자녀학교 방문	en,es,zh_hans,zh_hant,vi	자녀학교 방문
+저장	en,es,zh_hans,zh_hant,vi	저장
+저장 중...	en,es,zh_hans,zh_hant,vi	저장 중...
+저장되었습니다.	en,es,zh_hans,zh_hant,vi	저장되었습니다.
+저장된 일정이 있습니다	es,zh_hans,zh_hant,vi	저장된 일정이 있습니다
+저장에 실패했습니다.	en,es,zh_hans,zh_hant,vi	저장에 실패했습니다.
+전송 중...	en,es,zh_hans,zh_hant,vi	전송 중...
+전화개통/배송	en,es,zh_hans,zh_hant,vi	전화개통/배송
+접근 허용 역할 (GUEST=비로그인, CUSTOMER, AGENT, ADMIN)	en,es,zh_hans,zh_hant,vi	접근 허용 역할 (GUEST=비로그인, CUSTOMER, AGENT, ADMIN)
+정렬	en,es,zh_hans,zh_hant,vi	정렬
+정착 서비스 소개	en,es,zh_hans,zh_hant,vi	정착 서비스 소개
+정착 서비스를 제공합니다.	en,es,zh_hans,zh_hant,vi	정착 서비스를 제공합니다.
+정착 플랜	en,es,zh_hans,zh_hant,vi	정착 플랜
+정착 플랜 수정	es,zh_hans,zh_hant,vi	정착 플랜 수정
+정착에 필요한 정보	en,es,zh_hans,zh_hant,vi	정착에 필요한 정보
+제공 서비스	en,es,zh_hans,zh_hant,vi	제공 서비스
+제공할 서비스를 선택하세요.	en,es,zh_hans,zh_hant,vi	제공할 서비스를 선택하세요.
+제목	en,es,zh_hans,zh_hant,vi	제목
+주(State) 선택	en,es,zh_hans,zh_hant,vi	주(State) 선택
+주(State)를 선택한 후 해당 주의 도시를 선택하세요. 여러 주에서 도시를 선택할 수 있습니다.	en,es,zh_hans,zh_hant,vi	주(State)를 선택한 후 해당 주의 도시를 선택하세요. 여러 주에서 도시를 선택할 수 있습니다.
+주를 선택하세요	en,es,zh_hans,zh_hant,vi	주를 선택하세요
+주별 도시 ID: {"NC": [1,2,3], "CA": [10,11]}	en,es,zh_hans,zh_hant,vi	주별 도시 ID: {"NC": [1,2,3], "CA": [10,11]}
+주택 영상촬영	en,es,zh_hans,zh_hant,vi	주택 영상촬영
+주택조사	en,es,zh_hans,zh_hant,vi	주택조사
+주택투어	en,es,zh_hans,zh_hant,vi	주택투어
+지역투어	en,es,zh_hans,zh_hant,vi	지역투어
+차량구매	en,es,zh_hans,zh_hant,vi	차량구매
+차량등록	en,es,zh_hans,zh_hant,vi	차량등록
+차량렌트	en,es,zh_hans,zh_hant,vi	차량렌트
+추가 문의사항	en,es,zh_hans,zh_hant,vi	추가 문의사항
+추가 요청사항	en,es,zh_hans,zh_hant,vi	추가 요청사항
+추가 요청사항을 적어주세요.	en,es,zh_hans,zh_hant,vi	추가 요청사항을 적어주세요.
+추천 서비스가 선택되었습니다. 달력에 드래그하거나 "2주일 스캐쥴 짜줘"로 자동 배치하세요.	en,es,zh_hans,zh_hant,vi	추천 서비스가 선택되었습니다. 달력에 드래그하거나 "2주일 스캐쥴 짜줘"로 자동 배치하세요.
+추천 요청에 실패했습니다.	en,es,zh_hans,zh_hant,vi	추천 요청에 실패했습니다.
+추천 중...	en,es,zh_hans,zh_hant,vi	추천 중...
+취소	en,es,zh_hans,zh_hant,vi	취소
+취소 사유	en,es,zh_hans,zh_hant,vi	취소 사유
+취소 시 사유. 예: 사용자 취소, Agent 취소	en,es,zh_hans,zh_hant,vi	취소 시 사유. 예: 사용자 취소, Agent 취소
+취소됨	en,es,zh_hans,zh_hant,vi	취소됨
+취소에 실패했습니다.	en,es,zh_hans,zh_hant,vi	취소에 실패했습니다.
+카드를 날짜 칸에 드래그하여 배치하세요. 서비스 카드를 클릭해 Agent를 선택한 뒤 저장하면 예상 결제 금액이 홈·대시보드에 표시됩니다. 월/연도를 변경할 수 있습니다.	en,es,zh_hans,zh_hant,vi	카드를 날짜 칸에 드래그하여 배치하세요. 서비스 카드를 클릭해 Agent를 선택한 뒤 저장하면 예상 결제 금액이 홈·대시보드에 표시됩니다. 월/연도를 변경할 수 있습니다.
+카드를 클릭해 선택/해제하고, 드래그하여 달력에 놓으세요. "2주일 스캐쥴 짜줘" 입력 시 선택된 항목이 자동 배치됩니다.	en,es,zh_hans,zh_hant,vi	카드를 클릭해 선택/해제하고, 드래그하여 달력에 놓으세요. "2주일 스캐쥴 짜줘" 입력 시 선택된 항목이 자동 배치됩니다.
+카테고리	en,es,zh_hans,zh_hant,vi	카테고리
+캐러셀 (광고)	en,es,zh_hans,zh_hant,vi	캐러셀 (광고)
+캐러셀 (기업서비스)	en,es,zh_hans,zh_hant,vi	캐러셀 (기업서비스)
+캐러셀 (정착서비스)	en,es,zh_hans,zh_hant,vi	캐러셀 (정착서비스)
+캐러셀 (홈인트로)	en,es,zh_hans,zh_hant,vi	캐러셀 (홈인트로)
+캐러셀 슬라이드	en,es,zh_hans,zh_hant,vi	캐러셀 슬라이드
+커뮤니티와 함께	en,es,zh_hans,zh_hant,vi	커뮤니티와 함께
+커버 도시	en,es,zh_hans,zh_hant,vi	커버 도시
+커버 도시 (복수 선택)	en,es,zh_hans,zh_hant,vi	커버 도시 (복수 선택)
+커버 도시 (주별)	en,es,zh_hans,zh_hant,vi	커버 도시 (주별)
+커버 주(State)	en,es,zh_hans,zh_hant,vi	커버 주(State)
+커버 지역	en,es,zh_hans,zh_hant,vi	커버 지역
+컨텐츠	en,es,zh_hans,zh_hant,vi	컨텐츠
+컨텐츠 목록	en,es,zh_hans,zh_hant,vi	컨텐츠 목록
+클릭하여 선택 해제	en,es,zh_hans,zh_hant,vi	클릭하여 선택 해제
+토	es,zh_hans,zh_hant,vi	토
+평가 대상 (Agent)	en,es,zh_hans,zh_hant,vi	평가 대상 (Agent)
+평가 없음	en,es,zh_hans,zh_hant,vi	평가 없음
+평가자 (Customer)	en,es,zh_hans,zh_hant,vi	평가자 (Customer)
+표시	en,es,zh_hans,zh_hant,vi	표시
+표시할 컨텐츠가 없습니다.	en,es,zh_hans,zh_hant,vi	표시할 컨텐츠가 없습니다.
+프로필 사진	en,es,zh_hans,zh_hant,vi	프로필 사진
+프로필에 표시될 사진을 등록하세요.	en,es,zh_hans,zh_hant,vi	프로필에 표시될 사진을 등록하세요.
+필요 시 에이전트의 도움을 받을 수 있으며, 패키지 또는 단일 항목으로 계약 가능합니다.	en,es,zh_hans,zh_hant,vi	필요 시 에이전트의 도움을 받을 수 있으며, 패키지 또는 단일 항목으로 계약 가능합니다.
+필요 시간(분)	en,es,zh_hans,zh_hant,vi	필요 시간(분)
+필요한 서비스를 입력해 주세요.	en,es,zh_hans,zh_hant,vi	필요한 서비스를 입력해 주세요.
+필요한 서비스를 한글로 입력하거나, 2주일 스캐쥴 짜줘 입력	en,es,zh_hans,zh_hant,vi	필요한 서비스를 한글로 입력하거나, 2주일 스캐쥴 짜줘 입력
+한줄평	en,es,zh_hans,zh_hant,vi	한줄평
+합계	en,es,zh_hans,zh_hant,vi	합계
+항목이름	en,es,zh_hans,zh_hant,vi	항목이름
+해당 지역·서비스를 담당하는 Agent가 없습니다.	en,es,zh_hans,zh_hant,vi	해당 지역·서비스를 담당하는 Agent가 없습니다.
+현재 등급	en,es,zh_hans,zh_hant,vi	현재 등급
+화	es,zh_hans,zh_hant,vi	화
+확인	en,es,zh_hans,zh_hant,vi	확인
+확인 중...	en,es,zh_hans,zh_hant,vi	확인 중...
+활성	en,es,zh_hans,zh_hant,vi	활성
+회사/업체명	en,es,zh_hans,zh_hant,vi	회사/업체명
+희망 시간	en,es,zh_hans,zh_hant,vi	희망 시간
+희망 시간대	en,es,zh_hans,zh_hant,vi	희망 시간대
+희망 일자	en,es,zh_hans,zh_hant,vi	희망 일자

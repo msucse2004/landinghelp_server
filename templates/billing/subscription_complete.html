@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}구독 완료 – LifeAI US{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>구독 완료</h1>
+  <p style="font-size:1.1rem; margin:1rem 0;">{{ plan.get_display_name }} 플랜 구독이 완료되었습니다.</p>
+  <a href="{% url 'home' %}" class="btn btn-primary">홈으로</a>
+  <a href="{% url 'billing:subscription_plan' %}" class="btn btn-outline" style="margin-left:0.5rem;">구독 관리</a>
+</section>
+{% endblock %}

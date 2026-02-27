@@ -12,7 +12,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         email = options["email"]
-        self.stdout.write(f"설정 확인: BACKEND={settings.EMAIL_BACKEND}, HOST={getattr(settings, 'EMAIL_HOST', '')}")
+        self.stdout.write("설정 확인: BACKEND=%s" % settings.EMAIL_BACKEND)
         try:
             send_mail(
                 "[테스트] 랜딩헬프 이메일 설정 확인",

@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}내 예약 일정 – LifeAI US{% endblock %}
+{% block content %}
+<style>
+  .agent-cal-wrap { margin-top: 1rem; }
+  .agent-cal-nav { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+  .agent-cal-nav h2 { margin: 0; font-size: 1.1rem; }
+  .agent-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 0.5rem;
+    background: #fff;
+  }
+  .agent-cal-weekday { text-align: center; padding: 0.35rem; color: var(--color-muted); font-weight: 500; font-size: 0.85rem; }
+  .agent-cal-day {
+    min-height: 90px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 0.35rem;
+    background: #fafafa;
+    font-size: 0.85rem;
+  }
+  .agent-cal-day-num { font-weight: 600; color: var(--color-muted); font-size: 0.8rem; margin-bottom: 0.25rem; }
+  .agent-cal-card {
+    padding: 0.35rem 0.5rem;
+    margin-bottom: 0.25rem;
+    border-radius: 4px;
+    cursor: pointer;
+    background: #e0e7ff;
+    border: 1px solid #c7d2fe;
+    font-size: 0.75rem;
+  }
+  .agent-cal-card:hover { background: #c7d2fe; }
+  .agent-cal-card.confirmed { background: #d1fae5; border-color: #a7f3d0; }
+  .agent-cal-card.pending { background: #fef3c7; border-color: #fde68a; }
+  .agent-detail-panel {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: #fff;
+    display: none;
+  }
+  .agent-detail-panel.visible { display: block; }
+  .agent-detail-panel h3 { margin: 0 0 0.75rem; font-size: 1rem; }
+  .agent-detail-panel .detail-row { margin-bottom: 0.5rem; font-size: 0.9rem; }
+  .agent-detail-panel .detail-row .label { color: var(--color-muted); margin-right: 0.5rem; }
+  .agent-detail-actions { margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+</style>
+<div class="card">
+  <h1>고객 예약 달력</h1>
+  <p class="text-muted">고객이 신청한 약속을 날짜별로 확인하고, 수락하거나 메시지를 보낼 수 있습니다.</p>
+  <div class="agent-cal-wrap">
+    <div class="agent-cal-nav">
+      <a href="?year={{ prev_year }}&month={{ prev_month }}" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">◀ 이전</a>
+      <h2 id="agentCalTitle">{{ cal_title }}</h2>
+      <a href="?year={{ next_year }}&month={{ next_month }}" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">다음 ▶</a>
+    </div>
+    <div class="agent-cal-grid">
+      {% for w in calendar_weekdays %}<span class="agent-cal-weekday">{{ w }}</span>{% endfor %}
+      {% for cell in calendar_days %}
+      <div class="agent-cal-day">
+        {% if cell.day %}
+        <div class="agent-cal-day-num">{{ cell.day }}</div>
+        {% for item in cell.items %}
+        <div class="agent-cal-card {{ item.status|lower }}" data-id="{{ item.id }}" data-date="{{ cell.date_str }}" data-status="{{ item.status }}" data-conversation-id="{{ item.conversation_id|default:'' }}" data-service-label="{{ item.service_label }}" data-customer="{{ item.customer_display }}" data-time="{{ item.preferred_time|escape }}" data-message="{{ item.message|escape }}">
+          <strong>{{ item.service_label }}</strong><br>
+          <span>{{ item.customer_display }}</span> · <span>{{ item.status }}</span>
+        </div>
+        {% endfor %}
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <div class="agent-detail-panel" id="agentDetailPanel">
+      <h3 id="agentDetailTitle">예약 상세</h3>
+      <div class="detail-row"><span class="label">서비스</span><span id="agentDetailService"></span></div>
+      <div class="detail-row"><span class="label">날짜</span><span id="agentDetailDate"></span></div>
+      <div class="detail-row"><span class="label">고객</span><span id="agentDetailCustomer"></span></div>
+      <div class="detail-row"><span class="label">희망 시간</span><span id="agentDetailTime"></span></div>
+      <div class="detail-row"><span class="label">메시지</span><span id="agentDetailMessage" style="white-space:pre-wrap;"></span></div>
+      <div class="detail-row"><span class="label">상태</span><span id="agentDetailStatus"></span></div>
+      <div class="agent-detail-actions">
+        <button type="button" class="btn btn-primary" id="agentAcceptBtn" style="display:none;">수락</button>
+        <button type="button" class="btn btn-outline" id="agentCancelBtn" style="display:none; color:#dc2626;">취소</button>
+        <a href="#" id="agentMessageLink" class="btn btn-outline" style="display:none;">메시지 보내기</a>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  var panel = document.getElementById('agentDetailPanel');
+  var titleEl = document.getElementById('agentDetailTitle');
+  var serviceEl = document.getElementById('agentDetailService');
+  var dateEl = document.getElementById('agentDetailDate');
+  var customerEl = document.getElementById('agentDetailCustomer');
+  var timeEl = document.getElementById('agentDetailTime');
+  var messageEl = document.getElementById('agentDetailMessage');
+  var statusEl = document.getElementById('agentDetailStatus');
+  var acceptBtn = document.getElementById('agentAcceptBtn');
+  var cancelBtn = document.getElementById('agentCancelBtn');
+  var messageLink = document.getElementById('agentMessageLink');
+  var csrfEl = document.querySelector('[name=csrfmiddlewaretoken]');
+  var currentId = null;
+
+  function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  document.querySelectorAll('.agent-cal-card').forEach(function(card) {
+    card.addEventListener('click', function() {
+      currentId = parseInt(card.dataset.id, 10);
+      var dateStr = card.dataset.date || '';
+      var status = card.dataset.status || '';
+      var convId = (card.dataset.conversationId || '').trim();
+      serviceEl.textContent = card.dataset.serviceLabel || '-';
+      dateEl.textContent = dateStr || '-';
+      customerEl.textContent = card.dataset.customer || '-';
+      timeEl.textContent = card.dataset.time || '-';
+      messageEl.textContent = card.dataset.message || '-';
+      statusEl.textContent = status === 'PENDING' ? '대기' : (status === 'CONFIRMED' ? '확정' : status);
+      panel.classList.add('visible');
+      if (status === 'PENDING') {
+        acceptBtn.style.display = '';
+        acceptBtn.disabled = false;
+      } else {
+        acceptBtn.style.display = 'none';
+      }
+      cancelBtn.style.display = '';
+      cancelBtn.disabled = false;
+      if (convId) {
+        messageLink.href = '/messages/?conversation=' + convId;
+        messageLink.style.display = '';
+      } else {
+        messageLink.style.display = 'none';
+      }
+    });
+  });
+
+  acceptBtn.addEventListener('click', function() {
+    if (!currentId) return;
+    acceptBtn.disabled = true;
+    var fd = new FormData();
+    fd.append('csrfmiddlewaretoken', csrfEl ? csrfEl.value : '');
+    fetch('/api/settlement/appointment/' + currentId + '/accept/', { method: 'POST', body: fd, credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.ok) {
+          alert(data.message || '수락했습니다.');
+          window.location.reload();
+        } else {
+          alert(data.error || '수락 처리에 실패했습니다.');
+          acceptBtn.disabled = false;
+        }
+      })
+      .catch(function() { alert('요청에 실패했습니다.'); acceptBtn.disabled = false; });
+  });
+
+  cancelBtn.addEventListener('click', function() {
+    if (!currentId) return;
+    if (!confirm('이 예약을 취소하시겠습니까? 고객에게도 취소로 반영됩니다.')) return;
+    cancelBtn.disabled = true;
+    var fd = new FormData();
+    fd.append('csrfmiddlewaretoken', csrfEl ? csrfEl.value : '');
+    fetch('/api/settlement/appointment/' + currentId + '/cancel/', { method: 'POST', body: fd, credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.ok) {
+          alert(data.message || '취소되었습니다.');
+          window.location.reload();
+        } else {
+          alert(data.error || '취소에 실패했습니다.');
+          cancelBtn.disabled = false;
+        }
+      })
+      .catch(function() { alert('요청에 실패했습니다.'); cancelBtn.disabled = false; });
+  });
+})();
+</script>
+{% endblock %}

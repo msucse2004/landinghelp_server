@@ -1,12 +1,284 @@
 {% extends "base.html" %}
-{% block title %}고객 대시보드 – 랜딩헬프{% endblock %}
+{% load i18n %}
+{% block title %}{{ dashboard_i18n.page_title|default:"고객 대시보드" }} – LifeAI US{% endblock %}
 {% block content %}
+<style>
+  .dashboard-calendar { margin-top: 1.5rem; }
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    font-size: 0.85rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    background: #fff;
+  }
+  .calendar-weekday { text-align: center; padding: 0.35rem; color: var(--color-muted); font-weight: 500; }
+  .calendar-day {
+    min-height: 60px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 0.35rem;
+    background: #fafafa;
+  }
+  .calendar-day-num { font-weight: 600; margin-bottom: 0.25rem; color: var(--color-muted); font-size: 0.8rem; display: block; }
+  .calendar-card {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.35rem;
+    background: var(--color-primary);
+    color: #fff;
+    border-radius: 4px;
+    margin-bottom: 0.2rem;
+  }
+  .calendar-card-status {
+    display: block;
+    font-size: 0.6rem;
+    opacity: 0.9;
+    margin-top: 0.1rem;
+  }
+  .pending-appointments { margin-bottom: 1.5rem; }
+  .pending-appointments h3 { font-size: 1rem; margin: 0 0 0.5rem; }
+  .pending-appointments ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--color-border); border-radius: var(--radius); background: #fff; }
+  .pending-appointments li { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; padding: 0.6rem 1rem; border-bottom: 1px solid #eee; }
+  .pending-appointments li:last-child { border-bottom: none; }
+  .pending-appointments li .appointment-name { cursor: pointer; font-weight: 500; color: var(--color-primary); text-decoration: none; }
+  .pending-appointments li .appointment-name:hover { text-decoration: underline; }
+  .pending-appointments li .appointment-meta { font-size: 0.85rem; color: var(--color-muted); margin-left: 0.25rem; }
+  .pending-appointments li .appointment-actions { margin-left: auto; display: flex; gap: 0.35rem; }
+  .pending-appointments li .appointment-actions .btn { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; }
+  .modal-overlay.visible { display: flex; }
+  .modal-box { background: #fff; padding: 1.25rem; border-radius: var(--radius); min-width: 320px; max-width: 90%; }
+  .modal-box h4 { margin: 0 0 1rem; font-size: 1rem; }
+  .modal-box label { display: block; margin-top: 0.5rem; font-size: 0.9rem; }
+  .modal-box input, .modal-box textarea { width: 100%; padding: 0.4rem; margin-top: 0.2rem; box-sizing: border-box; }
+  .modal-box .modal-actions { margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end; }
+</style>
 <div class="card">
-  <h1>{{ user.username }}님, 환영합니다</h1>
-  <p class="text-muted">고객 계정입니다.</p>
-  <p><strong>내 플랜:</strong> {{ tier_label }}</p>
-  <p style="margin-top: 1rem;">
-    <a href="{% url 'content:list' %}" class="btn btn-primary">컨텐츠 보기</a>
+  <h1>{{ user.username }}{{ dashboard_i18n.welcome_suffix|default:"님, 환영합니다" }}</h1>
+  <p class="text-muted">{{ dashboard_i18n.customer_account|default:"고객 계정입니다." }}</p>
+  <p><strong>{{ dashboard_i18n.my_plan|default:"내 플랜:" }}</strong> {{ tier_label }}</p>
+  {% if free_agent_services %}
+  <p class="text-muted" style="font-size:0.9rem; margin-top:0.25rem;">
+    <strong>{{ dashboard_i18n.free_agent_services_label|default:"무료 Agent 서비스:" }}</strong> {% for code, label in free_agent_services %}{{ label }}{% if not forloop.last %}, {% endif %}{% endfor %}
   </p>
+  {% endif %}
+
+  {% if pending_appointments %}
+  <div class="pending-appointments">
+    <h3>{{ dashboard_i18n.pending_appointments|default:"수락 대기 중인 예약" }}</h3>
+    <ul id="pendingAppointmentsList">
+      {% for app in pending_appointments %}
+      <li data-id="{{ app.id }}" data-date="{{ app.service_date }}">
+        <a href="#" class="appointment-name" data-date="{{ app.service_date }}">{{ app.service_label }}</a>
+        <span class="appointment-meta">{{ app.service_date }}{% if app.preferred_time %} · {{ app.preferred_time }}{% endif %}</span>
+        <span class="appointment-actions">
+          <button type="button" class="btn btn-outline btn-edit-appointment" data-id="{{ app.id }}" data-preferred="{{ app.preferred_time|escape }}" data-message="{{ app.message_attr }}">{{ dashboard_i18n.edit|default:"수정" }}</button>
+          <button type="button" class="btn btn-outline btn-cancel-appointment" data-id="{{ app.id }}">{{ dashboard_i18n.cancel|default:"취소" }}</button>
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if user_plan %}
+  <div class="dashboard-calendar">
+    <h2 style="font-size:1.1rem; margin:1rem 0 0.5rem;">{{ dashboard_i18n.my_schedule|default:"내 정착 일정" }}</h2>
+    {% if user_plan.has_agent_assignment and user_plan.checkout_total and user_plan.checkout_total > 0 %}
+    <p style="font-size:0.95rem; font-weight:600; margin-bottom:0.5rem;"><span>{{ dashboard_i18n.estimated_checkout|default:"예상 Checkout" }}</span>: {{ user_plan.checkout_total|floatformat:0 }}{{ dashboard_i18n.won|default:"원" }}</p>
+    {% endif %}
+    <p class="text-muted" style="font-size:0.9rem;">
+      {% if user_plan.state %}{{ user_plan.state }}{% endif %}
+      {% if user_plan.city %} {{ user_plan.city }}{% endif %}
+      {% if user_plan.entry_date %}({{ dashboard_i18n.entry_planned|default:"입국 예정" }}: {{ user_plan.entry_date|date:"Y-m-d" }}){% endif %}
+    </p>
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+      <button type="button" class="dashboard-cal-prev btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.85rem;">◀ {{ dashboard_i18n.prev|default:"이전" }}</button>
+      <strong id="dashboardCalTitle" style="font-size: 0.95rem;" data-year-suffix="{{ calendar_year_suffix|default:'' }}" data-month-suffix="{{ calendar_month_suffix|default:'' }}"></strong>
+      <button type="button" class="dashboard-cal-next btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.85rem;">{{ dashboard_i18n.next|default:"다음" }} ▶</button>
+    </div>
+    <div id="dashboardCalendarGrid" class="calendar-grid">
+      {% for w in calendar_weekdays %}<span class="calendar-weekday">{{ w }}</span>{% endfor %}
+    </div>
+    <p style="margin-top:1rem;">
+      <a href="{% url 'settlement_quote' %}" class="btn btn-primary">{{ dashboard_i18n.edit_plan|default:"정착 플랜 수정" }}</a>
+    </p>
+  </div>
+  {{ dashboard_calendar_i18n|json_script:"dashboard-calendar-i18n" }}
+  <script>
+  (function() {
+    var schedule = {{ plan_schedule_json|safe }};
+    var grid = document.getElementById('dashboardCalendarGrid');
+    var titleEl = document.getElementById('dashboardCalTitle');
+    if (!grid || !titleEl) return;
+    var i18nEl = document.getElementById('dashboard-calendar-i18n');
+    var calI18n = i18nEl ? (function(){ try { return JSON.parse(i18nEl.textContent); } catch(e){ return {}; } })() : {};
+    var calLang = (calI18n && calI18n.lang) ? calI18n.lang : '';
+    function t(key) { return (calI18n && calI18n[key] != null) ? calI18n[key] : key; }
+    var today = new Date();
+    var calYear = today.getFullYear();
+    var calMonth = today.getMonth();
+    function padDate(y, m, d) {
+      m = (m + 1).toString();
+      d = d.toString();
+      return y + '-' + (m.length === 1 ? '0' + m : m) + '-' + (d.length === 1 ? '0' + d : d);
+    }
+    function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function render() {
+      var first = new Date(calYear, calMonth, 1);
+      var last = new Date(calYear, calMonth + 1, 0);
+      var startBlank = first.getDay();
+      var daysInMonth = last.getDate();
+      if (calLang === 'ko' || calLang === 'zh-hans' || calLang === 'zh-hant') {
+        var yearSuffix = titleEl.getAttribute('data-year-suffix') || t('year') || '년';
+        var monthSuffix = titleEl.getAttribute('data-month-suffix') || t('month') || '월';
+        titleEl.textContent = calYear + yearSuffix + ' ' + (calMonth + 1) + monthSuffix;
+      } else {
+        titleEl.textContent = (t('month_' + (calMonth + 1)) || (calMonth + 1)) + '. ' + calYear;
+      }
+      while (grid.children.length > 7) grid.removeChild(grid.lastChild);
+      for (var i = 0; i < startBlank; i++) {
+        var empty = document.createElement('div');
+        empty.className = 'calendar-day';
+        empty.style.background = '#f8fafc';
+        grid.appendChild(empty);
+      }
+      for (var d = 1; d <= daysInMonth; d++) {
+        var dateStr = padDate(calYear, calMonth, d);
+        var items = schedule[dateStr] || [];
+        var cell = document.createElement('div');
+        cell.className = 'calendar-day';
+        cell.innerHTML = '<span class="calendar-day-num">' + d + '</span>';
+        if (Array.isArray(items)) {
+          items.forEach(function(item) {
+            var label = (item && item.label) ? item.label : (item && item.code) ? item.code : '';
+            if (label) {
+              var statusLabel = (item && item.appointment_status_label) ? item.appointment_status_label : '';
+              cell.innerHTML += '<div class="calendar-card">' + esc(label) + (statusLabel ? '<span class="calendar-card-status">' + esc(statusLabel) + '</span>' : '') + '</div>';
+            }
+          });
+        }
+        grid.appendChild(cell);
+      }
+    }
+    render();
+    window.addEventListener('i18n-applied', render);
+    document.querySelector('.dashboard-cal-prev').addEventListener('click', function() {
+      calMonth--;
+      if (calMonth < 0) { calMonth = 11; calYear--; }
+      render();
+    });
+    document.querySelector('.dashboard-cal-next').addEventListener('click', function() {
+      calMonth++;
+      if (calMonth > 11) { calMonth = 0; calYear++; }
+      render();
+    });
+    window.customerCalendarGoToDate = function(dateStr) {
+      if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
+      var parts = dateStr.split('-');
+      calYear = parseInt(parts[0], 10);
+      calMonth = parseInt(parts[1], 10) - 1;
+      render();
+    };
+  })();
+  </script>
+  {% else %}
+  <p style="margin-top: 1rem;">
+    <a href="{% url 'settlement_quote' %}" class="btn btn-primary">{{ dashboard_i18n.create_plan|default:"정착 플랜 만들기" }}</a>
+    <a href="{% url 'content:list' %}" class="btn btn-outline" style="margin-left:0.5rem;">{{ dashboard_i18n.view_content|default:"컨텐츠 보기" }}</a>
+  </p>
+  {% endif %}
 </div>
+
+{% if pending_appointments %}
+<div class="modal-overlay" id="editAppointmentModal">
+  <div class="modal-box">
+    <h4>{{ dashboard_i18n.edit_appointment|default:"예약 수정" }}</h4>
+    <form id="editAppointmentForm">
+      <input type="hidden" name="id" id="editAppointmentId">
+      <label><span>{{ dashboard_i18n.preferred_time|default:"희망 시간대" }}</span> <input type="text" name="preferred_time" id="editPreferredTime" placeholder="{{ dashboard_i18n.example_time|default:'예: 오전 10시' }}"></label>
+      <label><span>{{ dashboard_i18n.message|default:"메시지" }}</span> <textarea name="message" id="editMessage" rows="3" placeholder="{{ dashboard_i18n.message_placeholder|default:'에이전트에게 전달할 메시지' }}"></textarea></label>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" id="editAppointmentModalClose">{{ dashboard_i18n.cancel|default:"취소" }}</button>
+        <button type="submit" class="btn btn-primary">{{ dashboard_i18n.save|default:"저장" }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+(function() {
+  var csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+  var csrfToken = csrf ? csrf.value : '';
+  document.querySelectorAll('.appointment-name').forEach(function(a) {
+    a.addEventListener('click', function(e) {
+      e.preventDefault();
+      var dateStr = a.getAttribute('data-date');
+      if (dateStr && window.customerCalendarGoToDate) window.customerCalendarGoToDate(dateStr);
+    });
+  });
+  document.querySelectorAll('.btn-edit-appointment').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var id = btn.getAttribute('data-id');
+      var preferred = btn.getAttribute('data-preferred') || '';
+      var message = (btn.getAttribute('data-message') || '').replace(/&quot;/g, '"');
+      document.getElementById('editAppointmentId').value = id;
+      document.getElementById('editPreferredTime').value = preferred;
+      document.getElementById('editMessage').value = message;
+      document.getElementById('editAppointmentModal').classList.add('visible');
+    });
+  });
+  document.getElementById('editAppointmentModalClose').addEventListener('click', function() {
+    document.getElementById('editAppointmentModal').classList.remove('visible');
+  });
+  document.getElementById('editAppointmentModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('visible');
+  });
+  document.getElementById('editAppointmentForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var id = document.getElementById('editAppointmentId').value;
+    var fd = new FormData();
+    fd.append('csrfmiddlewaretoken', csrfToken);
+    fd.append('preferred_time', document.getElementById('editPreferredTime').value);
+    fd.append('message', document.getElementById('editMessage').value);
+    fetch('/api/settlement/appointment/' + id + '/update/', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken },
+      body: fd,
+      credentials: 'same-origin',
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.ok) {
+          alert(res.message || '수정되었습니다.');
+          document.getElementById('editAppointmentModal').classList.remove('visible');
+          window.location.reload();
+        } else alert(res.error || '수정에 실패했습니다.');
+      })
+      .catch(function() { alert('수정 요청에 실패했습니다.'); });
+  });
+  document.querySelectorAll('.btn-cancel-appointment').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      if (!confirm('이 예약 요청을 취소하시겠습니까?')) return;
+      var id = btn.getAttribute('data-id');
+      fetch('/api/settlement/appointment/' + id + '/cancel/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' },
+        body: '{}',
+        credentials: 'same-origin',
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (res.ok) {
+            alert(res.message || '취소되었습니다.');
+            window.location.reload();
+          } else alert(res.error || '취소에 실패했습니다.');
+        })
+        .catch(function() { alert('취소 요청에 실패했습니다.'); });
+    });
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}

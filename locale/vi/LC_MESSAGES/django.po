@@ -1,0 +1,44 @@
+# Vietnamese
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: vi\n"
+
+msgid "로그아웃"
+msgstr "Đăng xuất"
+
+msgid "로그인"
+msgstr "Đăng nhập"
+
+msgid "회원가입"
+msgstr "Đăng ký"
+
+msgid "플랜"
+msgstr "Gói"
+
+msgid "메시지 함"
+msgstr "Tin nhắn"
+
+msgid "정착서비스"
+msgstr "Dịch vụ định cư"
+
+msgid "기업서비스"
+msgstr "Dịch vụ doanh nghiệp"
+
+msgid "지역 게시판"
+msgstr "Cộng đồng"
+
+msgid "관리"
+msgstr "Quản lý"
+
+msgid "새 메시지가 도착했습니다"
+msgstr "Bạn có tin nhắn mới"
+
+msgid "닫기"
+msgstr "Đóng"
+
+msgid "메시지함으로 이동"
+msgstr "Đến hộp thư"
+
+msgid "읽지 않은 메시지 %(count)s건이 있습니다. 메시지함에서 확인하세요."
+msgstr "Bạn có %(count)s tin nhắn chưa đọc. Vui lòng kiểm tra hộp thư."

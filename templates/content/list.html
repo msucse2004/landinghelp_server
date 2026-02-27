@@ -1,18 +1,19 @@
 {% extends "base.html" %}
-{% block title %}컨텐츠 목록{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "컨텐츠 목록" %}{% endblock %}
 {% block content %}
-<h1>컨텐츠 목록</h1>
+<h1 data-i18n-key="컨텐츠 목록">{% trans "컨텐츠 목록" %}</h1>
 {% if contents %}
 <ul class="content-list">
   {% for c in contents %}
   <li>
-    <a href="{% url 'content:detail' c.slug %}">{{ c.title }}</a>
+    <a href="{% url 'content:detail' c.slug %}">{{ c.title_display|default:c.title }}</a>
     {% if c.category %}<span class="category">[{{ c.category }}]</span>{% endif %}
-    {% if c.summary %}<p class="summary">{{ c.summary|truncatewords:30 }}</p>{% endif %}
+    {% if c.summary_display or c.summary %}<p class="summary">{{ c.summary_display|default:c.summary|truncatewords:30 }}</p>{% endif %}
   </li>
   {% endfor %}
 </ul>
 {% else %}
-<p>표시할 컨텐츠가 없습니다.</p>
+<p data-i18n-key="표시할 컨텐츠가 없습니다.">{% trans "표시할 컨텐츠가 없습니다." %}</p>
 {% endif %}
 {% endblock %}

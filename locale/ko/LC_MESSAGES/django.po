@@ -1,0 +1,104 @@
+# Korean (default)
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ko\n"
+
+msgid "로그아웃"
+msgstr "로그아웃"
+
+msgid "로그인"
+msgstr "로그인"
+
+msgid "회원가입"
+msgstr "회원가입"
+
+msgid "플랜"
+msgstr "플랜"
+
+msgid "메시지 함"
+msgstr "메시지 함"
+
+msgid "정착서비스"
+msgstr "정착서비스"
+
+msgid "기업서비스"
+msgstr "기업서비스"
+
+msgid "지역 게시판"
+msgstr "지역 게시판"
+
+msgid "관리"
+msgstr "관리"
+
+msgid "새 메시지가 도착했습니다"
+msgstr "새 메시지가 도착했습니다"
+
+msgid "닫기"
+msgstr "닫기"
+
+msgid "메시지함으로 이동"
+msgstr "메시지함으로 이동"
+
+msgid "읽지 않은 메시지 %(count)s건이 있습니다. 메시지함에서 확인하세요."
+msgstr "읽지 않은 메시지 %(count)s건이 있습니다. 메시지함에서 확인하세요."
+
+msgid "기본 정보부터 시작하세요"
+msgstr "기본 정보부터 시작하세요"
+
+msgid "소개 캐러셀"
+msgstr "소개 캐러셀"
+
+msgid "내 정착 플랜"
+msgstr "내 정착 플랜"
+
+msgid "예상 Checkout"
+msgstr "예상 Checkout"
+
+msgid "원"
+msgstr "원"
+
+msgid "입국 예정"
+msgstr "입국 예정"
+
+msgid "저장된 일정이 있습니다"
+msgstr "저장된 일정이 있습니다"
+
+msgid "정착 플랜 수정"
+msgstr "정착 플랜 수정"
+
+msgid "일"
+msgstr "일"
+
+msgid "월"
+msgstr "월"
+
+msgid "화"
+msgstr "화"
+
+msgid "수"
+msgstr "수"
+
+msgid "목"
+msgstr "목"
+
+msgid "금"
+msgstr "금"
+
+msgid "토"
+msgstr "토"
+
+msgid "아이디와 비밀번호를 확인해주세요."
+msgstr "아이디와 비밀번호를 확인해주세요."
+
+msgid "아이디"
+msgstr "아이디"
+
+msgid "비밀번호"
+msgstr "비밀번호"
+
+msgid "아이디 찾기"
+msgstr "아이디 찾기"
+
+msgid "비밀번호 찾기"
+msgstr "비밀번호 찾기"

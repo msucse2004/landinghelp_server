@@ -1,0 +1,31 @@
+{% extends "community/base_community.html" %}
+{% block title %}글쓰기 – {{ area.city_name }} – LifeAI US{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>글쓰기</h1>
+  <p class="text-muted">{{ area }} 지역 게시판</p>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="form-group">
+      <label>카테고리 *</label>
+      {{ form.category }}
+    </div>
+    <div class="form-group">
+      <label>제목 *</label>
+      {{ form.title }}
+      {% if form.title.errors %}<span class="form-errors">{{ form.title.errors.0 }}</span>{% endif %}
+    </div>
+    <div class="form-group">
+      <label>내용 *</label>
+      {{ form.content }}
+      {% if form.content.errors %}<span class="form-errors">{{ form.content.errors.0 }}</span>{% endif %}
+    </div>
+    <div class="form-group">
+      <label>썸네일 (선택)</label>
+      {{ form.thumbnail }}
+    </div>
+    <button type="submit" class="btn btn-primary">등록</button>
+    <a href="{% url 'community:board_list' area.slug %}" class="btn btn-outline" style="margin-left: 0.5rem;">취소</a>
+  </form>
+</div>
+{% endblock %}

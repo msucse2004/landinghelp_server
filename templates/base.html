@@ -1,9 +1,10 @@
+{% load i18n %}
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="{{ LANGUAGE_CODE|default:'ko' }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}랜딩헬프{% endblock %}</title>
+  <title>{% block title %}LifeAI US{% endblock %}</title>
   <style>
     :root {
       --max-w: 980px;
@@ -56,11 +57,22 @@
       align-items: center;
     }
     .brand-logo {
-      height: 72px;
-      max-width: 320px;
+      height: 96px;
+      max-width: 420px;
       object-fit: contain;
       object-position: left center;
       display: block;
+    }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
     .nav-links {
       display: flex;
@@ -82,7 +94,7 @@
     .nav-links .btn { min-height: 44px; padding: 0.6rem 1.25rem; }
     .nav-links .btn-primary { color: #fff; }
     .nav-links .btn-primary:hover { color: #fff; }
-    main { flex: 1; padding: clamp(2rem, 6vw, 4rem) 0; }
+    main.main-content { flex: 1 1 auto; padding: clamp(2rem, 6vw, 4rem) 0; min-height: 0; }
     .card {
       background: #fff;
       border: 1px solid var(--color-border);
@@ -157,64 +169,405 @@
       padding: 0.5rem var(--space);
       font-size: 0.9rem;
       color: var(--color-muted);
+      overflow: visible;
     }
     .user-info-bar .container {
       display: flex;
       align-items: center;
-      justify-content: flex-start;
+      justify-content: flex-end;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      overflow: visible;
     }
     .user-info-bar strong { color: var(--color-text); }
+    .user-info-bar a { color: inherit; text-decoration: none; }
+    .user-info-bar a:hover { text-decoration: underline; }
+    .user-info-bar .top-link { padding: 0.25rem 0.5rem; border-radius: var(--radius); }
+    .user-info-bar .top-link.btn-primary { color: #fff; }
+    .icon-mail-wrap {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: visible;
+    }
+    .icon-mail {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2rem;
+      height: 2rem;
+      padding: 0.15rem;
+    }
+    .icon-mail svg { width: 100%; height: 100%; fill: currentColor; }
+    .icon-mail-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      min-width: 18px;
+      min-height: 18px;
+      padding: 0 5px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      line-height: 1;
+      text-align: center;
+      background: #dc2626;
+      color: #fff !important;
+      border-radius: 999px;
+      border: 2px solid var(--color-bg);
+      box-sizing: border-box;
+      z-index: 10;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
   </style>
   {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   {% if email_config_warning %}
-  <div id="email-warning-banner" style="background:#fef3c7;border-bottom:2px solid #f59e0b;padding:0.75rem 1rem;text-align:center;font-size:0.9rem;position:relative;">
-    <span>⚠️ 이메일 설정 경고: EMAIL_HOST_USER, EMAIL_HOST_PASSWORD 환경변수가 설정되지 않았습니다. 이메일 발송이 동작하지 않습니다.</span>
+  <div id="email-warning-banner" style="background:#fef3c7;border-bottom:2px solid #f59e0b;padding:0.75rem 1rem;text-align:center;font-size:0.9rem;position:relative;" data-alert-message="{% trans '이메일 설정 경고' %}&#10;&#10;{% trans 'EMAIL_HOST_USER, EMAIL_HOST_PASSWORD 환경변수가 설정되지 않았습니다.' %}&#10;{% trans '이메일 발송이 동작하지 않습니다.' %}">
+    <span>⚠️ <span data-i18n-key="이메일 설정 경고: EMAIL_HOST_USER, EMAIL_HOST_PASSWORD 환경변수가 설정되지 않았습니다. 이메일 발송이 동작하지 않습니다.">{% trans "이메일 설정 경고: EMAIL_HOST_USER, EMAIL_HOST_PASSWORD 환경변수가 설정되지 않았습니다. 이메일 발송이 동작하지 않습니다." %}</span></span>
     <button type="button" onclick="document.getElementById('email-warning-banner').style.display='none'" style="position:absolute;right:1rem;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;font-size:1.2rem;">&times;</button>
   </div>
-  <script>if (!sessionStorage.getItem('emailWarningDismissed')) { setTimeout(function(){ alert('이메일 설정 경고\n\nEMAIL_HOST_USER, EMAIL_HOST_PASSWORD 환경변수가 설정되지 않았습니다.\n이메일 발송이 동작하지 않습니다.'); sessionStorage.setItem('emailWarningDismissed', '1'); }, 100); }</script>
+  <script>if (!sessionStorage.getItem('emailWarningDismissed')) { var b=document.getElementById('email-warning-banner'); if(b&&b.dataset.alertMessage){ setTimeout(function(){ alert(b.dataset.alertMessage.replace(/\u000a/g,'\n')); sessionStorage.setItem('emailWarningDismissed', '1'); }, 100); } }</script>
   {% endif %}
   <header class="user-info-bar">
     <div class="container">
       {% if user.is_authenticated %}
         <span><strong>ID</strong>: {{ user_id }}</span>
-        <span style="margin: 0 1rem;">|</span>
-        <span><strong>플랜</strong>: {{ user_plan_display }}</span>
+        <span><strong data-i18n-key="플랜">{% trans "플랜" %}</strong>: <a href="{% url 'billing:subscription_plan' %}">{{ user_plan_display }}</a></span>
+        <a href="{% url 'messages_inbox' %}" class="top-link icon-mail-wrap" title="{% trans '메시지 함' %}" aria-label="{% trans '메시지 함' %}" id="header-mail-link" data-aria-label-key="메시지 함">
+          <span class="icon-mail">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+          </span>
+          <span class="icon-mail-badge" id="header-mail-badge" aria-label="{% trans '읽지 않은 메시지' %}" data-unread-label="{% trans '읽지 않은 메시지' %}" data-unread-suffix="{% trans '건' %}" data-unread-label-key="읽지 않은 메시지" data-unread-suffix-key="건" style="{% if not messaging_unread_count or messaging_unread_count <= 0 %}display:none;{% else %}display:inline-flex;{% endif %}">{% if messaging_unread_count and messaging_unread_count > 99 %}99+{% else %}{{ messaging_unread_count|default:0 }}{% endif %}</span>
+        </a>
+        <form action="{% url 'logout' %}" method="post" style="display:inline; margin:0;">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline" style="padding:0.25rem 0.5rem; font-size:0.9rem;" data-i18n-key="로그아웃">{% trans "로그아웃" %}</button>
+        </form>
       {% else %}
-        <span><strong>Guest</strong></span>
+        <a href="{% url 'login' %}" class="top-link" data-i18n-key="로그인">{% trans "로그인" %}</a>
+        <a href="{% url 'signup' %}" class="btn btn-primary top-link" data-i18n-key="회원가입">{% trans "회원가입" %}</a>
       {% endif %}
+      <form action="{% url 'set_language' %}" method="post" style="display:inline; margin:0;" id="langForm">
+        {% csrf_token %}
+        <input name="next" type="hidden" value="{{ request.get_full_path|default:'/' }}">
+        <select name="language" id="langSelect" style="padding:0.25rem 0.5rem; font-size:0.9rem; border:1px solid var(--color-border); border-radius:var(--radius); background:#fff; min-height:36px;">
+          <option value="ko" {% if LANGUAGE_CODE == 'ko' %}selected{% endif %}>KR 한국어</option>
+          <option value="en" {% if LANGUAGE_CODE == 'en' %}selected{% endif %}>EN English</option>
+          <option value="es" {% if LANGUAGE_CODE == 'es' %}selected{% endif %}>ES Español</option>
+          <option value="zh-hans" {% if LANGUAGE_CODE == 'zh-hans' %}selected{% endif %}>ZH 中文(简体)</option>
+          <option value="zh-hant" {% if LANGUAGE_CODE == 'zh-hant' %}selected{% endif %}>ZH 中文(繁體)</option>
+          <option value="vi" {% if LANGUAGE_CODE == 'vi' %}selected{% endif %}>VI Tiếng Việt</option>
+        </select>
+      </form>
     </div>
   </header>
   <nav>
     <div class="container">
       <a href="{% url 'home' %}" class="brand">
         {% load static %}
-        <img src="{% static 'images/logo.png' %}" alt="Landing Help - 미국 정착의 시작" class="brand-logo">
+        <img src="{% static 'images/logo.png' %}" alt="LifeAI US" class="brand-logo">
+        <span class="brand-name visually-hidden">LifeAI US</span>
       </a>
       <div class="nav-links">
         {% if user.is_authenticated %}
-          <a href="{% url 'app_entry' %}">App</a>
-          <a href="{% url 'content:list' %}">컨텐츠</a>
-          {% if user.is_staff %}
-          <a href="/admin/">관리</a>
-          {% endif %}
-          <form action="{% url 'logout' %}" method="post" style="display:inline; margin:0;">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-outline">로그아웃</button>
-          </form>
+        <a href="{% url 'settlement_services' %}" data-i18n-key="정착서비스">{% trans "정착서비스" %}</a>
+        <a href="{% url 'corporate_services' %}" data-i18n-key="기업서비스">{% trans "기업서비스" %}</a>
+        <a href="{% url 'community:region_select' %}" data-i18n-key="지역 게시판">{% trans "지역 게시판" %}</a>
+        {% if user.is_staff %}
+        <a href="/admin/" data-i18n-key="관리">{% trans "관리" %}</a>
+        {% endif %}
         {% else %}
-          <a href="{% url 'login' %}">로그인</a>
-          <a href="{% url 'signup' %}" class="btn btn-primary">회원가입</a>
+        <a href="{% url 'settlement_services' %}" data-i18n-key="정착서비스">{% trans "정착서비스" %}</a>
+        <a href="{% url 'corporate_services' %}" data-i18n-key="기업서비스">{% trans "기업서비스" %}</a>
+        <a href="{% url 'community:region_select' %}" data-i18n-key="지역 게시판">{% trans "지역 게시판" %}</a>
         {% endif %}
       </div>
     </div>
   </nav>
   {% block below_nav %}{% endblock %}
-  <main>
+  <main class="main-content">
     <div class="container">
       {% block content %}{% endblock %}
     </div>
   </main>
+  {% block ad_carousel %}
+  {% if ad_carousel_slides %}
+  <section class="ad-carousel-wrap" aria-label="{% trans '기업 광고' %}" data-aria-label-key="기업 광고" data-slide-aria="{% trans '번째 슬라이드' %}" data-slide-aria-key="번째 슬라이드">
+    <div class="ad-carousel" id="adCarousel" data-auto-interval="3000">
+      <div class="ad-carousel-track" id="adCarouselTrack">
+        {% with slide=ad_carousel_slides|last %}
+        <div class="ad-carousel-slide ad-carousel-clone" data-clone="last" style="{% if slide.background_type == 'IMAGE' and slide.image %}background-image: url('{{ slide.image.url }}');{% elif slide.gradient_css %}background-image: {{ slide.gradient_css }};{% else %}background-image: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);{% endif %}">
+          {% if slide.link_url %}<a href="{{ slide.link_url }}" target="_blank" rel="noopener" class="ad-slide-link">{% endif %}
+          <h3 data-i18n-key="{{ slide.title|escapejs }}">{{ slide.title_display|default:slide.title }}</h3>{% if slide.subtitle_display or slide.subtitle %}<p data-i18n-key="{{ slide.subtitle|escapejs }}">{{ slide.subtitle_display|default:slide.subtitle }}</p>{% endif %}
+          {% if slide.link_url %}</a>{% endif %}
+        </div>
+        {% endwith %}
+        {% for slide in ad_carousel_slides %}
+        <div class="ad-carousel-slide" style="{% if slide.background_type == 'IMAGE' and slide.image %}background-image: url('{{ slide.image.url }}');{% elif slide.gradient_css %}background-image: {{ slide.gradient_css }};{% else %}background-image: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);{% endif %}">
+          {% if slide.link_url %}<a href="{{ slide.link_url }}" target="_blank" rel="noopener" class="ad-slide-link">{% endif %}
+          <h3 data-i18n-key="{{ slide.title|escapejs }}">{{ slide.title_display|default:slide.title }}</h3>{% if slide.subtitle_display or slide.subtitle %}<p data-i18n-key="{{ slide.subtitle|escapejs }}">{{ slide.subtitle_display|default:slide.subtitle }}</p>{% endif %}
+          {% if slide.link_url %}</a>{% endif %}
+        </div>
+        {% endfor %}
+        {% with slide=ad_carousel_slides|first %}
+        <div class="ad-carousel-slide ad-carousel-clone" data-clone="first" style="{% if slide.background_type == 'IMAGE' and slide.image %}background-image: url('{{ slide.image.url }}');{% elif slide.gradient_css %}background-image: {{ slide.gradient_css }};{% else %}background-image: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);{% endif %}">
+          {% if slide.link_url %}<a href="{{ slide.link_url }}" target="_blank" rel="noopener" class="ad-slide-link">{% endif %}
+          <h3 data-i18n-key="{{ slide.title|escapejs }}">{{ slide.title_display|default:slide.title }}</h3>{% if slide.subtitle_display or slide.subtitle %}<p data-i18n-key="{{ slide.subtitle|escapejs }}">{{ slide.subtitle_display|default:slide.subtitle }}</p>{% endif %}
+          {% if slide.link_url %}</a>{% endif %}
+        </div>
+        {% endwith %}
+      </div>
+      <div class="ad-carousel-dots" id="adCarouselDots"></div>
+    </div>
+  </section>
+  <style>
+    .ad-carousel-wrap { margin-top: auto; flex-shrink: 0; }
+    .ad-carousel {
+      width: 100vw; margin-left: calc(-50vw + 50%);
+      overflow: hidden; position: relative;
+    }
+    .ad-carousel-track { display: flex; transition: transform 0.35s ease-out; }
+    .ad-carousel-slide {
+      flex: 0 0 100%; min-width: 100%;
+      height: clamp(60px, 12.5vw, 90px);
+      background-size: cover; background-position: center;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      position: relative;
+    }
+    .ad-carousel-slide::before {
+      content: ''; position: absolute; inset: 0;
+      background: rgba(30, 58, 95, 0.5);
+    }
+    .ad-slide-link { position: relative; z-index: 1; color: #fff; text-decoration: none; text-align: center; padding: 1rem; display: block; width: 100%; }
+    .ad-carousel-slide h3, .ad-carousel-slide p { margin: 0; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.4); position: relative; z-index: 1; }
+    .ad-carousel-slide h3 { font-size: clamp(0.85rem, 2vw, 1rem); }
+    .ad-carousel-slide p { font-size: clamp(0.75rem, 1.5vw, 0.85rem); opacity: 0.95; }
+    .ad-carousel-dots { display: flex; justify-content: center; gap: 0.5rem; padding: 0.5rem; }
+    .ad-carousel-dots button { width: 8px; height: 8px; border-radius: 50%; border: 2px solid #fff; background: transparent; cursor: pointer; padding: 0; }
+    .ad-carousel-dots button.active { background: #fff; }
+  </style>
+  <script>
+  (function(){
+    var c=document.getElementById('adCarousel'); if(!c) return;
+    var track=document.getElementById('adCarouselTrack'); var dots=document.getElementById('adCarouselDots');
+    var slides=track.querySelectorAll('.ad-carousel-slide'); var total=slides.length; var realCount=total-2; var cur=0;
+    var singleSlide=realCount<=1;
+    if(singleSlide&&dots)dots.style.display='none';
+    for(var i=0;i<realCount;i++){
+      var b=document.createElement('button'); var slideAria=c.getAttribute('data-slide-aria')||'번째 슬라이드'; b.setAttribute('aria-label',(i+1)+slideAria);
+      b.addEventListener('click',(function(idx){return function(){goTo(idx);};})(i));
+      if(i===0)b.classList.add('active'); dots.appendChild(b);
+    }
+    function up(){ dots.querySelectorAll('button').forEach(function(x,i){x.classList.toggle('active',i===cur);}); }
+    function goTo(i){ cur=Math.max(0,Math.min(i,realCount-1)); track.style.transition='transform 0.35s ease-out'; track.style.transform='translateX(-'+((cur+1)*100)+'%)'; up(); }
+    function next(){
+      if(cur===realCount-1){
+        track.style.transition='transform 0.35s ease-out'; track.style.transform='translateX(-'+(total*100)+'%)';
+        track.addEventListener('transitionend',function fn(){ track.removeEventListener('transitionend',fn); track.style.transition='none'; cur=0; track.style.transform='translateX(-100%)'; up(); track.offsetHeight; track.style.transition='transform 0.35s ease-out'; },{once:true});
+      } else{ cur++; track.style.transition='transform 0.35s ease-out'; track.style.transform='translateX(-'+((cur+1)*100)+'%)'; up(); }
+    }
+    track.style.transform='translateX(-100%)';
+    var iv=parseInt(c.getAttribute('data-auto-interval')||'3000',10);
+    if(iv>0&&!singleSlide) setInterval(next,iv);
+  })();
+  </script>
+  {% endif %}
+  {% endblock %}
+  {% if user.is_authenticated %}
+  <script>
+  (function(){
+    var badge = document.getElementById('header-mail-badge');
+    if (!badge) return;
+    function updateUnread() {
+      fetch('/api/messaging/unread-count/', { method: 'GET', headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var n = (data && typeof data.unread_count === 'number') ? data.unread_count : 0;
+          badge.textContent = n > 99 ? '99+' : n;
+          badge.style.display = n > 0 ? 'inline-flex' : 'none';
+          var ul=badge.getAttribute('data-unread-label')||'읽지 않은 메시지'; var ux=badge.getAttribute('data-unread-suffix')||'건'; badge.setAttribute('aria-label', n > 0 ? ul + ' ' + n + ux : ul);
+        })
+        .catch(function() {});
+    }
+    updateUnread();
+    setInterval(updateUnread, 20000);
+    document.addEventListener('visibilitychange', function() { if (document.visibilityState === 'visible') updateUnread(); });
+    window.updateHeaderUnreadCount = updateUnread;
+  })();
+  </script>
+  {% endif %}
+  {% if user.is_authenticated and show_new_message_popup and messaging_unread_count and messaging_unread_count > 0 %}
+  <div id="new-message-popup-backdrop" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem;">
+    <div id="new-message-popup" role="dialog" aria-labelledby="new-message-popup-title" aria-modal="true" style="background:#fff;border-radius:var(--radius);box-shadow:0 8px 32px rgba(0,0,0,0.2);max-width:360px;width:100%;padding:1.5rem;">
+      <h2 id="new-message-popup-title" style="margin:0 0 0.75rem;font-size:1.15rem;" data-i18n-key="새 메시지가 도착했습니다">{% trans "새 메시지가 도착했습니다" %}</h2>
+      <p id="new-message-popup-body" style="margin:0 0 1.25rem;color:var(--color-muted);font-size:0.95rem;">{% blocktrans with count=messaging_unread_count %}읽지 않은 메시지 {{ count }}건이 있습니다. 메시지함에서 확인하세요.{% endblocktrans %}</p>
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
+        <button type="button" class="btn btn-outline" id="new-message-popup-close" data-i18n-key="닫기">{% trans "닫기" %}</button>
+        <a href="{% url 'messages_inbox' %}" class="btn btn-primary" id="new-message-popup-inbox" data-i18n-key="메시지함으로 이동">{% trans "메시지함으로 이동" %}</a>
+      </div>
+    </div>
+  </div>
+  <script>
+  (function(){
+    var backdrop = document.getElementById('new-message-popup-backdrop');
+    var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]') && document.querySelector('[name=csrfmiddlewaretoken]').value;
+    function dismissPopup() {
+      if (!backdrop) return;
+      backdrop.style.display = 'none';
+      if (csrfToken) {
+        fetch('/api/messaging/dismiss-login-popup/', {
+          method: 'POST',
+          headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: '{}',
+          credentials: 'same-origin',
+        }).catch(function(){});
+      }
+    }
+    document.getElementById('new-message-popup-close').addEventListener('click', function() { dismissPopup(); });
+    document.getElementById('new-message-popup-inbox').addEventListener('click', function() { dismissPopup(); });
+    backdrop.addEventListener('click', function(e) { if (e.target === backdrop) dismissPopup(); });
+  })();
+  </script>
+  {% endif %}
+  <script>
+  (function(){
+    var form = document.getElementById('langForm');
+    var select = document.getElementById('langSelect');
+    function applyTranslations(data, lang) {
+      if (!data || typeof data !== 'object') return;
+      if (lang) {
+        document.documentElement.setAttribute('lang', lang);
+        var dateLocale = { 'en': 'en-US', 'ko': 'ko-KR', 'es': 'es-ES', 'vi': 'vi-VN', 'zh-hans': 'zh-CN', 'zh-hant': 'zh-TW' }[lang] || lang;
+        document.querySelectorAll('input[type="date"]').forEach(function(input) {
+          input.setAttribute('lang', dateLocale);
+          var v = input.value;
+          if (v) { input.value = ''; input.value = v; }
+        });
+      }
+      document.querySelectorAll('[data-i18n-key]').forEach(function(el) {
+        var key = el.getAttribute('data-i18n-key');
+        if (key && data[key] !== undefined) el.textContent = data[key];
+      });
+      document.querySelectorAll('[data-aria-label-key]').forEach(function(el) {
+        var key = el.getAttribute('data-aria-label-key');
+        if (key && data[key] !== undefined) {
+          el.setAttribute('aria-label', data[key]);
+          if (el.getAttribute('title') !== null) el.setAttribute('title', data[key]);
+        }
+      });
+      document.querySelectorAll('[data-unread-label-key]').forEach(function(el) {
+        var labelKey = el.getAttribute('data-unread-label-key');
+        var suffixKey = el.getAttribute('data-unread-suffix-key');
+        if (labelKey && data[labelKey] !== undefined && suffixKey && data[suffixKey] !== undefined) {
+          var n = (el.textContent || '').trim();
+          el.setAttribute('aria-label', n ? data[labelKey] + ' ' + n + data[suffixKey] : data[labelKey]);
+        }
+      });
+      document.querySelectorAll('[data-slide-aria-key]').forEach(function(el) {
+        var key = el.getAttribute('data-slide-aria-key');
+        if (key && data[key] !== undefined) el.setAttribute('data-slide-aria', data[key]);
+      });
+      var dotsWrap = document.querySelector('.ad-carousel-dots');
+      if (dotsWrap) {
+        var slideAria = data['번째 슬라이드'] || '번째 슬라이드';
+        dotsWrap.querySelectorAll('button').forEach(function(btn, i) {
+          btn.setAttribute('aria-label', (i + 1) + slideAria);
+        });
+      }
+      var signupWrap = document.querySelector('.signup-wrap');
+      if (signupWrap) {
+        if (data['클릭하여 선택 해제'] !== undefined) signupWrap.setAttribute('data-title-remove', data['클릭하여 선택 해제']);
+        if (data['확인 중...'] !== undefined) signupWrap.setAttribute('data-checking', data['확인 중...']);
+      }
+      document.querySelectorAll('[data-year-suffix-key]').forEach(function(el) {
+        var k = el.getAttribute('data-year-suffix-key');
+        if (k && data[k] !== undefined) el.setAttribute('data-year-suffix', data[k]);
+      });
+      document.querySelectorAll('[data-month-suffix-key]').forEach(function(el) {
+        var k = el.getAttribute('data-month-suffix-key');
+        if (k && data[k] !== undefined) el.setAttribute('data-month-suffix', data[k]);
+      });
+      try { window.dispatchEvent(new CustomEvent('i18n-applied', { detail: data })); } catch (e) {}
+    }
+    if (form && select) {
+      select.addEventListener('change', function() {
+        var nextInput = form.querySelector('input[name="next"]');
+        if (nextInput) nextInput.value = window.location.href;
+        try { sessionStorage.setItem('preferred_lang', select.value); } catch (e) {}
+        form.submit();
+      });
+    }
+
+    // 페이지 로드 시: 서버가 보낸 언어와 사용자가 이전에 선택한 언어가 다르면 클라이언트에서 다시 적용 (네비/대시보드가 한국어로 돌아가는 현상 방지)
+    function runRestorePreferredLang() {
+      var serverLang = (document.documentElement.getAttribute('lang') || 'ko').toLowerCase();
+      var saved;
+      try { saved = sessionStorage.getItem('preferred_lang'); } catch (e) { return; }
+      if (!saved || saved === serverLang) return;
+      fetch('/api/i18n/' + encodeURIComponent(saved) + '/', { credentials: 'same-origin' })
+        .then(function(r) { return r.ok ? r.json() : {}; })
+        .then(function(data) {
+          applyTranslations(data, saved);
+          var sel = document.getElementById('langSelect');
+          if (sel) sel.value = saved;
+        })
+        .catch(function() {});
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', runRestorePreferredLang);
+    } else {
+      runRestorePreferredLang();
+    }
+
+    // 네비/서브네비 링크 클릭 시: 현재 선택 언어를 서버에 폼 제출 후 리다이렉트 (같은 언어 유지)
+    document.addEventListener('click', function(e) {
+      var a = e.target && e.target.closest ? e.target.closest('a') : null;
+      if (!a || !a.href) return;
+      try {
+        var url = new URL(a.href);
+        if (url.origin !== window.location.origin) return;
+      } catch (err) { return; }
+      var inNav = a.closest('.nav-links') || a.closest('.settlement-sub-nav');
+      if (!inNav) return;
+      if (a.target === '_blank' || a.hasAttribute('download')) return;
+      var form = document.getElementById('langForm');
+      if (!form || !form.action) return;
+      var sel = document.getElementById('langSelect');
+      var lang = (sel && sel.value) ? sel.value : '';
+      if (!lang) { try { lang = sessionStorage.getItem('preferred_lang'); } catch (x) {} }
+      if (!lang) lang = 'en';
+      e.preventDefault();
+      var f = document.createElement('form');
+      f.method = 'POST';
+      f.action = form.action;
+      f.style.display = 'none';
+      var csrf = form.querySelector('input[name=csrfmiddlewaretoken]');
+      if (csrf) {
+        var c = document.createElement('input');
+        c.name = 'csrfmiddlewaretoken';
+        c.value = csrf.value;
+        c.type = 'hidden';
+        f.appendChild(c);
+      }
+      var langInput = document.createElement('input');
+      langInput.name = 'language';
+      langInput.value = lang;
+      langInput.type = 'hidden';
+      f.appendChild(langInput);
+      var nextInput = document.createElement('input');
+      nextInput.name = 'next';
+      nextInput.value = a.href;
+      nextInput.type = 'hidden';
+      f.appendChild(nextInput);
+      document.body.appendChild(f);
+      f.submit();
+    }, true);
+  })();
+  </script>
 </body>
 </html>

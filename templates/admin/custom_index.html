@@ -9,20 +9,6 @@
 
 {% block content %}
 <div id="content-main" class="app-list">
-  <div class="module" style="margin-bottom: 24px; padding: 20px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
-    <h2 style="margin: 0 0 16px 0; font-size: 1.15rem; font-weight: 600;">관리 메뉴</h2>
-    <ul style="margin: 0; padding-left: 1.25rem; line-height: 2;">
-      <li><a href="{% url 'member_list' %}">가입자</a> — 회원 목록, 비밀번호 리셋</li>
-      <li>
-        <a href="{% url 'admin:content_carouselslide_changelist' %}">캐러셀 슬라이드 (목록)</a>
-        — 홈 인트로 슬라이드 수정·삭제
-      </li>
-      <li>
-        <a href="{% url 'admin:content_carouselslide_add' %}" style="font-weight: 600; color: #0d6efd;">➕ 캐러셀 슬라이드 추가</a>
-      </li>
-    </ul>
-  </div>
-
   {% include "admin/app_list.html" with app_list=app_list show_changelinks=True %}
 </div>
 {% endblock %}

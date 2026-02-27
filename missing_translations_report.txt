@@ -1,0 +1,8 @@
+Total rows: 331
+Rows with missing translation(s): 5
+
+Add %(name)s	en,es,zh_hans,zh_hant,vi	Add %(name)s
+Models in the %(name)s application	en,es,zh_hans,zh_hant,vi	Models in the %(name)s application
+Select %s to change	en,es,zh_hans,zh_hant,vi	Select %s to change
+Select all %(total_count)s %(module_name)s	en,es,zh_hans,zh_hant,vi	Select all %(total_count)s %(module_name)s
+Select all objects on this page for an action	en,es,zh_hans,zh_hant,vi	Select all objects on this page for an action

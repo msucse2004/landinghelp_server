@@ -25,7 +25,7 @@ def user_plan_info(request):
         .order_by('-started_at')
         .first()
     )
-    plan_display = sub.plan.get_code_display() if sub and sub.plan else '미설정'
+    plan_display = sub.plan.get_display_name() if sub and sub.plan else '미설정'
     return {
         'user_id': request.user.username,
         'user_plan_display': plan_display,

@@ -1,0 +1,15 @@
+{% extends "services/settlement_base.html" %}
+{% load i18n %}
+{% block title %}{{ settlement_main.title|default:"정착서비스" }} – LifeAI US{% endblock %}
+{% block settlement_content %}
+<section class="card">
+  <h1>{{ settlement_main.title|default:"정착서비스" }}</h1>
+  <p class="text-muted">{{ settlement_main.intro|default:"미국 이민·정착 관련 서비스를 제공합니다." }}</p>
+  <ul style="list-style:none;padding:0;">
+    <li style="margin-bottom:0.75rem;"><a href="{% url 'settlement_intro' %}">{{ settlement_main.link1|default:"1. 정착 서비스 소개" }}</a></li>
+    <li style="margin-bottom:0.75rem;"><a href="{% url 'settlement_quote' %}">{{ settlement_main.link2|default:"2. 정착 플랜" }}</a></li>
+    <li style="margin-bottom:0.75rem;"><a href="{% url 'settlement_reviews' %}">{{ settlement_main.link3|default:"3. 고객 후기" }}</a></li>
+    <li style="margin-bottom:0.75rem;"><a href="{% url 'settlement_cost_estimate' %}">{{ settlement_main.link4|default:"4. 셀프 정착 비용 예상" }}</a></li>
+  </ul>
+</section>
+{% endblock %}

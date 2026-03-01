@@ -1,0 +1,2 @@
+key	missing_languages
+건	vi

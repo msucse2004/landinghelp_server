@@ -6,10 +6,11 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+# 프로젝트 루트 기준 .env 로드 (cwd와 무관하게 동일 경로에서 로드)
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env')
+# cwd의 .env도 있으면 로드 (override 없음이 기본이라 먼저 로드된 값 유지)
+load_dotenv()
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-change-me-in-production')
@@ -20,7 +21,10 @@ DEBUG = os.environ.get('DJANGO_DEBUG', '0') in ('1', 'true', 'yes', 'True')
 _allowed = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 ALLOWED_HOSTS = [h.strip() for h in _allowed if h.strip()]
 if DEBUG and '*' not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS = list(ALLOWED_HOSTS) + ['127.0.0.1', 'localhost', '[::1]']
+    ALLOWED_HOSTS = list(ALLOWED_HOSTS) + [
+        '127.0.0.1', 'localhost', '[::1]',
+        '.trycloudflare.com',  # Cloudflare Tunnel 개발용 (예: xxx.trycloudflare.com)
+    ]
     ALLOWED_HOSTS = list(dict.fromkeys(ALLOWED_HOSTS))  # 중복 제거
 
 # Application definition
@@ -45,8 +49,10 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.locale.LocaleMiddleware',
+    # LocaleMiddleware 제거: Accept-Language가 세션/쿠키보다 우선해 로그인 후 선호어가 덮어씌워짐.
+    # config.middleware.GuestDefaultLanguageMiddleware 가 세션·쿠키·DB 선호어만으로 언어 제어.
     'django.middleware.common.CommonMiddleware',
+    'config.middleware.CsrfTrustCloudflareMiddleware',  # DEBUG 시 Cloudflare Tunnel Origin 허용 (CsrfViewMiddleware 전에 실행)
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -70,6 +76,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'billing.context_processors.user_plan_info',
                 'config.context_processors.email_config_warning',
+                'config.context_processors.translation_failed_alert',
                 'config.context_processors.settlement_nav_i18n',
                 'config.context_processors.ad_carousel_slides',
                 'messaging.context_processors.messaging_unread',
@@ -105,7 +112,7 @@ AUTH_PASSWORD_VALIDATORS = []
 # ]
 
 # Internationalization
-LANGUAGE_CODE = 'ko'
+LANGUAGE_CODE = 'en'
 TIME_ZONE = 'Asia/Seoul'
 USE_I18N = True
 USE_TZ = True
@@ -147,12 +154,20 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD') or ''
 # 에러 페이지에서 민감 설정(이메일 등) 숨김
 DEFAULT_EXCEPTION_REPORTER_FILTER = 'config.debug.SensitiveDataExceptionFilter'
 
+# CSRF: POST 등 요청 시 Origin 검증. Cloudflare Tunnel 등은 아래에서 동적 추가 또는 env로 설정
+_csrf_origins = os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '')
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_origins.split(',') if o.strip()]
+
 # Auth
 LOGIN_REDIRECT_URL = 'app_entry'
 LOGOUT_REDIRECT_URL = 'home'
 LOGIN_URL = 'login'
 
-# DeepL 번역 API (메시지/Admin 번역용)
-# Windows: 시스템/사용자 환경 변수 DEEPL_AUTH_KEY 에서 읽음 (관리 도구 → 고급 → 환경 변수)
-# https://www.deepl.com/pro-api 에서 API 키 발급. 무료 tier: 500,000자/월
-DEEPL_AUTH_KEY = os.environ.get('DEEPL_AUTH_KEY', '')
+# 번역 API: 1순위 Google, 2순위 DeepL
+# Google: 비활성화 시 DeepL만 사용. 활성화하려면 True + GOOGLE_TRANSLATE_API_KEY 설정
+GOOGLE_TRANSLATE_ENABLED = False
+GOOGLE_TRANSLATE_API_KEY = os.environ.get('GOOGLE_TRANSLATE_API_KEY', '')
+# DeepL: https://www.deepl.com/pro-api 에서 API 키 발급. 무료 tier: 500,000자/월.
+# 웹 요청 시에도 config.deepl_env.get_deepl_auth_key()로 env+레지스트리 재조회함
+from config.deepl_env import get_deepl_auth_key
+DEEPL_AUTH_KEY = get_deepl_auth_key()

@@ -6,7 +6,7 @@ from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils import timezone
 from django.utils import translation
-from translations.utils import get_display_text
+from translations.utils import get_display_text, get_request_language, get_calendar_weekday_display
 
 
 def _is_ajax(request):
@@ -31,7 +31,7 @@ from .constants import (
 
 def settlement_quote(request):
     """서비스 견적 신청 (폼 표시 및 제출 처리). 에이전트 계정은 정착 플랜 대신 고객예약 달력으로 이동."""
-    lang = getattr(request, 'LANGUAGE_CODE', None) or translation.get_language() or 'ko'
+    lang = get_request_language(request)
     if request.user.is_authenticated and getattr(request.user, 'role', None) == 'AGENT':
         return redirect(reverse('app_agent_appointments'))
     if request.method == 'POST':
@@ -235,13 +235,13 @@ def settlement_quote(request):
         'month': get_display_text('월', lang),
         'prev': get_display_text('이전', lang),
         'next': get_display_text('다음', lang),
-        'sun': get_display_text('요일_일', lang),
-        'mon': get_display_text('요일_월', lang),
-        'tue': get_display_text('요일_화', lang),
-        'wed': get_display_text('요일_수', lang),
-        'thu': get_display_text('요일_목', lang),
-        'fri': get_display_text('요일_금', lang),
-        'sat': get_display_text('요일_토', lang),
+        'sun': get_calendar_weekday_display(0, lang),
+        'mon': get_calendar_weekday_display(1, lang),
+        'tue': get_calendar_weekday_display(2, lang),
+        'wed': get_calendar_weekday_display(3, lang),
+        'thu': get_calendar_weekday_display(4, lang),
+        'fri': get_calendar_weekday_display(5, lang),
+        'sat': get_calendar_weekday_display(6, lang),
         'placeholder_time_example': get_display_text('예: 오전 10시', lang),
         # HTML 템플릿용 (locale 미사용, StaticTranslation만 사용)
         'plan_heading': get_display_text('정착 플랜', lang),

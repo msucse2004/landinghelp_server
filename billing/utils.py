@@ -8,7 +8,10 @@ DEFAULT_TIER = Plan.Tier.BASIC
 
 
 def get_user_plan(user):
-    """유저의 현재 ACTIVE 구독 플랜 반환. 없으면 None."""
+    """
+    유저의 현재 ACTIVE 구독 플랜 반환. 없으면 None.
+    플랜/구독 조회는 이 함수 한 곳에서만 수행(헤더·본문·정책 등 모두 여기 사용).
+    """
     if not user or not user.pk:
         return None
     sub = (
@@ -38,16 +41,34 @@ def get_user_tier(user):
     return DEFAULT_TIER
 
 
-def get_user_grade_display(user):
+def get_plan_display_key(plan):
     """
-    고객에게 보여줄 등급명. 요금제 이름(plan.get_display_name()) 사용.
-    구독 없으면 기본 '베이직'.
+    Plan 인스턴스에서 번역 DB 조회용 키 반환. 항상 DB(Plan) 기준.
+    표시명 없으면 '미설정' 키 사용.
     """
+    if not plan:
+        return '미설정'
+    raw = plan.get_display_name()
+    return (raw or '').strip() or '미설정'
+
+
+def get_user_grade_display(user, language_code=None):
+    """
+    헤더·본문 공통: 유저 플랜 표시문. 항상 DB에서 쿼리 후 설정 언어로 표시.
+    1) get_user_plan(user) 로 DB에서 구독/플랜 조회
+    2) 플랜 없으면 '미설정', 있으면 플랜 표시명을 키로 사용
+    3) get_display_text(key, lang) 로 번역 DB(StaticTranslation)에서 해당 언어 문구 조회·반환
+    """
+    from django.utils import translation
+    from translations.utils import get_display_text
+    lang = language_code or translation.get_language() or 'en'
+    if not user or not user.pk:
+        return get_display_text('미설정', lang)
+    if getattr(user, 'is_superuser', False):
+        return get_display_text('Super User', lang)
     plan = get_user_plan(user)
-    if plan:
-        return plan.get_display_name()
-    from .models import Plan
-    return dict(Plan.Tier.choices).get(DEFAULT_TIER, '베이직')
+    key = get_plan_display_key(plan)
+    return get_display_text(key, lang)
 
 
 def get_user_plan_policy(user):

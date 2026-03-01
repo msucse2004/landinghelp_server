@@ -1,17 +1,18 @@
 {% extends "base.html" %}
-{% block title %}관리자 대시보드 – LifeAI US{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "관리자 대시보드" %} – LifeAI US{% endblock %}
 {% block content %}
 {% if user.is_staff %}
 <div class="card" style="margin-bottom: 1.5rem;">
-  <h2 style="margin-top: 0;">관리 메뉴</h2>
+  <h2 style="margin-top: 0;" data-i18n-key="관리 메뉴">{% trans "관리 메뉴" %}</h2>
   <ul style="line-height: 2; padding-left: 1.25rem;">
-    <li><a href="{% url 'member_list' %}">가입자</a> — 회원 목록, 비밀번호 리셋</li>
-    <li><strong>캐러셀</strong> — 슬라이드 추가·수정·삭제
+    <li><a href="{% url 'member_list' %}" data-i18n-key="가입자">{% trans "가입자" %}</a> — <span data-i18n-key="회원 목록, 비밀번호 리셋">{% trans "회원 목록, 비밀번호 리셋" %}</span></li>
+    <li><strong data-i18n-key="캐러셀">{% trans "캐러셀" %}</strong> — <span data-i18n-key="슬라이드 추가·수정·삭제">{% trans "슬라이드 추가·수정·삭제" %}</span>
       <ul style="margin: 0.25rem 0 0 1rem; padding-left: 1rem;">
-        <li><a href="{% url 'admin:content_homeintroslide_changelist' %}">홈인트로</a></li>
-        <li><a href="{% url 'admin:content_settlementcarouselslide_changelist' %}">정착서비스</a></li>
-        <li><a href="{% url 'admin:content_corporatecarouselslide_changelist' %}">기업서비스</a></li>
-        <li><a href="{% url 'admin:content_adcarouselslide_changelist' %}">광고</a></li>
+        <li><a href="{% url 'admin:content_homeintroslide_changelist' %}" data-i18n-key="홈인트로">{% trans "홈인트로" %}</a></li>
+        <li><a href="{% url 'admin:content_settlementcarouselslide_changelist' %}" data-i18n-key="정착서비스">{% trans "정착서비스" %}</a></li>
+        <li><a href="{% url 'admin:content_corporatecarouselslide_changelist' %}" data-i18n-key="기업서비스">{% trans "기업서비스" %}</a></li>
+        <li><a href="{% url 'admin:content_adcarouselslide_changelist' %}" data-i18n-key="광고">{% trans "광고" %}</a></li>
       </ul>
     </li>
   </ul>
@@ -19,11 +20,11 @@
 {% endif %}
 
 <div class="card">
-  <h1>{{ user.username }}님, 환영합니다</h1>
-  <p class="text-muted">관리자 계정입니다.</p>
-  <p><strong>내 플랜:</strong> {{ tier_label }}</p>
+  <h1>{{ user.username }}{{ admin_i18n.welcome_suffix|default:"님, 환영합니다" }}</h1>
+  <p class="text-muted" data-i18n-key="관리자 계정입니다.">{{ admin_i18n.admin_account|default:"관리자 계정입니다." }}</p>
+  <p><strong data-i18n-key="내 플랜:">{{ admin_i18n.my_plan|default:"내 플랜:" }}</strong> {{ tier_label }}</p>
   <p style="margin-top: 1rem;">
-    <a href="{% url 'content:list' %}" class="btn btn-primary">컨텐츠 보기</a>
+    <a href="{% url 'content:list' %}" class="btn btn-primary" data-i18n-key="컨텐츠 보기">{{ admin_i18n.view_content|default:"컨텐츠 보기" }}</a>
     {% if user.is_staff %}
     <a href="/admin/" class="btn btn-outline" style="margin-left: 0.5rem;">Django Admin</a>
     {% endif %}

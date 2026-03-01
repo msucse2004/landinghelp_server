@@ -51,13 +51,13 @@
   .agent-detail-actions { margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
 </style>
 <div class="card">
-  <h1>고객 예약 달력</h1>
-  <p class="text-muted">고객이 신청한 약속을 날짜별로 확인하고, 수락하거나 메시지를 보낼 수 있습니다.</p>
+  <h1>{{ calendar_title_i18n }}</h1>
+  <p class="text-muted">{{ calendar_desc_i18n }}</p>
   <div class="agent-cal-wrap">
     <div class="agent-cal-nav">
-      <a href="?year={{ prev_year }}&month={{ prev_month }}" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">◀ 이전</a>
+      <a href="?year={{ prev_year }}&month={{ prev_month }}" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">◀ {{ prev_month_i18n }}</a>
       <h2 id="agentCalTitle">{{ cal_title }}</h2>
-      <a href="?year={{ next_year }}&month={{ next_month }}" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">다음 ▶</a>
+      <a href="?year={{ next_year }}&month={{ next_month }}" class="btn btn-outline" style="padding: 0.4rem 0.75rem;">{{ next_month_i18n }} ▶</a>
     </div>
     <div class="agent-cal-grid">
       {% for w in calendar_weekdays %}<span class="agent-cal-weekday">{{ w }}</span>{% endfor %}

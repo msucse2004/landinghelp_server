@@ -1,6 +1,6 @@
 {% load i18n %}
 <!DOCTYPE html>
-<html lang="{{ LANGUAGE_CODE|default:'ko' }}">
+<html lang="{{ LANGUAGE_CODE|default:'en' }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -225,7 +225,7 @@
   </style>
   {% block extra_head %}{% endblock %}
 </head>
-<body class="{% block body_class %}{% endblock %}">
+<body class="{% block body_class %}{% endblock %}" data-lang="{{ LANGUAGE_CODE|default:'en' }}" {% if user.is_authenticated %}data-logged-in="true"{% endif %}>
   {% if email_config_warning %}
   <div id="email-warning-banner" style="background:#fef3c7;border-bottom:2px solid #f59e0b;padding:0.75rem 1rem;text-align:center;font-size:0.9rem;position:relative;" data-alert-message="{% trans '이메일 설정 경고' %}&#10;&#10;{% trans 'EMAIL_HOST_USER, EMAIL_HOST_PASSWORD 환경변수가 설정되지 않았습니다.' %}&#10;{% trans '이메일 발송이 동작하지 않습니다.' %}">
     <span>⚠️ <span data-i18n-key="이메일 설정 경고: EMAIL_HOST_USER, EMAIL_HOST_PASSWORD 환경변수가 설정되지 않았습니다. 이메일 발송이 동작하지 않습니다.">{% trans "이메일 설정 경고: EMAIL_HOST_USER, EMAIL_HOST_PASSWORD 환경변수가 설정되지 않았습니다. 이메일 발송이 동작하지 않습니다." %}</span></span>
@@ -237,7 +237,7 @@
     <div class="container">
       {% if user.is_authenticated %}
         <span><strong>ID</strong>: {{ user_id }}</span>
-        <span><strong data-i18n-key="플랜">{% trans "플랜" %}</strong>: <a href="{% url 'billing:subscription_plan' %}">{{ user_plan_display }}</a></span>
+        <span><strong data-i18n-key="플랜">{{ plan_label|default:"Plan" }}</strong>: <a href="{% url 'billing:subscription_plan' %}">{{ user_plan_display }}</a></span>
         <a href="{% url 'messages_inbox' %}" class="top-link icon-mail-wrap" title="{% trans '메시지 함' %}" aria-label="{% trans '메시지 함' %}" id="header-mail-link" data-aria-label-key="메시지 함">
           <span class="icon-mail">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
@@ -434,139 +434,52 @@
   })();
   </script>
   {% endif %}
+  {% if translation_failed %}
+  <div id="translation-failed-popup-backdrop" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1001;display:flex;align-items:center;justify-content:center;padding:1rem;">
+    <div id="translation-failed-popup" role="alertdialog" aria-labelledby="translation-failed-title" aria-modal="true" style="background:#fff;border-radius:var(--radius);box-shadow:0 8px 32px rgba(0,0,0,0.2);max-width:420px;width:100%;padding:1.5rem;max-height:85vh;overflow:auto;">
+      <h2 id="translation-failed-title" style="margin:0 0 0.75rem;font-size:1.15rem;color:#b91c1c;">{{ translation_failed_title }}</h2>
+      <p id="translation-failed-body" style="margin:0 0 0.5rem;color:var(--color-muted);font-size:0.95rem;">{{ translation_failed_message }}</p>
+      {% if translation_failed_entries %}
+      <p style="margin:0 0 0.35rem;font-size:0.85rem;font-weight:600;color:var(--color-text);">{% trans "Failed keys" %}:</p>
+      <ul id="translation-failed-keys" style="margin:0 0 1.25rem;padding-left:1.25rem;font-size:0.9rem;color:var(--color-muted);max-height:12rem;overflow-y:auto;">
+        {% for entry in translation_failed_entries %}
+        <li style="margin-bottom:0.35rem;">
+          <code style="background:var(--color-bg);padding:0.1rem 0.35rem;border-radius:4px;">{{ entry.key }}</code>
+          {% if entry.error %}
+          <span style="font-size:0.8rem;color:#b91c1c;margin-left:0.25rem;">({{ entry.error }})</span>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      <div style="display:flex;justify-content:flex-end;">
+        <button type="button" class="btn btn-primary" id="translation-failed-popup-close">{% trans "Close" %}</button>
+      </div>
+    </div>
+  </div>
+  <script>
+  (function(){
+    var backdrop = document.getElementById('translation-failed-popup-backdrop');
+    var btn = document.getElementById('translation-failed-popup-close');
+    if (backdrop && btn) {
+      function closePopup() { backdrop.style.display = 'none'; }
+      btn.addEventListener('click', closePopup);
+      backdrop.addEventListener('click', function(e) { if (e.target === backdrop) closePopup(); });
+    }
+  })();
+  </script>
+  {% endif %}
   <script>
   (function(){
     var form = document.getElementById('langForm');
     var select = document.getElementById('langSelect');
-    function applyTranslations(data, lang) {
-      if (!data || typeof data !== 'object') return;
-      if (lang) {
-        document.documentElement.setAttribute('lang', lang);
-        var dateLocale = { 'en': 'en-US', 'ko': 'ko-KR', 'es': 'es-ES', 'vi': 'vi-VN', 'zh-hans': 'zh-CN', 'zh-hant': 'zh-TW' }[lang] || lang;
-        document.querySelectorAll('input[type="date"]').forEach(function(input) {
-          input.setAttribute('lang', dateLocale);
-          var v = input.value;
-          if (v) { input.value = ''; input.value = v; }
-        });
-      }
-      document.querySelectorAll('[data-i18n-key]').forEach(function(el) {
-        var key = el.getAttribute('data-i18n-key');
-        if (key && data[key] !== undefined) el.textContent = data[key];
-      });
-      document.querySelectorAll('[data-aria-label-key]').forEach(function(el) {
-        var key = el.getAttribute('data-aria-label-key');
-        if (key && data[key] !== undefined) {
-          el.setAttribute('aria-label', data[key]);
-          if (el.getAttribute('title') !== null) el.setAttribute('title', data[key]);
-        }
-      });
-      document.querySelectorAll('[data-unread-label-key]').forEach(function(el) {
-        var labelKey = el.getAttribute('data-unread-label-key');
-        var suffixKey = el.getAttribute('data-unread-suffix-key');
-        if (labelKey && data[labelKey] !== undefined && suffixKey && data[suffixKey] !== undefined) {
-          var n = (el.textContent || '').trim();
-          el.setAttribute('aria-label', n ? data[labelKey] + ' ' + n + data[suffixKey] : data[labelKey]);
-        }
-      });
-      document.querySelectorAll('[data-slide-aria-key]').forEach(function(el) {
-        var key = el.getAttribute('data-slide-aria-key');
-        if (key && data[key] !== undefined) el.setAttribute('data-slide-aria', data[key]);
-      });
-      var dotsWrap = document.querySelector('.ad-carousel-dots');
-      if (dotsWrap) {
-        var slideAria = data['번째 슬라이드'] || '번째 슬라이드';
-        dotsWrap.querySelectorAll('button').forEach(function(btn, i) {
-          btn.setAttribute('aria-label', (i + 1) + slideAria);
-        });
-      }
-      var signupWrap = document.querySelector('.signup-wrap');
-      if (signupWrap) {
-        if (data['클릭하여 선택 해제'] !== undefined) signupWrap.setAttribute('data-title-remove', data['클릭하여 선택 해제']);
-        if (data['확인 중...'] !== undefined) signupWrap.setAttribute('data-checking', data['확인 중...']);
-      }
-      document.querySelectorAll('[data-year-suffix-key]').forEach(function(el) {
-        var k = el.getAttribute('data-year-suffix-key');
-        if (k && data[k] !== undefined) el.setAttribute('data-year-suffix', data[k]);
-      });
-      document.querySelectorAll('[data-month-suffix-key]').forEach(function(el) {
-        var k = el.getAttribute('data-month-suffix-key');
-        if (k && data[k] !== undefined) el.setAttribute('data-month-suffix', data[k]);
-      });
-      try { window.dispatchEvent(new CustomEvent('i18n-applied', { detail: data })); } catch (e) {}
-    }
     if (form && select) {
       select.addEventListener('change', function() {
         var nextInput = form.querySelector('input[name="next"]');
         if (nextInput) nextInput.value = window.location.href;
-        try { sessionStorage.setItem('preferred_lang', select.value); } catch (e) {}
         form.submit();
       });
     }
-
-    // 페이지 로드 시: 서버가 보낸 언어와 사용자가 이전에 선택한 언어가 다르면 클라이언트에서 다시 적용 (네비/대시보드가 한국어로 돌아가는 현상 방지)
-    function runRestorePreferredLang() {
-      var serverLang = (document.documentElement.getAttribute('lang') || 'ko').toLowerCase();
-      var saved;
-      try { saved = sessionStorage.getItem('preferred_lang'); } catch (e) { return; }
-      if (!saved || saved === serverLang) return;
-      fetch('/api/i18n/' + encodeURIComponent(saved) + '/', { credentials: 'same-origin' })
-        .then(function(r) { return r.ok ? r.json() : {}; })
-        .then(function(data) {
-          applyTranslations(data, saved);
-          var sel = document.getElementById('langSelect');
-          if (sel) sel.value = saved;
-        })
-        .catch(function() {});
-    }
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', runRestorePreferredLang);
-    } else {
-      runRestorePreferredLang();
-    }
-
-    // 네비/서브네비 링크 클릭 시: 현재 선택 언어를 서버에 폼 제출 후 리다이렉트 (같은 언어 유지)
-    document.addEventListener('click', function(e) {
-      var a = e.target && e.target.closest ? e.target.closest('a') : null;
-      if (!a || !a.href) return;
-      try {
-        var url = new URL(a.href);
-        if (url.origin !== window.location.origin) return;
-      } catch (err) { return; }
-      var inNav = a.closest('.nav-links') || a.closest('.settlement-sub-nav');
-      if (!inNav) return;
-      if (a.target === '_blank' || a.hasAttribute('download')) return;
-      var form = document.getElementById('langForm');
-      if (!form || !form.action) return;
-      var sel = document.getElementById('langSelect');
-      var lang = (sel && sel.value) ? sel.value : '';
-      if (!lang) { try { lang = sessionStorage.getItem('preferred_lang'); } catch (x) {} }
-      if (!lang) lang = 'en';
-      e.preventDefault();
-      var f = document.createElement('form');
-      f.method = 'POST';
-      f.action = form.action;
-      f.style.display = 'none';
-      var csrf = form.querySelector('input[name=csrfmiddlewaretoken]');
-      if (csrf) {
-        var c = document.createElement('input');
-        c.name = 'csrfmiddlewaretoken';
-        c.value = csrf.value;
-        c.type = 'hidden';
-        f.appendChild(c);
-      }
-      var langInput = document.createElement('input');
-      langInput.name = 'language';
-      langInput.value = lang;
-      langInput.type = 'hidden';
-      f.appendChild(langInput);
-      var nextInput = document.createElement('input');
-      nextInput.name = 'next';
-      nextInput.value = a.href;
-      nextInput.type = 'hidden';
-      f.appendChild(nextInput);
-      document.body.appendChild(f);
-      f.submit();
-    }, true);
   })();
   </script>
 </body>

@@ -94,7 +94,7 @@ class User(AbstractUser):
     preferred_language = models.CharField(
         max_length=10,
         choices=PREFERRED_LANGUAGE_CHOICES,
-        default='ko',
+        default='en',
         blank=True,
         verbose_name=DisplayKey('선호 언어'),  # 선호 언어
     )

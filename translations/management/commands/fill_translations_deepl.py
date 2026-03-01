@@ -48,15 +48,11 @@ class Command(BaseCommand):
             )
 
         from translations.models import StaticTranslation
-        from translations.utils import invalidate_cache, _has_hangul
-        from translations.services import _get_deepl_translator, _translate_one, LANG_TO_DEEPL
+        from translations.utils import invalidate_cache
+        from translations.services import _translate_one
         from translations.utils import get_supported_language_codes, save_translation_from_api
 
         invalidate_cache()
-        translator = _get_deepl_translator()
-        if not translator and not dry_run:
-            raise CommandError('DeepL 번역기를 초기화할 수 없습니다. DEEPL_AUTH_KEY를 확인하세요.')
-
         qs = StaticTranslation.objects.all().order_by('key')
         if limit > 0:
             qs = qs[:limit]
@@ -80,16 +76,12 @@ class Command(BaseCommand):
                         total_filled += 1
                 continue
 
-            # 원문 언어: 한글이 있으면 KO, 없으면 EN (DeepL 소스)
-            source_deepl = 'KO' if _has_hangul(source_text) else 'EN'
             for lang in target_langs:
-                if lang not in LANG_TO_DEEPL:
-                    continue
                 if not force:
                     f = lang_to_field.get(lang, lang)
                     if getattr(row, f, None) and str(getattr(row, f, '')).strip():
                         continue
-                translated_text = _translate_one(translator, source_text, LANG_TO_DEEPL[lang], source_deepl)
+                translated_text = _translate_one(source_text, lang, 'ko')
                 if translated_text:
                     save_translation_from_api(row.key, lang, translated_text)
                     total_filled += 1

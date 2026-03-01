@@ -49,9 +49,9 @@ SETTLEMENT_COST_ESTIMATE_KEYS = [
 
 def _settlement_i18n(request, keys_list):
     """StaticTranslation에서 현재 언어로 번역 dict 생성."""
-    lang = getattr(request, 'LANGUAGE_CODE', None) or 'ko'
+    from translations.utils import get_display_text, get_request_language
+    lang = get_request_language(request)
     try:
-        from translations.utils import get_display_text
         return {key: get_display_text(msg_key, lang) for key, msg_key in keys_list}
     except Exception:
         return {key: msg_key for key, msg_key in keys_list}
@@ -74,15 +74,49 @@ def ad_carousel_slides(request):
         placement=CarouselSlide.Placement.AD,
         is_active=True
     ).order_by('order', 'id'))
-    lang = getattr(request, 'LANGUAGE_CODE', None)
+    from translations.utils import get_request_language, enrich_objects_for_display
+    lang = get_request_language(request)
     try:
-        from translations.utils import enrich_objects_for_display
         enrich_objects_for_display(slides, ['title', 'subtitle'], language_code=lang)
     except Exception:
         for s in slides:
             s.title_display = getattr(s, 'title', '') or ''
             s.subtitle_display = getattr(s, 'subtitle', '') or ''
     return {'ad_carousel_slides': slides}
+
+
+# 팝업 자체 문구용 키 → 실패 목록에 넣지 않음 (목록에 노출 시 중복/혼동 방지)
+_TRANSLATION_FAILED_POPUP_KEYS = frozenset({
+    '번역 실패',
+    '번역에 실패했습니다. 일부 문구가 원문으로 표시될 수 있습니다.',
+})
+
+
+def translation_failed_alert(request):
+    """번역 실패 시 팝업용 플래그·제목·메시지·실패한 키·에러 목록."""
+    from translations.utils import get_translation_failed, get_translation_failed_entries, get_display_text, get_request_language
+    if not get_translation_failed():
+        return {
+            'translation_failed': False,
+            'translation_failed_title': '',
+            'translation_failed_message': '',
+            'translation_failed_keys': [],
+            'translation_failed_entries': [],
+        }
+    lang = get_request_language(request)
+    title = get_display_text('번역 실패', lang) or 'Translation failed'
+    msg = get_display_text('번역에 실패했습니다. 일부 문구가 원문으로 표시될 수 있습니다.', lang) or 'Some text may appear in the original language.'
+    all_entries = get_translation_failed_entries()
+    # 팝업 제목/메시지용 키는 실패 목록에서 제외
+    failed_entries = [e for e in all_entries if e['key'] not in _TRANSLATION_FAILED_POPUP_KEYS]
+    failed_keys = [e['key'] for e in failed_entries]  # 하위 호환
+    return {
+        'translation_failed': True,
+        'translation_failed_title': title,
+        'translation_failed_message': msg,
+        'translation_failed_keys': failed_keys,
+        'translation_failed_entries': failed_entries,
+    }
 
 
 @sensitive_variables('user', 'password')

@@ -1,14 +1,15 @@
 {% extends "base.html" %}
-{% block title %}에이전트 대시보드 – LifeAI US{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "에이전트 대시보드" %} – LifeAI US{% endblock %}
 {% block content %}
 <div class="card">
-  <h1>{{ user.username }}님, 환영합니다</h1>
-  <p class="text-muted">에이전트 계정입니다.</p>
-  <p><strong>내 플랜:</strong> {{ tier_label }}</p>
+  <h1>{{ user.username }}{{ agent_i18n.welcome_suffix }}</h1>
+  <p class="text-muted">{{ agent_i18n.agent_account }}</p>
+  <p><strong>{{ agent_i18n.my_plan }}</strong> {{ tier_label }}</p>
   <p style="margin-top: 1rem;">
-    <a href="{% url 'app_agent_appointments' %}" class="btn btn-primary">고객 예약 달력</a>
-    <a href="{% url 'messages_inbox' %}" class="btn btn-outline" style="margin-left: 0.5rem;">메시지 함</a>
-    <a href="{% url 'content:list' %}" class="btn btn-outline" style="margin-left: 0.5rem;">컨텐츠 보기</a>
+    <a href="{% url 'app_agent_appointments' %}" class="btn btn-primary">{{ agent_i18n.agent_calendar }}</a>
+    <a href="{% url 'messages_inbox' %}" class="btn btn-outline" style="margin-left: 0.5rem;">{{ agent_i18n.message_inbox }}</a>
+    <a href="{% url 'content:list' %}" class="btn btn-outline" style="margin-left: 0.5rem;">{{ agent_i18n.view_content }}</a>
   </p>
 </div>
 {% endblock %}

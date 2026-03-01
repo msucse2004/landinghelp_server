@@ -1095,6 +1095,7 @@
       dayDiv.innerHTML = dayNumHtml + '<div class="calendar-day-cards"></div>';
       var cardsDiv = dayDiv.querySelector('.calendar-day-cards');
       (schedule[dateStr] || []).forEach(function(item) {
+        // 클릭/드래그 시 반드시 card.dataset.date 사용 (루프 변수 dateStr은 클로저로 마지막 날(31일)만 가리켜 희망일자 버그 유발)
         var card = document.createElement('span');
         var statusClass = '';
         if (item.appointment_status === 'PENDING') statusClass = ' calendar-card--status-pending';
@@ -1146,24 +1147,26 @@
         labelEl.addEventListener('click', function(e) {
           e.stopPropagation();
           if (card._justDragged) { card._justDragged = false; return; }
+          var cellDate = (card.dataset && card.dataset.date) || (card.closest && card.closest('.calendar-day') && card.closest('.calendar-day').dataset && card.closest('.calendar-day').dataset.date) || '';
           if (item.appointment_status && item.appointment_status !== 'CANCELLED') {
-            showAppointmentDetail(item, dateStr);
+            showAppointmentDetail(item, cellDate);
           } else if (item.agent_id && !item.appointment_id) {
-            showPaymentPendingDetail(item, dateStr);
+            showPaymentPendingDetail(item, cellDate);
           } else {
-            showAgentList(item.code, item.label, dateStr);
+            showAgentList(item.code, item.label, cellDate);
           }
         });
         card.addEventListener('dragstart', function(e) {
           card._justDragged = true;
           window._scheduleCardDragging = true;
           window._scheduleDragFromCalendar = true;
-          window._scheduleDragSourceDate = dateStr;
+          var cellDate = (card.dataset && card.dataset.date) || (card.closest && card.closest('.calendar-day') && card.closest('.calendar-day').dataset && card.closest('.calendar-day').dataset.date) || '';
+          window._scheduleDragSourceDate = cellDate;
           card.classList.add('dragging');
           e.dataTransfer.setData('service-code', item.code);
           e.dataTransfer.setData('service-label', item.label);
           e.dataTransfer.setData('source', 'calendar');
-          e.dataTransfer.setData('source-date', dateStr);
+          e.dataTransfer.setData('source-date', cellDate);
           e.dataTransfer.effectAllowed = 'move';
         });
         card.addEventListener('dragend', function() {
@@ -1209,7 +1212,10 @@
       window._scheduleDropInProgress = true;
       var targetDay = e.currentTarget;
       targetDay.classList.remove('dragover');
-      var dateStr = (targetDay && targetDay.dataset && targetDay.dataset.date) ? targetDay.dataset.date : '';
+      // [재발 방지] drop은 자식(.calendar-day-num, .calendar-day-cards)에서 발생할 수 있음.
+      // 반드시 실제 드롭된 셀의 날짜만 사용 (closest('.calendar-day')) → 예약 창 희망일자가 잘못된 날(예: 3/31)로 뜨는 버그 방지.
+      var dayCell = (e.target && e.target.closest && e.target.closest('.calendar-day')) || targetDay;
+      var dateStr = (dayCell && dayCell.dataset && dayCell.dataset.date) ? String(dayCell.dataset.date).trim() : ((targetDay && targetDay.dataset && targetDay.dataset.date) ? String(targetDay.dataset.date).trim() : '');
       if (!dateStr) { window._scheduleDropInProgress = false; return; }
       var code = e.dataTransfer.getData('service-code');
       var label = e.dataTransfer.getData('service-label');
@@ -1255,8 +1261,10 @@
       schedule[dateStr].push(itemToAdd);
       done();
       if (!fromCalendar) {
-        setTimeout(function() { showAgentList(code, label, dateStr); }, 0);
+        var droppedDateStr = dateStr;
+        setTimeout(function() { showAgentList(code, label, droppedDateStr); }, 0);
       }
+      // 위 droppedDateStr: 예약 창에 전달할 날짜를 클로저로 고정 (다른 참조로 덮어씌워지지 않도록)
     });
   }
 

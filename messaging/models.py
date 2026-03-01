@@ -83,6 +83,17 @@ class Message(models.Model):
         verbose_name='보낸 사람',
     )
     body = models.TextField(verbose_name='내용', blank=True)
+    detected_lang = models.CharField(
+        max_length=10,
+        blank=True,
+        verbose_name='감지된 언어',
+        help_text='langdetect 결과 (ko, en 등). 영어가 아니면 body_en에 번역 저장.',
+    )
+    body_en = models.TextField(
+        blank=True,
+        verbose_name='영어 번역',
+        help_text='원문이 영어가 아닐 때 DeepL로 번역한 영어 본문.',
+    )
     image = models.ImageField(
         upload_to='messaging/%Y/%m/',
         blank=True,
@@ -98,6 +109,27 @@ class Message(models.Model):
 
     def __str__(self):
         return f'{self.sender.username}: {self.body[:30]}...'
+
+
+class MessageTranslation(models.Model):
+    """메시지 본문의 언어별 번역 캐시 (수신자 선호어 표시용)."""
+
+    message = models.ForeignKey(
+        Message,
+        on_delete=models.CASCADE,
+        related_name='translations_by_lang',
+    )
+    language_code = models.CharField(max_length=20, verbose_name='언어 코드')
+    body = models.TextField(verbose_name='번역된 본문', blank=True)
+
+    class Meta:
+        verbose_name = '메시지 번역'
+        verbose_name_plural = '메시지 번역'
+        unique_together = [['message', 'language_code']]
+        ordering = ['language_code']
+
+    def __str__(self):
+        return f'msg #{self.message_id} ({self.language_code})'
 
 
 class MessageRead(models.Model):

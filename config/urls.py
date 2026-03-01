@@ -19,6 +19,7 @@ from config.views import (
     corporate_services, corporate_ad_register,
     set_language,
     api_i18n,
+    LoginView,
 )
 from settlement.views import (
     settlement_quote,
@@ -61,7 +62,7 @@ urlpatterns = [
     path('customer/dashboard/', customer_dashboard, name='app_customer_dashboard'),
     path('content/', include('content.urls')),
     path('community/', include('community.urls')),
-    path('login/', auth_views.LoginView.as_view(template_name='registration/login.html'), name='login'),
+    path('login/', LoginView.as_view(template_name='registration/login.html'), name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('find-username/', find_username, name='find_username'),
     path('find-username/done/', find_username_done, name='find_username_done'),

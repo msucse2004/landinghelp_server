@@ -5,13 +5,7 @@ from django.db.models import Avg, Count, Q
 from django.utils.html import format_html
 from translations.utils import DisplayKey
 from billing.utils import get_user_tier, get_user_grade_display
-from billing.models import Plan
 from .models import User, AgentRating, AgentForRating
-
-
-def _tier_label(tier):
-    val = getattr(tier, 'value', tier) if hasattr(tier, 'value') else tier
-    return dict(Plan.Tier.choices).get(val, '베이직')
 
 
 @admin.register(User)

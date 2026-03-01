@@ -1,7 +1,8 @@
 {% extends "base.html" %}
-{% block title %}메시지 함 – LifeAI US{% endblock %}
+{% block title %}{{ inbox_i18n.page_title|default:"메시지 함" }} – LifeAI US{% endblock %}
 {% block content %}
 {% csrf_token %}
+{{ inbox_i18n|json_script:"inbox-i18n" }}
 <style>
   .inbox-wrap { display: flex; gap: 1rem; margin-top: 1rem; min-height: 360px; }
   .inbox-list { width: 280px; flex-shrink: 0; border: 1px solid var(--color-border); border-radius: var(--radius); background: #fff; overflow: hidden; }
@@ -11,7 +12,9 @@
   .inbox-list li:hover { background: #f1f5f9; }
   .inbox-list li.active { background: #e0e7ff; }
   .inbox-list li .conv-title { font-weight: 500; }
-  .inbox-list li .conv-preview { font-size: 0.85rem; color: var(--color-muted); margin-top: 0.25rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .inbox-list li .conv-title .conv-title-en { display: block; font-size: 0.8rem; font-weight: 400; color: var(--color-muted); margin-top: 0.15rem; }
+  .inbox-list li .conv-preview { font-size: 0.85rem; color: var(--color-muted); margin-top: 0.25rem; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+  .inbox-list li .conv-preview .conv-preview-en { display: block; font-size: 0.78rem; margin-top: 0.1rem; opacity: 0.9; }
   .inbox-list li .conv-meta { font-size: 0.75rem; color: var(--color-muted); margin-top: 0.2rem; }
   .inbox-list li .unread-badge { display: inline-block; min-width: 1.2em; padding: 0.1em 0.4em; font-size: 0.75rem; background: #dc2626; color: #fff; border-radius: 999px; margin-left: 0.35rem; }
   .inbox-detail { flex: 1; border: 1px solid var(--color-border); border-radius: var(--radius); background: #fff; display: flex; flex-direction: column; min-width: 0; }
@@ -45,36 +48,36 @@
   .inbox-appointment-actions .btn { padding: 0.4rem 0.8rem; font-size: 0.9rem; }
 </style>
 <div class="card">
-  <h1>메시지 함</h1>
-  <p class="text-muted">약속 요청·공지에 대한 대화를 확인하고 답장할 수 있습니다.</p>
+  <h1>{{ inbox_i18n.page_title|default:"메시지 함" }}</h1>
+  <p class="text-muted">{{ inbox_i18n.page_desc|default:"약속 요청·공지에 대한 대화를 확인하고 답장할 수 있습니다." }}</p>
   <div class="inbox-wrap">
     <div class="inbox-list">
-      <h3>대화 목록</h3>
+      <h3>{{ inbox_i18n.conversation_list|default:"대화 목록" }}</h3>
       <ul id="inboxConversations">
-        <li class="inbox-loading">불러오는 중...</li>
+        <li class="inbox-loading">{{ inbox_i18n.loading|default:"불러오는 중..." }}</li>
       </ul>
     </div>
     <div class="inbox-detail" id="inboxDetail">
-      <div class="inbox-detail-empty" id="inboxDetailEmpty">왼쪽에서 대화를 선택하세요.</div>
+      <div class="inbox-detail-empty" id="inboxDetailEmpty">{{ inbox_i18n.select_conversation|default:"왼쪽에서 대화를 선택하세요." }}</div>
       <div id="inboxDetailContent" style="display:none;">
         <h3 id="inboxDetailTitle"></h3>
         <div class="inbox-appointment-actions" id="inboxAppointmentActions" style="display:none;">
-          <button type="button" class="btn btn-primary" id="inboxAppointmentAcceptBtn">수락</button>
-          <button type="button" class="btn btn-secondary" id="inboxAppointmentRequestChangeBtn">수정요청</button>
+          <button type="button" class="btn btn-primary" id="inboxAppointmentAcceptBtn">{{ inbox_i18n.accept|default:"수락" }}</button>
+          <button type="button" class="btn btn-secondary" id="inboxAppointmentRequestChangeBtn">{{ inbox_i18n.request_change|default:"수정요청" }}</button>
         </div>
         <div class="inbox-messages" id="inboxMessages"></div>
         <div class="inbox-send">
           <div class="inbox-send-attach-wrap">
-            <button type="button" class="inbox-attach-btn" id="inboxAttachBtn" title="사진 첨부" aria-label="사진 첨부">+</button>
+            <button type="button" class="inbox-attach-btn" id="inboxAttachBtn" title="{{ inbox_i18n.attach_photo|default:'사진 첨부' }}" aria-label="{{ inbox_i18n.attach_photo|default:'사진 첨부' }}">+</button>
             <div class="inbox-attach-menu" id="inboxAttachMenu">
-              <button type="button" id="inboxAttachGallery">앨범에서 선택</button>
-              <button type="button" id="inboxAttachCamera">카메라로 촬영</button>
+              <button type="button" id="inboxAttachGallery">{{ inbox_i18n.from_gallery|default:"앨범에서 선택" }}</button>
+              <button type="button" id="inboxAttachCamera">{{ inbox_i18n.from_camera|default:"카메라로 촬영" }}</button>
             </div>
             <input type="file" id="inboxFileGallery" accept="image/*" tabindex="-1">
             <input type="file" id="inboxFileCamera" accept="image/*" capture="environment" tabindex="-1">
           </div>
-          <input type="text" id="inboxMessageInput" placeholder="메시지를 입력하세요..." maxlength="2000">
-          <button type="button" class="btn btn-primary" id="inboxSendBtn">전송</button>
+          <input type="text" id="inboxMessageInput" placeholder="{{ inbox_i18n.message_placeholder|default:'메시지를 입력하세요...' }}" maxlength="2000">
+          <button type="button" class="btn btn-primary" id="inboxSendBtn">{{ inbox_i18n.send|default:"전송" }}</button>
         </div>
       </div>
     </div>
@@ -82,6 +85,11 @@
 </div>
 <script>
 (function() {
+  var i18nEl = document.getElementById('inbox-i18n');
+  window.INBOX_I18N = i18nEl ? (function(){ try { return JSON.parse(i18nEl.textContent); } catch(e){ return {}; } })() : {};
+  window.VIEWER_PREFERRED_LANGUAGE = "{{ viewer_preferred_language|default:'en' }}";
+  function t(key) { return (window.INBOX_I18N && window.INBOX_I18N[key]) || key; }
+
   var API_BASE = '/api/messaging';
   var csrfEl = document.querySelector('[name=csrfmiddlewaretoken]');
   var csrf = csrfEl ? csrfEl.value : '';
@@ -95,20 +103,28 @@
 
   function readStatusIcon(readByOthers) {
     var cls = readByOthers ? 'read' : 'sent';
-    var title = readByOthers ? '읽음' : '전송됨';
+    var title = readByOthers ? t('read') : t('sent');
     var check = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
     if (readByOthers) {
-      return '<span class="msg-read-status ' + cls + '" title="' + title + '" aria-label="' + title + '">' + check + check + '</span>';
+      return '<span class="msg-read-status ' + cls + '" title="' + escapeHtml(title) + '" aria-label="' + escapeHtml(title) + '">' + check + check + '</span>';
     }
-    return '<span class="msg-read-status ' + cls + '" title="' + title + '" aria-label="' + title + '">' + check + '</span>';
+    return '<span class="msg-read-status ' + cls + '" title="' + escapeHtml(title) + '" aria-label="' + escapeHtml(title) + '">' + check + '</span>';
   }
 
   function escapeHtml(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function messageBodyHtml(m) {
+    var pref = (m.viewer_preferred_language || window.VIEWER_PREFERRED_LANGUAGE || 'en');
+    var line1 = (m.body_preferred != null ? m.body_preferred : m.body) || '';
+    var line2 = (m.body_en != null ? m.body_en : '') || '';
+    var twoLines = (pref !== 'en' && line2 && line2 !== line1);
     var parts = [];
-    if (m.image_url) parts.push('<img src="' + escapeHtml(m.image_url) + '" alt="첨부 이미지" class="msg-image">');
-    if (m.body && m.body !== '[사진]') parts.push('<div class="msg-body-text">' + escapeHtml(m.body).replace(/\n/g, '<br>') + '</div>');
-    return parts.length ? parts.join('') : '<div class="msg-body-text">' + escapeHtml(m.body || '') + '</div>';
+    if (m.image_url) parts.push('<img src="' + escapeHtml(m.image_url) + '" alt="' + escapeHtml(t('image_alt')) + '" class="msg-image">');
+    if (line1 && line1 !== '[사진]') {
+      parts.push('<div class="msg-body-text">' + escapeHtml(line1).replace(/\n/g, '<br>'));
+      if (twoLines) parts.push('<div class="msg-body-en" style="margin-top:0.35rem;font-size:0.9em;opacity:0.9;">' + escapeHtml(line2).replace(/\n/g, '<br>') + '</div>');
+      parts.push('</div>');
+    }
+    return parts.length ? parts.join('') : '<div class="msg-body-text">' + escapeHtml(line1 || '') + '</div>';
   }
 
   function loadConversations() {
@@ -118,18 +134,25 @@
       .then(function(data) {
         var list = data.conversations || [];
         if (list.length === 0) {
-          ul.innerHTML = '<li class="inbox-loading">대화가 없습니다.</li>';
+          ul.innerHTML = '<li class="inbox-loading">' + t('no_conversations') + '</li>';
           return;
         }
+        if (data.viewer_preferred_language) window.VIEWER_PREFERRED_LANGUAGE = data.viewer_preferred_language;
+        var prefLang = data.viewer_preferred_language || window.VIEWER_PREFERRED_LANGUAGE || 'en';
         ul.innerHTML = list.map(function(c) {
-          var title = c.display_title || (c.type === 'NOTICE' ? (c.subject || '공지') : (c.appointment_id ? '약속 #' + c.appointment_id : '대화'));
-          var preview = (c.last_message && c.last_message.body) ? c.last_message.body : '';
+          var titlePref = c.display_title_preferred != null ? c.display_title_preferred : (c.display_title || (c.type === 'NOTICE' ? (c.subject || '공지') : (c.appointment_id ? '약속 #' + c.appointment_id : '대화')));
+          var titleEn = c.display_title_en != null ? c.display_title_en : '';
+          var showTitleEn = (prefLang !== 'en' && titleEn && titleEn !== titlePref);
+          var titleHtml = '<span class="conv-title">' + escapeHtml(titlePref) + (showTitleEn ? '<span class="conv-title-en">' + escapeHtml(titleEn) + '</span>' : '') + (c.unread_count && c.unread_count > 0 ? '<span class="unread-badge">' + c.unread_count + '</span>' : '') + '</span>';
+          var bodyPref = (c.last_message && (c.last_message.body_preferred != null ? c.last_message.body_preferred : c.last_message.body)) ? (c.last_message.body_preferred != null ? c.last_message.body_preferred : c.last_message.body) : '';
+          var bodyEn = (c.last_message && c.last_message.body_en != null) ? c.last_message.body_en : '';
+          var showPreviewEn = (prefLang !== 'en' && bodyEn && bodyEn !== bodyPref);
+          var previewHtml = '<div class="conv-preview">' + escapeHtml(bodyPref) + (showPreviewEn ? '<span class="conv-preview-en">' + escapeHtml(bodyEn) + '</span>' : '') + '</div>';
           var meta = (c.last_message && c.last_message.created_at) ? c.last_message.created_at.slice(0, 10) : c.updated_at.slice(0, 10);
-          var unread = (c.unread_count && c.unread_count > 0) ? '<span class="unread-badge">' + c.unread_count + '</span>' : '';
-          var safeTitle = (title || '').replace(/"/g, '&quot;');
-          return '<li data-id="' + c.id + '" data-type="' + (c.type || '') + '" data-display-title="' + safeTitle + '" data-appointment-id="' + (c.appointment_id || '') + '">' +
-            '<span class="conv-title">' + title + unread + '</span>' +
-            '<div class="conv-preview">' + (preview.replace(/</g, '&lt;').replace(/>/g, '&gt;')) + '</div>' +
+          var safeTitle = (titlePref || '').replace(/"/g, '&quot;');
+          return '<li data-id="' + c.id + '" data-type="' + (c.type || '') + '" data-display-title="' + safeTitle + '" data-display-title-pref="' + (titlePref || '').replace(/"/g, '&quot;') + '" data-display-title-en="' + (titleEn || '').replace(/"/g, '&quot;') + '" data-appointment-id="' + (c.appointment_id || '') + '">' +
+            titleHtml +
+            previewHtml +
             '<div class="conv-meta">' + meta + '</div></li>';
         }).join('');
         ul.querySelectorAll('li').forEach(function(li) {
@@ -137,7 +160,7 @@
         });
         if (window.updateHeaderUnreadCount) window.updateHeaderUnreadCount();
       })
-      .catch(function() { ul.innerHTML = '<li class="inbox-loading">목록을 불러올 수 없습니다.</li>'; });
+      .catch(function() { ul.innerHTML = '<li class="inbox-loading">' + t('load_failed') + '</li>'; });
   }
   function getQueryParam(name) {
     var m = new RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
@@ -156,10 +179,15 @@
     document.getElementById('inboxDetailContent').style.display = 'flex';
     document.getElementById('inboxDetailContent').style.flexDirection = 'column';
     var li = document.querySelector('#inboxConversations li[data-id="' + convId + '"]');
-    var displayTitle = li ? (li.getAttribute('data-display-title') || '').replace(/&quot;/g, '"') : ('대화 #' + convId);
-    document.getElementById('inboxDetailTitle').textContent = displayTitle || ('대화 #' + convId);
+    var displayTitlePref = li ? (li.getAttribute('data-display-title-pref') || li.getAttribute('data-display-title') || '').replace(/&quot;/g, '"') : ('대화 #' + convId);
+    var displayTitleEn = li ? (li.getAttribute('data-display-title-en') || '').replace(/&quot;/g, '"') : '';
+    var prefLang = window.VIEWER_PREFERRED_LANGUAGE || 'en';
+    var showDetailTitleEn = (prefLang !== 'en' && displayTitleEn && displayTitleEn !== displayTitlePref);
+    var titleEl = document.getElementById('inboxDetailTitle');
+    if (showDetailTitleEn) titleEl.innerHTML = escapeHtml(displayTitlePref) + '<span class="conv-title-en" style="display:block;font-size:0.85rem;color:var(--color-muted);margin-top:0.2rem;">' + escapeHtml(displayTitleEn) + '</span>';
+    else titleEl.textContent = displayTitlePref || ('대화 #' + convId);
     document.getElementById('inboxAppointmentActions').style.display = 'none';
-    document.getElementById('inboxMessages').innerHTML = '<div class="inbox-loading">불러오는 중...</div>';
+    document.getElementById('inboxMessages').innerHTML = '<div class="inbox-loading">' + t('loading') + '</div>';
     Promise.all([
       fetch(API_BASE + '/conversations/' + convId + '/', { method: 'GET', headers: getHeaders('GET'), credentials: 'same-origin' }).then(function(r) { return r.json(); }),
       fetch(API_BASE + '/conversations/' + convId + '/messages/', { method: 'GET', headers: getHeaders('GET'), credentials: 'same-origin' }).then(function(r) { return r.json(); })
@@ -167,14 +195,23 @@
       .then(function(results) {
         var detail = results[0];
         var data = results[1];
-        if (detail.display_title) document.getElementById('inboxDetailTitle').textContent = detail.display_title;
+        if (detail.display_title_preferred != null || detail.display_title != null) {
+          var pref = detail.viewer_preferred_language || window.VIEWER_PREFERRED_LANGUAGE || 'en';
+          var dp = detail.display_title_preferred != null ? detail.display_title_preferred : detail.display_title;
+          var de = detail.display_title_en != null ? detail.display_title_en : '';
+          var showEn = (pref !== 'en' && de && de !== dp);
+          var tel = document.getElementById('inboxDetailTitle');
+          if (showEn) tel.innerHTML = escapeHtml(dp) + '<span class="conv-title-en" style="display:block;font-size:0.85rem;color:var(--color-muted);margin-top:0.2rem;">' + escapeHtml(de) + '</span>';
+          else tel.textContent = dp || '';
+        }
         if (detail.appointment && detail.appointment.can_accept) {
           currentAppointmentId = detail.appointment.id;
           document.getElementById('inboxAppointmentActions').style.display = 'flex';
         }
         var msgs = data.messages || [];
         var box = document.getElementById('inboxMessages');
-        if (msgs.length === 0) box.innerHTML = '<p class="text-muted">아직 메시지가 없습니다.</p>';
+        if (data.viewer_preferred_language) window.VIEWER_PREFERRED_LANGUAGE = data.viewer_preferred_language;
+        if (msgs.length === 0) box.innerHTML = '<p class="text-muted">' + t('no_messages') + '</p>';
         else {
           box.innerHTML = msgs.map(function(m) {
             var cls = m.sender_id === currentUserId ? 'mine' : 'theirs';
@@ -190,7 +227,7 @@
         fetch(API_BASE + '/conversations/' + convId + '/read/', { method: 'POST', headers: getHeaders('POST'), body: '{}', credentials: 'same-origin' });
         loadConversations();
       })
-      .catch(function() { document.getElementById('inboxMessages').innerHTML = '<p class="text-muted">메시지를 불러올 수 없습니다.</p>'; });
+      .catch(function() { document.getElementById('inboxMessages').innerHTML = '<p class="text-muted">' + t('messages_load_failed') + '</p>'; });
   }
 
   document.getElementById('inboxAppointmentAcceptBtn').addEventListener('click', function() {
@@ -206,18 +243,18 @@
       .then(function(r) { return r.json(); })
       .then(function(res) {
         if (res.ok) {
-          alert(res.message || '약속을 수락했습니다.');
+          alert(res.message || t('accept_success'));
           document.getElementById('inboxAppointmentActions').style.display = 'none';
           currentAppointmentId = null;
           loadConversations();
-        } else alert(res.error || '수락에 실패했습니다.');
+        } else alert(res.error || t('accept_failed'));
       })
-      .catch(function() { alert('수락 요청에 실패했습니다.'); })
+      .catch(function() { alert(t('accept_failed')); })
       .finally(function() { btn.disabled = false; });
   });
   document.getElementById('inboxAppointmentRequestChangeBtn').addEventListener('click', function() {
     if (!currentConvId || !currentAppointmentId) return;
-    var defaultBody = '일정 수정을 요청드립니다. 가능한 시간을 알려주세요.';
+    var defaultBody = t('request_change_sent');
     fetch(API_BASE + '/conversations/' + currentConvId + '/messages/', {
       method: 'POST',
       headers: getHeaders('POST'),
@@ -239,7 +276,7 @@
           loadConversations();
         } else if (msg.error) alert(msg.error);
       })
-      .catch(function() { alert('메시지 전송에 실패했습니다.'); });
+      .catch(function() { alert(t('send_failed')); });
   });
 
   document.getElementById('inboxSendBtn').addEventListener('click', function() {
@@ -269,7 +306,7 @@
           loadConversations();
         } else if (msg.error) alert(msg.error);
       })
-      .catch(function() { alert('전송에 실패했습니다.'); });
+      .catch(function() { alert(t('send_failed')); });
   });
   document.getElementById('inboxMessageInput').addEventListener('keydown', function(e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('inboxSendBtn').click(); }
@@ -299,7 +336,7 @@
     });
     function sendImageFile(file) {
       if (!currentConvId) return;
-      if (!file || !file.type.match(/^image\//)) { alert('이미지 파일만 전송할 수 있습니다.'); return; }
+      if (!file || !file.type.match(/^image\//)) { alert(t('image_only')); return; }
       var fd = new FormData();
       fd.append('image', file);
       fd.append('body', document.getElementById('inboxMessageInput').value.trim());
@@ -309,7 +346,7 @@
       xhr.setRequestHeader('X-CSRFToken', csrf);
       xhr.onload = function() {
         if (xhr.status !== 201) {
-          try { var err = JSON.parse(xhr.responseText); alert(err.error || '전송에 실패했습니다.'); } catch(e) { alert('전송에 실패했습니다.'); }
+          try { var err = JSON.parse(xhr.responseText); alert(err.error || t('send_failed')); } catch(e) { alert(t('send_failed')); }
           return;
         }
         var msg = JSON.parse(xhr.responseText);
@@ -324,7 +361,7 @@
         box.scrollTop = box.scrollHeight;
         loadConversations();
       };
-      xhr.onerror = function() { alert('전송에 실패했습니다.'); };
+      xhr.onerror = function() { alert(t('send_failed')); };
       xhr.send(fd);
     }
     fileGallery.addEventListener('change', function() { if (this.files && this.files[0]) sendImageFile(this.files[0]); });

@@ -41,6 +41,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-landinghelp}
       DB_HOST: db
       DB_PORT: "5432"
+      DEEPL_AUTH_KEY: ${DEEPL_AUTH_KEY:-}
     depends_on:
       db:
         condition: service_healthy

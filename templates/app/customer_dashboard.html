@@ -136,7 +136,7 @@
         var monthSuffix = titleEl.getAttribute('data-month-suffix') || t('month') || '월';
         titleEl.textContent = calYear + yearSuffix + ' ' + (calMonth + 1) + monthSuffix;
       } else {
-        titleEl.textContent = (t('month_' + (calMonth + 1)) || (calMonth + 1)) + '. ' + calYear;
+        titleEl.textContent = (t('month_' + (calMonth + 1)) || (calMonth + 1)) + ' ' + calYear;
       }
       while (grid.children.length > 7) grid.removeChild(grid.lastChild);
       for (var i = 0; i < startBlank; i++) {

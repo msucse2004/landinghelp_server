@@ -181,6 +181,70 @@ docker compose up --build
 4. 프리미엄 글 상세 직접 접근 (/content/premium-sample/)
    - 권한 없으면 403 + "업그레이드 필요" 안내
 
+### 4. 번역 파이프라인 (DeepL → Ollama) 로컬 확인
+
+로컬에서 파이프라인이 동작하는지 아래 순서로 확인합니다.
+
+#### 1) Ollama 실행 확인
+
+```bash
+# 설치된 모델 목록 (기본 모델 예: llama3.1:8b)
+ollama list
+
+# 서버 포트 확인 (기본 11434)
+# Windows: netstat -an | findstr 11434
+# Mac/Linux: lsof -i :11434
+```
+
+Ollama가 안 떠 있으면 터미널에서 `ollama serve` 또는 `ollama run llama3.1:8b` 로 기동합니다.
+
+#### 2) DeepL 키 확인 (환경변수)
+
+```bash
+# Windows PowerShell (값은 출력하지 말 것)
+$env:DEEPL_AUTH_KEY.Length
+
+# 또는 .env에 설정했다면 프로젝트 루트에서
+# DEEPL_AUTH_KEY=... 가 있는지 확인 (키 값은 터미널에 붙여넣지 말 것)
+```
+
+키가 없으면 [DeepL API](https://www.deepl.com/pro-api)에서 발급 후 시스템 환경변수 또는 `.env`에 설정합니다.
+
+#### 3) Django에서 check_translation_env 실행
+
+```bash
+python manage.py check_translation_env
+```
+
+- **DEEPL_AUTH_KEY**: 설정됨(길이 N) 또는 없음
+- **Ollama /api/version**: 연결됨(version: x.y.z) 또는 연결 실패
+
+둘 다 정상이면 파이프라인 사용 가능합니다.
+
+#### 4) 특정 문장 1개를 translate_pipeline()로 번역해 결과 확인
+
+```bash
+python manage.py shell
+```
+
+```python
+from translations.translation_pipeline import translate_pipeline
+
+# 한 문장만 파이프라인(DeepL → Ollama)으로 번역
+out = translate_pipeline('저장되었습니다.', 'en')
+print(out)  # 예: 'Saved.' (Ollama 기동 시) 또는 DeepL 결과만
+```
+
+Ollama가 꺼져 있으면 DeepL 결과만 반환되고, 서버 로그에 Ollama 연결 실패 경고가 남습니다.
+
+#### 5) 메시지함 접속 후 “translation failures” 노출 확인
+
+1. 로그인한 뒤 **메시지 함** (또는 언어가 다른 화면) 접속
+2. **확인 사항**
+   - 번역이 불가능해도 앱은 정상 동작하고, 원문이 표시됨
+   - 번역 실패 시 팝업이 뜨더라도 **"원문 표시 중"** / **"Showing original"** 같은 **짧은 안내만** 보이고, **실패한 키 목록이 길게 나오지 않음**
+3. 서버 로그에는 `번역 실패(원문 폴백) N건` 경고가 남고, 상세 키/에러는 로그에만 출력됩니다.
+
 ---
 
 ## 폰(모바일) 접속 방법

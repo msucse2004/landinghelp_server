@@ -1,7 +1,10 @@
 # config: 템플릿 컨텍스트 프로세서
 
+import logging
 from django.conf import settings
 from django.views.decorators.debug import sensitive_variables
+
+logger = logging.getLogger(__name__)
 
 from content.models import CarouselSlide
 
@@ -93,8 +96,11 @@ _TRANSLATION_FAILED_POPUP_KEYS = frozenset({
 
 
 def translation_failed_alert(request):
-    """번역 실패 시 팝업용 플래그·제목·메시지·실패한 키·에러 목록."""
-    from translations.utils import get_translation_failed, get_translation_failed_entries, get_display_text, get_request_language
+    """
+    번역 실패 시: 서버 로그에는 경고 출력, 클라이언트에는 짧은 안내만 전달.
+    실패 키 목록은 사용자에게 노출하지 않고, 원문 폴백으로 앱은 정상 동작.
+    """
+    from translations.utils import get_translation_failed, get_translation_failed_entries, get_request_language
     if not get_translation_failed():
         return {
             'translation_failed': False,
@@ -103,19 +109,26 @@ def translation_failed_alert(request):
             'translation_failed_keys': [],
             'translation_failed_entries': [],
         }
-    lang = get_request_language(request)
-    title = get_display_text('번역 실패', lang) or 'Translation failed'
-    msg = get_display_text('번역에 실패했습니다. 일부 문구가 원문으로 표시될 수 있습니다.', lang) or 'Some text may appear in the original language.'
     all_entries = get_translation_failed_entries()
-    # 팝업 제목/메시지용 키는 실패 목록에서 제외
-    failed_entries = [e for e in all_entries if e['key'] not in _TRANSLATION_FAILED_POPUP_KEYS]
-    failed_keys = [e['key'] for e in failed_entries]  # 하위 호환
+    failed_entries = [e for e in all_entries if e.get('key') not in _TRANSLATION_FAILED_POPUP_KEYS]
+    # 서버 로그: 경고만 (상세 키/에러는 로그에만)
+    if failed_entries:
+        logger.warning(
+            '번역 실패(원문 폴백) %s건. 첫 항목: key=%r error=%s',
+            len(failed_entries),
+            failed_entries[0].get('key', '')[:60],
+            (failed_entries[0].get('error') or '')[:80],
+        )
+    lang = get_request_language(request)
+    # 클라이언트에는 짧은 안내만 (실패 목록은 전달하지 않음)
+    short_title = '원문 표시 중' if lang == 'ko' else 'Showing original'
+    short_msg = '일부 문구가 원문으로 표시됩니다.' if lang == 'ko' else 'Some text is shown in the original language.'
     return {
         'translation_failed': True,
-        'translation_failed_title': title,
-        'translation_failed_message': msg,
-        'translation_failed_keys': failed_keys,
-        'translation_failed_entries': failed_entries,
+        'translation_failed_title': short_title,
+        'translation_failed_message': short_msg,
+        'translation_failed_keys': [],
+        'translation_failed_entries': [],
     }
 
 

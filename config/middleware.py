@@ -7,6 +7,7 @@ from translations.utils import get_valid_language_codes, clear_translation_faile
 class CsrfTrustCloudflareMiddleware:
     """
     DEBUG 시 *.trycloudflare.com Origin을 CSRF 신뢰 목록에 동적 추가.
+    Host 헤더와 Origin 헤더 둘 다 확인 (터널 접속 시 브라우저는 Origin으로 전달).
     CsrfViewMiddleware 보다 먼저 실행되어야 하므로 MIDDLEWARE 상단에 배치.
     """
     def __init__(self, get_response):
@@ -14,11 +15,17 @@ class CsrfTrustCloudflareMiddleware:
 
     def __call__(self, request):
         if getattr(settings, 'DEBUG', False):
+            to_add = []
             host = request.get_host().split(':')[0]
             if host.endswith('.trycloudflare.com'):
-                origin = f'https://{request.get_host()}'
-                if origin not in settings.CSRF_TRUSTED_ORIGINS:
-                    settings.CSRF_TRUSTED_ORIGINS = list(settings.CSRF_TRUSTED_ORIGINS) + [origin]
+                to_add.append(f'https://{request.get_host()}')
+                to_add.append(f'https://{host}')
+            origin = request.META.get('HTTP_ORIGIN', '').strip()
+            if origin and '.trycloudflare.com' in origin and not origin.startswith('http://'):
+                to_add.append(origin)
+            for url in to_add:
+                if url and url not in settings.CSRF_TRUSTED_ORIGINS:
+                    settings.CSRF_TRUSTED_ORIGINS = list(settings.CSRF_TRUSTED_ORIGINS) + [url]
         return self.get_response(request)
 
 class GuestDefaultLanguageMiddleware:

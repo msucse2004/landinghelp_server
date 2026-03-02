@@ -41,7 +41,10 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-landinghelp}
       DB_HOST: db
       DB_PORT: "5432"
+      # 번역 파이프라인 (값은 호스트 env에서 전달, 하드코딩 금지)
       DEEPL_AUTH_KEY: ${DEEPL_AUTH_KEY:-}
+      OLLAMA_URL: ${OLLAMA_URL:-http://localhost:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
     depends_on:
       db:
         condition: service_healthy

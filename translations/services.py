@@ -160,6 +160,34 @@ def _translate_one(text: str, target_lang: str, source_lang: str = 'ko') -> str:
     return _translate_one_deepl(translator, text, target_deepl, source_deepl)
 
 
+def _translate_for_save(text: str, target_lang: str, source_lang: str = 'ko') -> str:
+    """
+    DB 저장용 번역. DeepL로 1차 번역 후 LLM(Ollama) 후편집 결과를 반환해 DB에 저장하는 흐름.
+    문맥 보정: glossary(translations.glossary)에 등록된 원문은 API 없이 고정 번역 사용(예: 원→KRW).
+    파이프라인(translate_pipeline) 시도 → Ollama 실패 시 DeepL 결과 반환.
+    파이프라인 예외/DeepL 실패 시 _translate_one(Google→DeepL) 폴백. 둘 다 실패 시 빈 문자열.
+    """
+    text = (text or '').strip()
+    if not text:
+        return ''
+    try:
+        from .glossary import get_glossary_translation
+        glossary_out = get_glossary_translation(text, target_lang)
+        if glossary_out:
+            return glossary_out
+    except Exception:
+        pass
+    try:
+        from .translation_pipeline import translate_pipeline
+        out = translate_pipeline(text, target_lang, source_lang)
+        if out and out.strip():
+            return out.strip()
+    except Exception as e:
+        logger.warning('번역 파이프라인 예외, DeepL만 사용: %s', e)
+    out = _translate_one(text, target_lang, source_lang)
+    return (out or '').strip()
+
+
 def translate_and_save_to_static(key_text: str, source_lang: str = 'ko') -> bool:
     """
     관리자가 입력한 문구(key_text)를 고정 번역에 등록하고,
@@ -188,17 +216,19 @@ def translate_and_save_to_static(key_text: str, source_lang: str = 'ko') -> bool
         existing = get_from_cache(canonical_key, lang)
         if existing:
             continue
-        translated = _translate_one(key_text, lang, source_lang)
+        translated = _translate_for_save(key_text, lang, source_lang)
         if translated:
             save_translation_from_api(canonical_key, lang, translated)
         else:
             save_translation_from_api(canonical_key, lang, key_text)
+            logger.warning('번역 실패(파이프라인+폴백) key=%r lang=%s, 원문 저장', canonical_key[:50], lang)
     return True
 
 
 def get_or_translate_with_deepl(key: str, target_lang: str) -> str:
     """
-    DB에 번역이 있으면 반환, 없으면 1순위 Google → 2순위 DeepL 로 번역 후 DB 저장하고 반환.
+    DB에 번역이 있으면 반환(캐시). 없으면 DeepL→Ollama 파이프라인으로 번역 후 DB 저장하고 반환.
+    Ollama 실패 시 DeepL 결과 저장. DeepL 실패 시 원문 반환(저장 없이), 경고 로그.
     """
     if not key or not (key := (key or '').strip()):
         return ''
@@ -218,8 +248,9 @@ def get_or_translate_with_deepl(key: str, target_lang: str) -> str:
         return key
 
     source_lang = 'ko' if _has_hangul(key) else 'en'
-    translated = _translate_one(key, target_lang, source_lang)
+    translated = _translate_for_save(key, target_lang, source_lang)
     if translated:
         save_translation_from_api(canonical_key, target_lang, translated)
         return translated
+    logger.warning('번역 실패(파이프라인+폴백) key=%r target_lang=%s, 원문 유지', key[:50], target_lang)
     return key

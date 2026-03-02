@@ -436,22 +436,9 @@
   {% endif %}
   {% if translation_failed %}
   <div id="translation-failed-popup-backdrop" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1001;display:flex;align-items:center;justify-content:center;padding:1rem;">
-    <div id="translation-failed-popup" role="alertdialog" aria-labelledby="translation-failed-title" aria-modal="true" style="background:#fff;border-radius:var(--radius);box-shadow:0 8px 32px rgba(0,0,0,0.2);max-width:420px;width:100%;padding:1.5rem;max-height:85vh;overflow:auto;">
-      <h2 id="translation-failed-title" style="margin:0 0 0.75rem;font-size:1.15rem;color:#b91c1c;">{{ translation_failed_title }}</h2>
-      <p id="translation-failed-body" style="margin:0 0 0.5rem;color:var(--color-muted);font-size:0.95rem;">{{ translation_failed_message }}</p>
-      {% if translation_failed_entries %}
-      <p style="margin:0 0 0.35rem;font-size:0.85rem;font-weight:600;color:var(--color-text);">{% trans "Failed keys" %}:</p>
-      <ul id="translation-failed-keys" style="margin:0 0 1.25rem;padding-left:1.25rem;font-size:0.9rem;color:var(--color-muted);max-height:12rem;overflow-y:auto;">
-        {% for entry in translation_failed_entries %}
-        <li style="margin-bottom:0.35rem;">
-          <code style="background:var(--color-bg);padding:0.1rem 0.35rem;border-radius:4px;">{{ entry.key }}</code>
-          {% if entry.error %}
-          <span style="font-size:0.8rem;color:#b91c1c;margin-left:0.25rem;">({{ entry.error }})</span>
-          {% endif %}
-        </li>
-        {% endfor %}
-      </ul>
-      {% endif %}
+    <div id="translation-failed-popup" role="alertdialog" aria-labelledby="translation-failed-title" aria-modal="true" style="background:#fff;border-radius:var(--radius);box-shadow:0 8px 32px rgba(0,0,0,0.2);max-width:380px;width:100%;padding:1.25rem;">
+      <h2 id="translation-failed-title" style="margin:0 0 0.5rem;font-size:1rem;color:var(--color-muted);font-weight:600;">{{ translation_failed_title }}</h2>
+      <p id="translation-failed-body" style="margin:0 0 1rem;color:var(--color-muted);font-size:0.9rem;">{{ translation_failed_message }}</p>
       <div style="display:flex;justify-content:flex-end;">
         <button type="button" class="btn btn-primary" id="translation-failed-popup-close">{% trans "Close" %}</button>
       </div>

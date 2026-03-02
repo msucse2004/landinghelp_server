@@ -1,6 +1,7 @@
 """
-번역 DB(StaticTranslation)에서 비어 있는 언어 컬럼을 DeepL로 채운 뒤,
+번역 DB(StaticTranslation)에서 비어 있는 언어 컬럼을 파이프라인(DeepL→Ollama)으로 채운 뒤,
 여전히 비어 있거나 한글만 있는 항목(번역 실패)을 키별로 리스트업합니다.
+재실행 시 이미 번역된 항목은 건너뜀 (--force 시에만 재번역). placeholder 보호·UI 톤 유지.
 
   python manage.py fill_translations_and_list_failed
   python manage.py fill_translations_and_list_failed --dry-run   # 채우기만 시뮬레이션 후 실패 목록
@@ -21,7 +22,7 @@ def _is_empty_or_korean_only(val):
 
 
 class Command(BaseCommand):
-    help = 'DeepL로 빈 번역을 채운 뒤, 번역에 실패한 문구(키) 목록을 출력합니다.'
+    help = '파이프라인(DeepL→Ollama)으로 빈 번역을 채운 뒤 실패한 키 목록 출력. 재실행 시 이미 있는 항목 건너뜀.'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -68,7 +69,7 @@ class Command(BaseCommand):
 
         from translations.models import StaticTranslation, LANG_CODE_TO_FIELD
         from translations.utils import invalidate_cache, get_supported_language_codes
-        from translations.services import _translate_one
+        from translations.services import _translate_for_save
         from translations.utils import save_translation_from_api
 
         invalidate_cache()
@@ -95,7 +96,7 @@ class Command(BaseCommand):
                     val = getattr(row, f, None) if hasattr(row, f) else None
                     if not force and (val and str(val).strip() and not _is_empty_or_korean_only(val)):
                         continue
-                    translated_text = _translate_one(source_text, lang, 'ko')
+                    translated_text = _translate_for_save(source_text, lang, 'ko')
                     if translated_text and not _is_empty_or_korean_only(translated_text):
                         save_translation_from_api(row.key, lang, translated_text)
                         total_filled += 1

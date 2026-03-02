@@ -72,8 +72,9 @@ def run_translate_po(locales=None, force=False, dry_run=False):
 
     try:
         from translations.utils import get_from_cache, save_translation_from_api
+        from translations.services import get_or_translate_with_deepl
     except ImportError:
-        get_from_cache = save_translation_from_api = None
+        get_from_cache = save_translation_from_api = get_or_translate_with_deepl = None
 
     translator = get_translator()
     if not translator:
@@ -117,13 +118,9 @@ def run_translate_po(locales=None, force=False, dry_run=False):
             if not need_translate:
                 continue
             target_lang = LOCALE_TO_LANG.get(loc)
-            # 동일 번역 API 호출 절감: CSV 테이블(캐시)에 있으면 사용
-            if target_lang and get_from_cache and save_translation_from_api:
-                translated = get_from_cache(entry.msgid, target_lang)
-                if not translated:
-                    translated = translate_text(translator, entry.msgid, deepl_code)
-                    if translated and not dry_run:
-                        save_translation_from_api(entry.msgid, target_lang, translated)
+            # DB 저장 시 파이프라인(DeepL→Ollama) 사용; 캐시 있으면 재번역 없이 사용
+            if target_lang and get_or_translate_with_deepl:
+                translated = get_or_translate_with_deepl(entry.msgid, target_lang)
             else:
                 translated = translate_text(translator, entry.msgid, deepl_code)
             if translated:
@@ -135,12 +132,8 @@ def run_translate_po(locales=None, force=False, dry_run=False):
                 for idx, msgstr in entry.msgstr_plural.items():
                     if force or not (msgstr and msgstr.strip()):
                         to_translate = entry.msgid_plural if int(idx) else entry.msgid
-                        if target_lang and get_from_cache and save_translation_from_api:
-                            t = get_from_cache(to_translate, target_lang)
-                            if not t:
-                                t = translate_text(translator, to_translate, deepl_code)
-                                if t and not dry_run:
-                                    save_translation_from_api(to_translate, target_lang, t)
+                        if target_lang and get_or_translate_with_deepl:
+                            t = get_or_translate_with_deepl(to_translate, target_lang)
                         else:
                             t = translate_text(translator, to_translate, deepl_code)
                         if t and not dry_run:

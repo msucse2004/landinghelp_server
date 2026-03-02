@@ -143,7 +143,7 @@ msgid "서비스별 Customer 가격 기준"
 msgstr "Per-service customer pricing"
 
 msgid "이주 정보"
-msgstr "Relocation info"
+msgstr "Settlement info"
 
 msgid "이주할 State"
 msgstr "State"
@@ -152,7 +152,7 @@ msgid "도시"
 msgstr "City"
 
 msgid "입국/이주 예정일"
-msgstr "Entry/relocation date"
+msgstr "Entry/settlement date"
 
 msgid "AI 서비스 추천 / 스케줄 생성"
 msgstr "AI service recommendations / schedule"

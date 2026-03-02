@@ -105,29 +105,65 @@ def get_request_language(request):
     return getattr(request, 'LANGUAGE_CODE', None) or 'en'
 
 
-def normalize_english_display(text: str) -> str:
+def _title_case_word(w: str) -> str:
+    """한 단어(또는 슬래시로 구분된 한 덩어리)에 대해 첫 글자 대문자, 나머지 소문자."""
+    if not w:
+        return w
+    return w[0].upper() + (w[1:].lower() if len(w) > 1 else '')
+
+
+def _normalize_title_case_latin(text: str) -> str:
     """
-    영어 표기 규칙 적용.
-    - 문장(끝이 . ! ?): 첫 글자만 대문자.
-    - 문장이 아닌 경우(라벨·버튼 등): 각 단어 첫 글자 대문자, 단어 사이 공백 유지 (예: Sign In, Log Out).
+    라틴 계열(es, vi 등) 번역 표기: 단어별 띄어쓰기·슬래시(/) 구분도 유지하며 단어별 첫 글자 대문자.
+    예: healthcare/education → Healthcare/Education, medical / education → Medical / Education.
+    CamelCase는 단어 구분용 공백 삽입 후 Title Case 적용.
     """
     if not text or not isinstance(text, str):
         return text
     s = text.strip()
     if not s:
         return s
-    # 문장 여부: 끝이 . ! ? 로 끝나면 문장으로 간주
+    # CamelCase(공백 없음)인 경우 대문자 앞에 공백 삽입 (SignIn -> Sign In)
+    s = re.sub(r'([a-z0-9])([A-Z])', r'\1 \2', s)
+    # 공백·슬래시를 구분자로 유지하면서 분리: [구분자, ...] 도 반환
+    parts = re.split(r'([/\s]+)', s)
+    result = ''.join(
+        _title_case_word(p) if p and not re.match(r'^[/\s]+$', p) else (p or '')
+        for p in parts
+    )
+    return result or s
+
+
+def _normalize_display_latin(text: str) -> str:
+    """
+    라틴 계열(en, es, vi) 공통 표기 규칙. 영어와 동일.
+    - 문장(끝이 . ! ?): 첫 글자만 대문자.
+    - 비문장(라벨·버튼 등): 단어별 띄어쓰기·슬래시 유지, 단어별 첫 글자 대문자 (Healthcare/Education 등).
+    """
+    if not text or not isinstance(text, str):
+        return text
+    s = text.strip()
+    if not s:
+        return s
     is_sentence = s.rstrip().endswith(('.', '!', '?'))
     if is_sentence:
         return s[0].upper() + s[1:] if len(s) > 1 else s.upper()
-    # CamelCase(공백 없음)인 경우 대문자 앞에 공백 삽입 → 단어 구분 (SignIn -> Sign In)
-    s = re.sub(r'([a-z0-9])([A-Z])', r'\1 \2', s)
-    # 비문장: 공백으로 쪼갠 뒤 각 단어 첫 글자 대문자·나머지 소문자, 단어 사이 공백으로 연결
-    parts = s.split()
-    result = ' '.join(
-        (p[0].upper() + (p[1:].lower() if len(p) > 1 else '') for p in parts if p)
-    )
-    return result or s
+    return _normalize_title_case_latin(s)
+
+
+def normalize_english_display(text: str) -> str:
+    """영어 표기 규칙. _normalize_display_latin과 동일 (문장/비문장 구분 + Title Case)."""
+    return _normalize_display_latin(text)
+
+
+def _normalize_display_cjk(text: str) -> str:
+    """중국어(간체/번체) 공통: 앞뒤 공백 제거, 연속 공백 하나로."""
+    if not text or not isinstance(text, str):
+        return text
+    s = text.strip()
+    if not s:
+        return s
+    return re.sub(r'\s+', ' ', s)
 
 
 def _has_hangul(text: str) -> bool:
@@ -153,8 +189,10 @@ _CALENDAR_MONTH_FALLBACK = {
     'zh-hant': ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],
 }
 
-# 달력 요일 헤더 폴백 (짧은 표기). 인덱스 0=일요일, 1=월요일, ..., 6=토요일
-# 화면에는 항상 이 짧은 형태(월, 화, 수, 목, 금, 토, 일 / Sun, Mon, ...)로 표시
+# 달력 요일 DB 키. 인덱스 0=일요일, 1=월요일, ..., 6=토요일. get_calendar_weekday_display에서 사용
+WEEKDAY_KEYS = ['요일_일', '요일_월', '요일_화', '요일_수', '요일_목', '요일_금', '요일_토']
+
+# 달력 요일 헤더 폴백 (DB에 값 없을 때). 인덱스 0=일요일, 1=월요일, ..., 6=토요일
 _CALENDAR_WEEKDAY_FALLBACK = {
     'ko': ['일', '월', '화', '수', '목', '금', '토'],
     'en': ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
@@ -209,15 +247,18 @@ def get_calendar_month_year_display(year: int, month: int, language_code: str) -
 def get_calendar_weekday_display(day_index: int, language_code: str) -> str:
     """
     달력 요일 헤더 반환. day_index 0=일요일, 1=월요일, ..., 6=토요일.
-    설정된 언어에 맞는 짧은 표기 사용: ko → 일,월,화,수,목,금,토 / en → Sun,Mon,... 등.
+    DB 키 요일_일~요일_토에 저장된 번역을 사용하고, 없으면 폴백.
     """
     if not (0 <= day_index <= 6):
         return ''
     lang = (language_code or '').strip() or 'en'
+    key = WEEKDAY_KEYS[day_index]
+    out = get_display_text(key, lang)
+    if out and str(out).strip():
+        return str(out).strip()
     fallback = _CALENDAR_WEEKDAY_FALLBACK.get(lang)
     if fallback:
         return fallback[day_index]
-    # 지원 언어 외에는 en 폴백 사용
     return _CALENDAR_WEEKDAY_FALLBACK['en'][day_index]
 
 
@@ -330,15 +371,19 @@ def get_from_cache(key: str, language_code: str) -> str | None:
 def save_translation_from_api(key: str, language_code: str, value: str) -> None:
     """
     번역 API 결과를 StaticTranslation에 저장하고 메모리 캐시에 반영.
-    영어(en)인 경우: 문장은 첫 단어 대문자, 비문장은 CamelCase 적용.
+    모든 언어 동일 룰:
+    - en, es, vi: 문장은 첫 글자만 대문자, 비문장은 단어별 띄어쓰기·첫 글자 대문자(Healthcare/Education 등).
+    - zh-hans, zh-hant: 앞뒤 공백 제거, 연속 공백 정리.
     """
     if not key or not value:
         return
     from translations.models import LANG_CODE_TO_FIELD
     if language_code not in LANG_CODE_TO_FIELD:
         return
-    if language_code == 'en':
-        value = normalize_english_display(value)
+    if language_code in ('en', 'es', 'vi'):
+        value = _normalize_display_latin(value)
+    elif language_code in ('zh-hans', 'zh-hant'):
+        value = _normalize_display_cjk(value)
     field_name = LANG_CODE_TO_FIELD[language_code]
     try:
         from translations.models import StaticTranslation

@@ -255,7 +255,7 @@ def settlement_quote(request):
         'agent_helps_optional': get_display_text('필요 시 에이전트의 도움을 받을 수 있으며, 패키지 또는 단일 항목으로 계약 가능합니다.', lang),
         'checkout_total': get_display_text('예상 Checkout 합계', lang),
         'customer_pricing_note': get_display_text('서비스별 Customer 가격 기준', lang),
-        'relocation_info': get_display_text('이주 정보', lang),
+        'settlement_info': get_display_text('이주 정보', lang),
         'state_label': get_display_text('이주할 State', lang),
         'city_label': get_display_text('도시', lang),
         'entry_date_label': get_display_text('입국/이주 예정일', lang),

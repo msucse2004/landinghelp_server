@@ -441,8 +441,18 @@
     if (inboxLink) {
       inboxLink.addEventListener('click', function(e) {
         e.preventDefault();
-        dismissPopup();
-        window.location.href = inboxLink.getAttribute('href');
+        if (backdrop) backdrop.style.display = 'none';
+        var href = inboxLink.getAttribute('href');
+        if (csrfToken) {
+          fetch('/api/messaging/dismiss-login-popup/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: '{}',
+            credentials: 'same-origin',
+          }).then(function() { window.location.href = href; }).catch(function() { window.location.href = href; });
+        } else {
+          window.location.href = href;
+        }
       });
     }
     backdrop.addEventListener('click', function(e) { if (e.target === backdrop) dismissPopup(); });

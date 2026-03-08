@@ -58,6 +58,27 @@ def _is_email_configured():
     return True
 
 
+def _get_or_create_shared_conversation(submission, subject_fallback=''):
+    """
+    submission 에 연결된 공유 대화를 찾거나 새로 생성.
+    모든 알림은 같은 submission 대화를 공유하여 고객↔Admin이 한 thread에서 소통.
+    """
+    from messaging.models import Conversation, ConversationParticipant
+    conv = Conversation.objects.filter(survey_submission=submission).first()
+    if not conv:
+        conv = Conversation.objects.create(
+            type=Conversation.Type.NOTICE,
+            subject=subject_fallback,
+            survey_submission=submission,
+        )
+    customer = getattr(submission, 'user', None)
+    if customer and getattr(customer, 'is_authenticated', True):
+        ConversationParticipant.objects.get_or_create(conversation=conv, user=customer)
+    for admin in _get_admin_users():
+        ConversationParticipant.objects.get_or_create(conversation=conv, user=admin)
+    return conv
+
+
 def send_survey_submitted_admin_notification(submission, language_code='ko'):
     """
     설문 제출(SUBMITTED) 시 Admin 알림. 금액/총액/checkout 포함 금지(status < FINAL_SENT).
@@ -130,6 +151,7 @@ def send_survey_submitted_customer_email(submission, language_code='ko'):
 def send_survey_submitted_customer_message(submission, language_code='ko'):
     """
     설문 제출(SUBMITTED) 시 고객 메시지함에 확인 메시지 추가. 로그인한 고객(submission.user)만 대상.
+    고객 + Admin 모두 참여자로 추가하여 같은 thread에서 대화 가능.
     """
     if not submission or submission.status != 'SUBMITTED':
         return False
@@ -142,12 +164,11 @@ def send_survey_submitted_customer_message(submission, language_code='ko'):
         logger.warning("Survey submitted customer message skipped: no system sender (staff/superuser).")
         return False
     try:
-        from messaging.models import Conversation, ConversationParticipant, Message
+        from messaging.models import Message
         subject = _get_display_text('설문 제출 확인', language_code)
         body = '✨ ' + _get_display_text('정착 서비스 설문이 제출되었습니다. 😊 Admin 검토 후 견적을 보내드리겠습니다.', language_code)
         body += '\n\n💬 ' + _get_display_text('필요한 사항이 있으시면 메시지로 보내 주세요.', language_code)
-        conv = Conversation.objects.create(type=Conversation.Type.NOTICE, subject=subject)
-        ConversationParticipant.objects.create(conversation=conv, user=customer)
+        conv = _get_or_create_shared_conversation(submission, subject_fallback=subject)
         msg = Message(conversation=conv, sender=system_sender, body=body)
         msg.save()
         return True
@@ -173,7 +194,7 @@ def send_revision_requested_customer_message(submission, language_code='ko', sec
         logger.warning("Revision requested customer message skipped: no system sender.")
         return False
     try:
-        from messaging.models import Conversation, ConversationParticipant, Message
+        from messaging.models import Message
         subject = _get_display_text('설문 수정 요청', language_code)
         body = _get_display_text('설문 수정이 요청되었습니다.', language_code)
         body += '\n\n' + _get_display_text('정착 서비스 > 정착 설문 화면에서 다시 접속하여 요청된 내용을 수정해 주세요.', language_code)
@@ -182,8 +203,7 @@ def send_revision_requested_customer_message(submission, language_code='ko', sec
         extra = (revision_message or '').strip()
         if extra:
             body += '\n\n' + extra
-        conv = Conversation.objects.create(type=Conversation.Type.NOTICE, subject=subject)
-        ConversationParticipant.objects.create(conversation=conv, user=customer)
+        conv = _get_or_create_shared_conversation(submission, subject_fallback=subject)
         msg = Message(conversation=conv, sender=sender, body=body)
         msg.save()
         return True
@@ -195,6 +215,7 @@ def send_revision_requested_customer_message(submission, language_code='ko', sec
 def send_survey_submitted_admin_message(submission, language_code='ko'):
     """
     설문 제출(SUBMITTED) 시 Admin 메시지함에 알림 메시지 추가.
+    send_survey_submitted_customer_message 에서 만든 공유 대화가 있으면 거기에 추가, 없으면 새로 생성.
     """
     if not submission or submission.status != 'SUBMITTED':
         return False
@@ -209,7 +230,7 @@ def send_survey_submitted_admin_message(submission, language_code='ko'):
         logger.warning("Survey submitted admin message skipped: no sender.")
         return False
     try:
-        from messaging.models import Conversation, ConversationParticipant, Message
+        from messaging.models import Message
         customer = getattr(submission, 'user', None)
         if customer and getattr(customer, 'is_authenticated', True):
             customer_name = (customer.get_full_name() or getattr(customer, 'username', '') or getattr(customer, 'email', '') or '').strip() or (getattr(submission, 'email', None) or '-')
@@ -217,18 +238,12 @@ def send_survey_submitted_admin_message(submission, language_code='ko'):
             customer_name = (getattr(submission, 'email', None) or '-').strip() or '-'
         subject_suffix = _get_display_text('새 설문 제출 알림', language_code)
         subject = f'[{customer_name}] {subject_suffix}'
+        conv = _get_or_create_shared_conversation(submission, subject_fallback=subject)
         email = getattr(submission, 'email', None) or '-'
         submitted_at = str(getattr(submission, 'submitted_at', None) or '-')
         body = _get_display_text('고객이 정착 서비스 설문을 제출했습니다.', language_code)
         body += '\n' + _get_display_text('이메일', language_code) + ': ' + email
         body += '\n' + _get_display_text('제출 시각', language_code) + ': ' + submitted_at
-        conv = Conversation.objects.create(
-            type=Conversation.Type.NOTICE,
-            subject=subject,
-            survey_submission=submission,
-        )
-        for admin in admin_users:
-            ConversationParticipant.objects.get_or_create(conversation=conv, user=admin)
         msg = Message(conversation=conv, sender=sender, body=body)
         msg.save()
         return True
@@ -266,12 +281,12 @@ def send_quote_sent_customer_message(quote, language_code='ko'):
         logger.warning("Quote sent customer message skipped: no system sender.")
         return False
     try:
-        from messaging.models import Conversation, ConversationParticipant, Message
+        from messaging.models import Message
         subject = _get_display_text('견적서를 보냈습니다', language_code)
         body = _get_display_text('견적서를 보냈습니다. 내 견적 페이지에서 확인해 주세요.', language_code)
         body += '\n\n' + _get_display_text('추가로 필요한 사항이 있으면 Admin에게 메시지를 보내 주세요.', language_code)
-        conv = Conversation.objects.create(type=Conversation.Type.NOTICE, subject=subject)
-        ConversationParticipant.objects.create(conversation=conv, user=customer)
+        submission = quote.submission
+        conv = _get_or_create_shared_conversation(submission, subject_fallback=subject)
         msg = Message(conversation=conv, sender=sender, body=body)
         msg.save()
         return True
@@ -396,20 +411,14 @@ def send_quote_arrived_admin_message(quote, language_code='ko'):
         logger.warning("Quote arrived admin message skipped: no system sender.")
         return False
     try:
-        from messaging.models import Conversation, ConversationParticipant, Message
+        from messaging.models import Message
         sub = quote.submission
         customer_name = (getattr(sub, 'user', None) and sub.user.get_full_name()) or (sub.email or '-')
         subject_suffix = _get_display_text('견적서 도착', language_code)
         subject = f'[{customer_name}] {subject_suffix}'
         body = _get_display_text('새 견적서(초안)가 생성되었습니다. Admin 검토 페이지에서 확인해 주세요.', language_code)
         body += '\n' + _get_display_text('고객', language_code) + ': ' + (sub.email or '-')
-        conv = Conversation.objects.create(
-            type=Conversation.Type.NOTICE,
-            subject=subject,
-            survey_submission=sub,
-        )
-        for admin in admin_users:
-            ConversationParticipant.objects.get_or_create(conversation=conv, user=admin)
+        conv = _get_or_create_shared_conversation(sub, subject_fallback=subject)
         msg = Message(conversation=conv, sender=sender, body=body)
         msg.save()
         return True

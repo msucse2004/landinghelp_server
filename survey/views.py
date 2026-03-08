@@ -323,20 +323,18 @@ def survey_step(request, step):
         and getattr(current_section, 'title', '') == '서비스 진행 방식'
         and (selected_required or [])
     )
-    on_agent_selection_step = bool(
-        current_section and getattr(current_section, 'title', '') == '기타 의뢰 내용'
-    )
+    on_agent_selection_step = on_delivery_step
     agent_ctx = _compute_agent_selection_context(answers, selected_required, current_section)
-    show_agent_selection = agent_ctx['show_agent_selection'] if on_agent_selection_step else False
-    state_for_agent = agent_ctx['state_for_agent'] if on_agent_selection_step else ''
-    agent_direct_service_codes = agent_ctx['agent_direct_service_codes'] if on_agent_selection_step else []
-    preferred_agent_id = agent_ctx['preferred_agent_id'] if on_agent_selection_step else ''
+    show_agent_selection = agent_ctx['show_agent_selection'] if on_delivery_step else False
+    state_for_agent = agent_ctx.get('state_for_agent', '') if on_delivery_step else ''
+    agent_direct_service_codes = agent_ctx.get('agent_direct_service_codes', []) if on_delivery_step else []
+    preferred_agent_id = agent_ctx.get('preferred_agent_id', '') if on_delivery_step else ''
     agents = []
-    if on_agent_selection_step and agent_ctx['show_agent_selection'] and agent_ctx['agent_direct_service_codes']:
+    if on_delivery_step and selected_required:
         from settlement.views import get_agents_for_survey_fragment
         agents = get_agents_for_survey_fragment(
-            agent_ctx['state_for_agent'],
-            agent_ctx['agent_direct_service_codes'],
+            agent_ctx.get('state_for_agent', ''),
+            list(selected_required),
             request,
         )
 
@@ -522,11 +520,14 @@ def survey_step_save(request, step):
     # 설문에서 선호 Agent 선택 시 저장
     preferred_agent_id = (request.POST.get('preferred_agent_id') or '').strip()
     if preferred_agent_id:
-        try:
-            int(preferred_agent_id)
+        if preferred_agent_id == 'admin_assign':
             draft.answers['preferred_agent_id'] = preferred_agent_id
-        except (ValueError, TypeError):
-            pass
+        else:
+            try:
+                int(preferred_agent_id)
+                draft.answers['preferred_agent_id'] = preferred_agent_id
+            except (ValueError, TypeError):
+                pass
     if email:
         draft.email = email.strip()
     draft.current_step = step

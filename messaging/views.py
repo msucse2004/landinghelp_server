@@ -152,6 +152,7 @@ def inbox(request):
         'image_only': get_display_text('이미지 파일만 전송할 수 있습니다.', lang),
         'view_survey': get_display_text('고객 설문 확인', lang),
     }
+    request.session.pop('show_new_message_popup', None)
     viewer_preferred = (getattr(request.user, 'preferred_language', None) or '').strip() or 'en'
     return render(request, 'messaging/inbox.html', {
         'inbox_i18n': i18n,

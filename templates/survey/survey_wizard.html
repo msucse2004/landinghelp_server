@@ -306,9 +306,6 @@
 
       {% if on_delivery_step %}
       <input type="hidden" id="id_requested_required_services_json" value="{{ selected_required_services|json_dumps }}">
-      {% endif %}
-      {% if on_agent_selection_step %}
-      <input type="hidden" id="id_requested_required_services_json" value="{{ selected_required_services|json_dumps }}">
       <div id="survey-agent-selection-root">{% include 'survey/_agent_selection_fragment.html' %}</div>
       {% endif %}
 
@@ -422,6 +419,38 @@
     if (perServiceWrap) perServiceWrap.style.display = mode === 'per_service' ? 'block' : 'none';
   }
   toggleDeliveryModeVisibility();
+
+  function toggleAgentWrapVisibility() {
+    var wrap = document.getElementById('survey-agent-selection-wrap');
+    if (!wrap) return;
+    var modeEl = form.querySelector('input[name="service_delivery_mode"]:checked');
+    var mode = modeEl ? String(modeEl.value) : '';
+    var shouldShow = false;
+    if (mode === 'per_service') {
+      var selects = form.querySelectorAll('select[name^="service_delivery_"]');
+      for (var i = 0; i < selects.length; i++) {
+        if (selects[i].name === 'service_delivery_mode') continue;
+        if (String(selects[i].value) === 'agent_direct') { shouldShow = true; break; }
+      }
+    } else {
+      var pref = form.querySelector('input[name="service_delivery_preference"]:checked');
+      if (pref && String(pref.value) === 'agent_direct') shouldShow = true;
+    }
+    wrap.style.setProperty('display', shouldShow ? 'block' : 'none', 'important');
+  }
+  form.addEventListener('change', function(e) {
+    var t = e.target;
+    if (!t || !t.name) return;
+    if (t.name === 'service_delivery_mode') {
+      toggleDeliveryModeVisibility();
+      toggleAgentWrapVisibility();
+    } else if (t.name === 'service_delivery_preference') {
+      toggleAgentWrapVisibility();
+    } else if (t.name.indexOf('service_delivery_') === 0) {
+      toggleAgentWrapVisibility();
+    }
+  });
+  toggleAgentWrapVisibility();
 
   (function initAgentSelectionHandlers() {
     var root = document.getElementById('survey-agent-selection-root');

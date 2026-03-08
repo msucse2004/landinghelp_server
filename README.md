@@ -90,6 +90,17 @@ python manage.py seed_plans
 
 **확인:** `python manage.py check_email_env` 로 설정 여부 확인
 
+#### 6. 스케줄 작업 (설문 리마인드 등)
+
+24시간마다 미제출 설문(DRAFT) 사용자에게 리마인드 이메일을 보내려면 cron 또는 작업 스케줄러로 아래 명령을 등록합니다.
+
+```bash
+python manage.py send_survey_reminders
+```
+
+- 테스트(발송 없이 대상만 확인): `python manage.py send_survey_reminders --dry-run --verbose`
+- 상세: [docs/SCHEDULING.md](docs/SCHEDULING.md)
+
 ---
 
 ### B. Docker (전체 컨테이너)

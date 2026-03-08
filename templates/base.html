@@ -133,6 +133,8 @@
     input[type="email"],
     input[type="password"],
     input[type="number"],
+    input[type="date"],
+    select,
     textarea {
       width: 100%;
       padding: 0.75rem 1rem;
@@ -141,9 +143,11 @@
       border: 1px solid var(--color-border);
       border-radius: var(--radius);
       margin-bottom: 1rem;
+      box-sizing: border-box;
     }
     textarea { min-height: 100px; resize: vertical; }
-    input:focus, textarea:focus {
+    select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 1rem center; padding-right: 2.25rem; }
+    input:focus, textarea:focus, select:focus {
       outline: none;
       border-color: var(--color-primary);
       box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
@@ -415,22 +419,34 @@
   <script>
   (function(){
     var backdrop = document.getElementById('new-message-popup-backdrop');
+    var inboxLink = document.getElementById('new-message-popup-inbox');
     var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]') && document.querySelector('[name=csrfmiddlewaretoken]').value;
     function dismissPopup() {
       if (!backdrop) return;
       backdrop.style.display = 'none';
+      sendDismissRequest();
+    }
+    function sendDismissRequest() {
       if (csrfToken) {
         fetch('/api/messaging/dismiss-login-popup/', {
           method: 'POST',
           headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: '{}',
           credentials: 'same-origin',
+          keepalive: true,
         }).catch(function(){});
       }
     }
     document.getElementById('new-message-popup-close').addEventListener('click', function() { dismissPopup(); });
-    document.getElementById('new-message-popup-inbox').addEventListener('click', function() { dismissPopup(); });
+    if (inboxLink) {
+      inboxLink.addEventListener('click', function(e) {
+        e.preventDefault();
+        dismissPopup();
+        window.location.href = inboxLink.getAttribute('href');
+      });
+    }
     backdrop.addEventListener('click', function(e) { if (e.target === backdrop) dismissPopup(); });
+    sendDismissRequest();
   })();
   </script>
   {% endif %}

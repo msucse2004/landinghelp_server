@@ -7,7 +7,15 @@
   <p class="text-muted">{{ settlement_main.intro|default:"미국 이민·정착 관련 서비스를 제공합니다." }}</p>
   <ul style="list-style:none;padding:0;">
     <li style="margin-bottom:0.75rem;"><a href="{% url 'settlement_intro' %}">{{ settlement_main.link1|default:"1. 정착 서비스 소개" }}</a></li>
+    {% if user.is_authenticated and user.role == 'AGENT' %}
+    <li style="margin-bottom:0.75rem;"><a href="{% url 'app_agent_appointments' %}">{{ settlement_main.link2|default:"2. 정착 플랜" }}</a></li>
+    {% elif not user.is_authenticated or user.role == 'CUSTOMER' %}
+    <li style="margin-bottom:0.75rem;"><a href="{% url 'survey:survey_start' %}">{{ settlement_main.link2_survey|default:"2. 정착 설문" }}</a></li>
+    {% elif user.is_staff %}
+    <li style="margin-bottom:0.75rem;"><a href="{% url 'app_submission_review_list' %}">{% trans "2. 고객 설문 확인 요청 리스트" %}</a></li>
+    {% else %}
     <li style="margin-bottom:0.75rem;"><a href="{% url 'settlement_quote' %}">{{ settlement_main.link2|default:"2. 정착 플랜" }}</a></li>
+    {% endif %}
     <li style="margin-bottom:0.75rem;"><a href="{% url 'settlement_reviews' %}">{{ settlement_main.link3|default:"3. 고객 후기" }}</a></li>
     <li style="margin-bottom:0.75rem;"><a href="{% url 'settlement_cost_estimate' %}">{{ settlement_main.link4|default:"4. 셀프 정착 비용 예상" }}</a></li>
   </ul>

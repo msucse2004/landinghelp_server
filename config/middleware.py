@@ -1,6 +1,7 @@
 # 디폴트 언어 en. 헤더 드롭다운/로그인 시 선호어로 세팅되면 모든 view에서 해당 언어 적용.
 from django.utils import translation
 from django.conf import settings
+from django.shortcuts import redirect
 from translations.utils import get_valid_language_codes, clear_translation_failed
 
 
@@ -27,6 +28,29 @@ class CsrfTrustCloudflareMiddleware:
                 if url and url not in settings.CSRF_TRUSTED_ORIGINS:
                     settings.CSRF_TRUSTED_ORIGINS = list(settings.CSRF_TRUSTED_ORIGINS) + [url]
         return self.get_response(request)
+
+
+class LogoutCsrfFallbackMiddleware:
+    """
+    로그아웃 POST 시 CSRF 검증 실패(403)면 403 대신 홈으로 리다이렉트.
+    (다른 탭에서 이미 로그아웃했거나 쿠키/토큰 불일치 시 사용자 경험 개선)
+    """
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        return self.get_response(request)
+
+    def process_response(self, request, response):
+        path = request.path.rstrip('/') or '/'
+        if (
+            request.method == 'POST'
+            and response.status_code == 403
+            and (path == '/logout' or path.endswith('/logout'))
+        ):
+            return redirect('home')
+        return response
+
 
 class GuestDefaultLanguageMiddleware:
     """

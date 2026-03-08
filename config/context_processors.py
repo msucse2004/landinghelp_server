@@ -9,21 +9,25 @@ logger = logging.getLogger(__name__)
 from content.models import CarouselSlide
 
 # 정착 서비스 서브네비 라벨 (StaticTranslation 사용, locale과 중복 제거)
+# customer/guest용: nav_survey(정착 설문) → 설문 연결. 그 외: nav_plan(정착 플랜).
 SETTLEMENT_NAV_KEYS = [
     ('nav_settlement', '정착서비스'),
     ('nav_intro', '정착 서비스 소개'),
     ('nav_plan', '정착 플랜'),
+    ('nav_survey', '정착 설문'),
     ('nav_calendar', '고객예약 달력'),
     ('nav_reviews', '고객 후기'),
     ('nav_cost_estimate', '셀프 정착 비용 예상'),
 ]
 
 # 정착 서비스 메인 대시보드 본문 (제목, 소개문, 번호 링크)
+# link2 = 정착 플랜(에이전트/스태프용), link2_survey = 정착 설문(customer/guest용)
 SETTLEMENT_MAIN_KEYS = [
     ('title', '정착서비스'),
     ('intro', '미국 이민·정착 관련 서비스를 제공합니다.'),
     ('link1', '1. 정착 서비스 소개'),
     ('link2', '2. 정착 플랜'),
+    ('link2_survey', '2. 정착 설문'),
     ('link3', '3. 고객 후기'),
     ('link4', '4. 셀프 정착 비용 예상'),
 ]

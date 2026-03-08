@@ -46,6 +46,8 @@
   .inbox-loading { padding: 2rem; text-align: center; color: var(--color-muted); }
   .inbox-appointment-actions { padding: 0.5rem 1rem; border-bottom: 1px solid var(--color-border); background: #f8fafc; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
   .inbox-appointment-actions .btn { padding: 0.4rem 0.8rem; font-size: 0.9rem; }
+  .inbox-survey-actions { padding: 0.5rem 1rem; border-bottom: 1px solid var(--color-border); background: #f0fdf4; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+  .inbox-survey-actions .btn { padding: 0.4rem 0.8rem; font-size: 0.9rem; text-decoration: none; }
 </style>
 <div class="card">
   <h1>{{ inbox_i18n.page_title|default:"메시지 함" }}</h1>
@@ -64,6 +66,9 @@
         <div class="inbox-appointment-actions" id="inboxAppointmentActions" style="display:none;">
           <button type="button" class="btn btn-primary" id="inboxAppointmentAcceptBtn">{{ inbox_i18n.accept|default:"수락" }}</button>
           <button type="button" class="btn btn-secondary" id="inboxAppointmentRequestChangeBtn">{{ inbox_i18n.request_change|default:"수정요청" }}</button>
+        </div>
+        <div class="inbox-survey-actions" id="inboxSurveyActions" style="display:none;">
+          <a href="#" id="inboxSurveyReviewLink" class="btn btn-primary">{{ inbox_i18n.view_survey|default:"고객 설문 확인" }}</a>
         </div>
         <div class="inbox-messages" id="inboxMessages"></div>
         <div class="inbox-send">
@@ -88,6 +93,7 @@
   var i18nEl = document.getElementById('inbox-i18n');
   window.INBOX_I18N = i18nEl ? (function(){ try { return JSON.parse(i18nEl.textContent); } catch(e){ return {}; } })() : {};
   window.VIEWER_PREFERRED_LANGUAGE = "{{ viewer_preferred_language|default:'en' }}";
+  window.VIEWER_IS_STAFF = {% if user.is_staff %}true{% else %}false{% endif %};
   function t(key) { return (window.INBOX_I18N && window.INBOX_I18N[key]) || key; }
 
   var API_BASE = '/api/messaging';
@@ -187,6 +193,7 @@
     if (showDetailTitleEn) titleEl.innerHTML = escapeHtml(displayTitlePref) + '<span class="conv-title-en" style="display:block;font-size:0.85rem;color:var(--color-muted);margin-top:0.2rem;">' + escapeHtml(displayTitleEn) + '</span>';
     else titleEl.textContent = displayTitlePref || ('대화 #' + convId);
     document.getElementById('inboxAppointmentActions').style.display = 'none';
+    document.getElementById('inboxSurveyActions').style.display = 'none';
     document.getElementById('inboxMessages').innerHTML = '<div class="inbox-loading">' + t('loading') + '</div>';
     Promise.all([
       fetch(API_BASE + '/conversations/' + convId + '/', { method: 'GET', headers: getHeaders('GET'), credentials: 'same-origin' }).then(function(r) { return r.json(); }),
@@ -207,6 +214,12 @@
         if (detail.appointment && detail.appointment.can_accept) {
           currentAppointmentId = detail.appointment.id;
           document.getElementById('inboxAppointmentActions').style.display = 'flex';
+        }
+        if (window.VIEWER_IS_STAFF && detail.submission_id && detail.survey_review_url) {
+          var surveyLink = document.getElementById('inboxSurveyReviewLink');
+          surveyLink.href = detail.survey_review_url;
+          surveyLink.textContent = t('view_survey') || '고객 설문 확인';
+          document.getElementById('inboxSurveyActions').style.display = 'flex';
         }
         var msgs = data.messages || [];
         var box = document.getElementById('inboxMessages');

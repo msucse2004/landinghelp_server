@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "Admin 답변 대기" %} – LifeAI US{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="card" style="max-width: 560px; margin: 0 auto; text-align: center;">
+    <h1>{% trans "설문이 제출되었습니다" %}</h1>
+    <p class="text-muted" style="margin: 1rem 0;">{% trans "Admin의 견적/답변을 기다리고 있습니다. 검토 후 연락드리겠습니다." %}</p>
+    <a href="{% url 'settlement_services' %}" class="btn btn-primary">{% trans "정착서비스로 돌아가기" %}</a>
+  </div>
+</div>
+{% endblock %}

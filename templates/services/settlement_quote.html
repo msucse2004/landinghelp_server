@@ -397,10 +397,29 @@
   </ul>
   {% endif %}
 
-  {% if saved_checkout_total and saved_checkout_total > 0 %}
+  {% if saved_checkout_total and saved_checkout_total > 0 and can_show_plan_prices %}
   <div class="quote-section" style="background: #f0fdf4; border: 1px solid #86efac; border-radius: var(--radius); padding: 1rem;">
     <strong><span>{{ settlement_i18n.checkout_total }}</span>:</strong> {{ saved_checkout_total|floatformat:0 }}{{ settlement_i18n.won }}
     <span class="text-muted" style="font-size:0.9rem;">(<span>{{ settlement_i18n.customer_pricing_note }}</span>)</span>
+  </div>
+  {% elif not can_show_plan_prices %}
+  <div class="quote-section" style="background: #f8f9fa; border: 1px solid var(--color-border); border-radius: var(--radius); padding: 1rem;">
+    <strong><span>{{ settlement_i18n.checkout_total }}</span>:</strong> <span class="text-muted">{{ price_masked_label|default:"견적 후 공개" }}</span>
+  </div>
+  {% endif %}
+
+  {% if can_assign_agent %}
+  <div class="quote-section dedicated-agent-section" id="dedicatedAgentSection" data-can-assign="1" data-assigned-id="{% if assigned_agent %}{{ assigned_agent.id }}{% endif %}" data-assigned-name="{% if assigned_agent %}{{ assigned_agent.get_full_name|default:assigned_agent.username }}{% endif %}">
+    {% if assigned_agent %}
+    <h2>{{ settlement_i18n.dedicated_agent_assigned|default:"배정된 전담 Agent" }}</h2>
+    <p><strong>{{ assigned_agent.get_full_name|default:assigned_agent.username }}</strong></p>
+    <p class="text-muted" style="font-size:0.9rem;">{{ settlement_i18n.calendar_hint|default:"아래 결제하기를 누르면 이 Agent에게 약속이 전달됩니다." }}</p>
+    {% else %}
+    <h2>{{ settlement_i18n.dedicated_agent_title|default:"전담 Agent 선택" }}</h2>
+    <p class="text-muted" style="font-size:0.9rem; margin-bottom:0.75rem;">결제 후 가능한 Agent 1명을 선택해 전담 배정합니다. 서비스별 선택은 없습니다.</p>
+    <div id="dedicatedAgentList"></div>
+    <p class="text-muted" style="font-size:0.85rem; margin-top:0.5rem;" id="dedicatedAgentLoadHint">{{ settlement_i18n.loading|default:"로딩 중..." }}</p>
+    {% endif %}
   </div>
   {% endif %}
 
@@ -466,10 +485,12 @@
           <span class="calendar-weekday">{{ settlement_i18n.sun }}</span><span class="calendar-weekday">{{ settlement_i18n.mon }}</span><span class="calendar-weekday">{{ settlement_i18n.tue }}</span><span class="calendar-weekday">{{ settlement_i18n.wed }}</span><span class="calendar-weekday">{{ settlement_i18n.thu }}</span><span class="calendar-weekday">{{ settlement_i18n.fri }}</span><span class="calendar-weekday">{{ settlement_i18n.sat }}</span>
         </div>
       </div>
+      {% if not can_assign_agent %}
       <div class="agent-list-panel" id="agentListPanel">
         <h4 id="agentListTitle">{{ settlement_i18n.available_agents }}</h4>
         <div id="agentListContent"></div>
       </div>
+      {% endif %}
     </div>
 
     <input type="hidden" name="ai_suggested" id="aiSuggested" value="0">
@@ -544,6 +565,10 @@
   var schedule = {{ initial_schedule_json|safe }};
   var servicePrices = {{ service_prices_json|default:"{}"|safe }};
   var freeAgentServiceCodes = {{ free_agent_service_codes_json|default:"[]"|safe }};
+  var dedicatedSection = document.getElementById('dedicatedAgentSection');
+  var canAssignAgent = !!dedicatedSection;
+  var assignedAgentId = dedicatedSection ? (dedicatedSection.getAttribute('data-assigned-id') || '') : '';
+  var assignedAgentName = dedicatedSection ? (dedicatedSection.getAttribute('data-assigned-name') || '') : '';
   var now = new Date();
   var calYear = now.getFullYear();
   var calMonth = now.getMonth();
@@ -654,7 +679,7 @@
     Object.keys(schedule).forEach(function(dateStr) {
       (schedule[dateStr] || []).forEach(function(item) {
         if (!item || !item.code) return;
-        var hasAgent = !!item.agent_id;
+        var hasAgent = !!item.agent_id || (canAssignAgent && !!assignedAgentId);
         var isUnpaid = hasAgent && (!item.appointment_id || item.appointment_status === 'CANCELLED');
         if (!isUnpaid) return;
         if (seen[item.code]) {
@@ -670,6 +695,8 @@
     });
     var freeSet = (typeof freeAgentServiceCodes !== 'undefined' && Array.isArray(freeAgentServiceCodes))
       ? new Set(freeAgentServiceCodes) : new Set();
+    var canShowPrices = i18n.can_show_plan_prices !== false;
+    var priceMaskedLabel = i18n.price_masked_label || '견적 후 공개';
     var items = Object.keys(seen).map(function(code) {
       var info = servicePrices[code] || { name: seen[code].label, price: 0 };
       var name = info.name || seen[code].label;
@@ -677,7 +704,7 @@
       var hasAgent = seen[code].hasAgent;
       var price = hasAgent ? basePrice : basePrice;
       if (hasAgent) total += basePrice;
-      return { name: name, price: price, hasAgent: hasAgent };
+      return { name: name, price: price, hasAgent: hasAgent, _masked: info._masked || !canShowPrices };
     });
     if (items.length === 0 || total < 1) {
       floatEl.classList.add('empty');
@@ -699,17 +726,20 @@
     var agentRequired = t('agent_required');
     var totalLabel = t('total');
     listEl.innerHTML = items.map(function(it) {
-      var priceStr = it.price > 0 ? (it.price).toLocaleString() + won : free;
+      var priceStr;
+      if (it._masked) priceStr = priceMaskedLabel;
+      else if (it.price > 0) priceStr = (it.price).toLocaleString() + won;
+      else priceStr = free;
       if (!it.hasAgent) priceStr += ' <span class="text-muted" style="font-size:0.8em;">(' + agentRequired + ')</span>';
       return '<div class="summary-row"><span class="name">' + (it.name || '').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span><span class="price">' + priceStr + '</span></div>';
     }).join('');
     if (totalEl) {
       totalEl.style.display = 'flex';
-      totalEl.innerHTML = '<span>' + totalLabel + '</span><span class="price">' + (total).toLocaleString() + won + '</span>';
+      totalEl.innerHTML = '<span>' + totalLabel + '</span><span class="price">' + (canShowPrices ? (total).toLocaleString() + won : priceMaskedLabel) + '</span>';
     }
     var payWrap = document.getElementById('scheduleSummaryPayment');
     if (payWrap) {
-      if (total >= 1) {
+      if (total >= 1 && canShowPrices) {
         payWrap.style.display = 'block';
         payWrap.innerHTML = '<button type="button" class="btn btn-primary" id="scheduleSummaryPayBtn">' + t('pay') + ' (' + (total).toLocaleString() + won + ')</button>';
         var payBtn = document.getElementById('scheduleSummaryPayBtn');
@@ -1095,22 +1125,25 @@
       dayDiv.innerHTML = dayNumHtml + '<div class="calendar-day-cards"></div>';
       var cardsDiv = dayDiv.querySelector('.calendar-day-cards');
       (schedule[dateStr] || []).forEach(function(item) {
-        // 클릭/드래그 시 반드시 card.dataset.date 사용 (루프 변수 dateStr은 클로저로 마지막 날(31일)만 가리켜 희망일자 버그 유발)
+        var effectiveItem = item;
+        if (canAssignAgent && assignedAgentId && !item.appointment_id) {
+          effectiveItem = Object.assign({}, item, { agent_id: assignedAgentId, agent_name: assignedAgentName });
+        }
         var card = document.createElement('span');
         var statusClass = '';
-        if (item.appointment_status === 'PENDING') statusClass = ' calendar-card--status-pending';
-        else if (item.appointment_status === 'CONFIRMED') statusClass = ' calendar-card--status-confirmed';
-        else if (item.appointment_status === 'CANCELLED') statusClass = ' calendar-card--status-cancelled';
-        else if (item.agent_id && !item.appointment_id) statusClass = ' calendar-card--status-payment-pending';
-        card.className = 'calendar-card' + (item.agent_id || item.appointment_status ? ' calendar-card-has-agent' + statusClass : ' calendar-card--no-agent');
+        if (effectiveItem.appointment_status === 'PENDING') statusClass = ' calendar-card--status-pending';
+        else if (effectiveItem.appointment_status === 'CONFIRMED') statusClass = ' calendar-card--status-confirmed';
+        else if (effectiveItem.appointment_status === 'CANCELLED') statusClass = ' calendar-card--status-cancelled';
+        else if (effectiveItem.agent_id && !effectiveItem.appointment_id) statusClass = ' calendar-card--status-payment-pending';
+        card.className = 'calendar-card' + (effectiveItem.agent_id || effectiveItem.appointment_status ? ' calendar-card-has-agent' + statusClass : ' calendar-card--no-agent');
         card.draggable = true;
-        card.dataset.code = item.code;
-        card.dataset.label = item.label;
+        card.dataset.code = effectiveItem.code;
+        card.dataset.label = effectiveItem.label;
         card.dataset.date = dateStr;
-        var agentLabel = (item.agent_id || item.appointment_status) && item.agent_name ? ' ✓ ' + item.agent_name : (item.agent_id || item.appointment_status) ? ' ✓' : '';
-        if (item.appointment_status === 'CANCELLED') agentLabel = ' (' + t('cancelled') + ')';
-        var labelText = item.label + agentLabel;
-        var statusLabel = item.appointment_status === 'CANCELLED' ? '' : (item.appointment_status_label || (item.agent_id && !item.appointment_id ? t('payment_pending_status') : ''));
+        var agentLabel = (effectiveItem.agent_id || effectiveItem.appointment_status) && effectiveItem.agent_name ? ' ✓ ' + effectiveItem.agent_name : (effectiveItem.agent_id || effectiveItem.appointment_status) ? ' ✓' : '';
+        if (effectiveItem.appointment_status === 'CANCELLED') agentLabel = ' (' + t('cancelled') + ')';
+        var labelText = effectiveItem.label + agentLabel;
+        var statusLabel = effectiveItem.appointment_status === 'CANCELLED' ? '' : (effectiveItem.appointment_status_label || (effectiveItem.agent_id && !effectiveItem.appointment_id ? t('payment_pending_status') : ''));
         var statusHtml = statusLabel ? '<span class="calendar-card-status">' + (statusLabel.replace(/</g,'&lt;').replace(/>/g,'&gt;')) + '</span>' : '';
         card.innerHTML = '<span class="calendar-card-remove" title="' + t('remove') + '">✕</span><span class="calendar-card-body"><span class="calendar-card-label">' + labelText + '</span>' + statusHtml + '</span>';
         var removeBtn = card.querySelector('.calendar-card-remove');
@@ -1119,8 +1152,8 @@
           e.stopPropagation();
           e.preventDefault();
           var cd = card.dataset.code, dt = card.dataset.date;
-          var appointmentId = item.appointment_id;
-          var needCancel = appointmentId && item.appointment_status && item.appointment_status !== 'CANCELLED';
+          var appointmentId = effectiveItem.appointment_id;
+          var needCancel = appointmentId && effectiveItem.appointment_status && effectiveItem.appointment_status !== 'CANCELLED';
           function doRemove() {
             schedule[dt] = (schedule[dt] || []).filter(function(x) { return x.code !== cd; });
             if (!schedule[dt].length) delete schedule[dt];
@@ -1148,12 +1181,17 @@
           e.stopPropagation();
           if (card._justDragged) { card._justDragged = false; return; }
           var cellDate = (card.dataset && card.dataset.date) || (card.closest && card.closest('.calendar-day') && card.closest('.calendar-day').dataset && card.closest('.calendar-day').dataset.date) || '';
-          if (item.appointment_status && item.appointment_status !== 'CANCELLED') {
-            showAppointmentDetail(item, cellDate);
-          } else if (item.agent_id && !item.appointment_id) {
-            showPaymentPendingDetail(item, cellDate);
+          if (canAssignAgent) {
+            if (effectiveItem.appointment_status && effectiveItem.appointment_status !== 'CANCELLED') showAppointmentDetail(effectiveItem, cellDate);
+            else if (assignedAgentId) showPaymentPendingDetail(effectiveItem, cellDate);
+            return;
+          }
+          if (effectiveItem.appointment_status && effectiveItem.appointment_status !== 'CANCELLED') {
+            showAppointmentDetail(effectiveItem, cellDate);
+          } else if (effectiveItem.agent_id && !effectiveItem.appointment_id) {
+            showPaymentPendingDetail(effectiveItem, cellDate);
           } else {
-            showAgentList(item.code, item.label, cellDate);
+            showAgentList(effectiveItem.code, effectiveItem.label, cellDate);
           }
         });
         card.addEventListener('dragstart', function(e) {
@@ -1163,8 +1201,8 @@
           var cellDate = (card.dataset && card.dataset.date) || (card.closest && card.closest('.calendar-day') && card.closest('.calendar-day').dataset && card.closest('.calendar-day').dataset.date) || '';
           window._scheduleDragSourceDate = cellDate;
           card.classList.add('dragging');
-          e.dataTransfer.setData('service-code', item.code);
-          e.dataTransfer.setData('service-label', item.label);
+          e.dataTransfer.setData('service-code', effectiveItem.code);
+          e.dataTransfer.setData('service-label', effectiveItem.label);
           e.dataTransfer.setData('source', 'calendar');
           e.dataTransfer.setData('source-date', cellDate);
           e.dataTransfer.effectAllowed = 'move';
@@ -1258,9 +1296,13 @@
         done();
         return;
       }
+      if (canAssignAgent && assignedAgentId) {
+        itemToAdd.agent_id = assignedAgentId;
+        itemToAdd.agent_name = assignedAgentName;
+      }
       schedule[dateStr].push(itemToAdd);
       done();
-      if (!fromCalendar) {
+      if (!fromCalendar && !canAssignAgent) {
         var droppedDateStr = dateStr;
         setTimeout(function() { showAgentList(code, label, droppedDateStr); }, 0);
       }
@@ -1378,6 +1420,45 @@
 
   renderCalendar();
 
+  (function loadDedicatedAgentList() {
+    var listEl = document.getElementById('dedicatedAgentList');
+    var hintEl = document.getElementById('dedicatedAgentLoadHint');
+    if (!listEl || assignedAgentId) return;
+    fetch('/api/settlement/available-agents/', { method: 'GET', credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.agents && data.agents.length) {
+          listEl.innerHTML = data.agents.map(function(a) {
+            var name = (a.name || a.username || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return '<div class="dedicated-agent-item" style="margin-bottom:0.5rem; padding:0.5rem; border:1px solid var(--color-border); border-radius:4px;"><span>' + name + '</span> <button type="button" class="btn btn-primary btn-sm" data-agent-id="' + a.id + '" style="margin-left:0.5rem;">' + (t('assign_agent_btn') || '이 Agent로 배정') + '</button></div>';
+          }).join('');
+          listEl.querySelectorAll('button[data-agent-id]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              var id = btn.getAttribute('data-agent-id');
+              var fd = new FormData();
+              var csrf = document.querySelector('input[name="csrfmiddlewaretoken"]');
+              if (csrf) fd.append('csrfmiddlewaretoken', csrf.value);
+              fd.append('agent_id', id);
+              btn.disabled = true;
+              fetch('/api/settlement/assign-agent/', { method: 'POST', body: fd, credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(res) {
+                  if (res.ok) window.location.reload();
+                  else { alert(res.error || '배정에 실패했습니다.'); btn.disabled = false; }
+                })
+                .catch(function() { alert(t('request_failed') || '요청에 실패했습니다.'); btn.disabled = false; });
+            });
+          });
+          if (hintEl) hintEl.textContent = '';
+        } else {
+          if (hintEl) hintEl.textContent = data.error || t('no_agents');
+        }
+      })
+      .catch(function() {
+        if (hintEl) hintEl.textContent = t('agents_load_failed') || 'Agent 목록을 불러올 수 없습니다.';
+      });
+  })();
+
   var form = document.getElementById('quoteForm');
   var aiInput = document.getElementById('aiInput');
   var aiBtn = document.getElementById('aiSuggestBtn');
@@ -1409,6 +1490,9 @@
       schedule[dateStr] = schedule[dateStr] || [];
       (newSchedule[dateStr] || []).forEach(function(item) {
         if (!schedule[dateStr].some(function(x) { return x.code === item.code; })) {
+          if (canAssignAgent && assignedAgentId) {
+            item = Object.assign({}, item, { agent_id: assignedAgentId, agent_name: assignedAgentName });
+          }
           schedule[dateStr].push(item);
         }
       });

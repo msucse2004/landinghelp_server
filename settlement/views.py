@@ -16,7 +16,13 @@ from billing.utils import get_user_plan_service_description, get_user_plan_polic
 from billing.service_tiers import get_tier_service_description
 
 from .forms import SettlementQuoteForm
-from .models import SettlementQuoteRequest, AgentAppointmentRequest, SettlementService, UserSettlementPlan
+from .models import (
+    SettlementQuoteRequest,
+    AgentAppointmentRequest,
+    SettlementService,
+    UserSettlementPlan,
+    SettlementQuote,
+)
 from .constants import (
     get_services_by_category,
     get_all_service_codes,
@@ -26,14 +32,21 @@ from .constants import (
     calc_checkout_total,
     enrich_schedule_with_appointment_status,
     CATEGORY_ORDER,
+    can_view_price,
+    has_pending_survey_quote,
+    customer_can_assign_agent,
+    quote_for_customer,
 )
 
 
 def settlement_quote(request):
-    """서비스 견적 신청 (폼 표시 및 제출 처리). 에이전트 계정은 정착 플랜 대신 고객예약 달력으로 이동."""
+    """서비스 견적 신청 (폼 표시 및 제출 처리). 에이전트는 달력으로, 고객은 설문으로 리다이렉트(정착 플랜 비활성화)."""
     lang = get_request_language(request)
-    if request.user.is_authenticated and getattr(request.user, 'role', None) == 'AGENT':
-        return redirect(reverse('app_agent_appointments'))
+    if request.user.is_authenticated:
+        if getattr(request.user, 'role', None) == 'AGENT':
+            return redirect(reverse('app_agent_appointments'))
+        if getattr(request.user, 'role', None) == 'CUSTOMER':
+            return redirect(reverse('survey:survey_start'))
     if request.method == 'POST':
         form = SettlementQuoteForm(request.POST)
         if form.is_valid():
@@ -83,7 +96,12 @@ def settlement_quote(request):
                         'checkout_total': checkout_total,
                     }
                 )
-            msg = get_display_text('스케줄이 저장되었습니다. 예상 Checkout: %(total)s원', lang) % {'total': f'{checkout_total:,.0f}'}  # 스케줄이 저장되었습니다. 예상 Checkout: %(total)s원
+            # 결제 전 가격 비노출: 설문 견적 대기 중이면 합계를 메시지에 넣지 않음
+            can_show = (not request.user.is_authenticated) or (not has_pending_survey_quote(request.user))
+            if can_show:
+                msg = get_display_text('스케줄이 저장되었습니다. 예상 Checkout: %(total)s원', lang) % {'total': f'{checkout_total:,.0f}'}
+            else:
+                msg = (get_display_text('스케줄이 저장되었습니다.', lang) or '스케줄이 저장되었습니다.') + ' ' + (get_display_text('예상 Checkout', lang) or '예상 Checkout') + ': ' + (get_display_text('견적 후 공개', lang) or '견적 후 공개')
             messages.success(request, msg)
             if _is_ajax(request):
                 return JsonResponse({'success': True, 'message': msg})
@@ -137,12 +155,22 @@ def settlement_quote(request):
                 initial_schedule = enrich_schedule_with_appointment_status(
                     request.user, plan.service_schedule or {}
                 )
+                if getattr(plan, 'assigned_agent_id', None) and plan.assigned_agent:
+                    for items in initial_schedule.values():
+                        if not isinstance(items, list):
+                            continue
+                        for item in items:
+                            if isinstance(item, dict) and not item.get('agent_id'):
+                                item['agent_id'] = plan.assigned_agent_id
+                                item['agent_name'] = plan.assigned_agent.get_full_name() or plan.assigned_agent.username or ''
         except UserSettlementPlan.DoesNotExist:
             pass
 
     # 저장된 플랜의 checkout 합계 (표시용) — Agent가 하나라도 할당된 경우에만 표시
+    # 가격 비노출 정책: 설문 견적이 아직 송부 전(status < FINAL_SENT)이면 달력/합계도 마스킹
+    can_show_plan_prices = not has_pending_survey_quote(request.user) if request.user.is_authenticated else True
     saved_checkout = 0
-    if request.user.is_authenticated:
+    if request.user.is_authenticated and can_show_plan_prices:
         try:
             plan = request.user.settlement_plan
             if plan.checkout_total and plan.has_agent_assignment():
@@ -153,11 +181,12 @@ def settlement_quote(request):
     raw_free_agent_services = get_user_free_agent_services(request.user) if request.user.is_authenticated else []
     free_agent_services = [(code, get_display_text(label, lang)) for code, label in raw_free_agent_services]
 
-    # 서비스별 가격 (플로팅 요약 패널용) code -> { name, price }
+    # 서비스별 가격 (플로팅 요약 패널용). can_show_plan_prices False면 price 0으로 전달해 프론트에서 '견적 후 공개' 표시
     service_prices = {}
     for s in SettlementService.objects.filter(is_active=True):
         key = s.code or str(s.id)
-        service_prices[key] = {'name': s.name, 'price': float(s.customer_price or 0)}
+        price = float(s.customer_price or 0) if can_show_plan_prices else 0
+        service_prices[key] = {'name': s.name, 'price': price, '_masked': not can_show_plan_prices}
     service_prices_json = json.dumps(service_prices)
     # 요금제 무료 Agent 서비스 코드 (플로팅 패널에서 0원 표시 및 합계 반영)
     free_agent_service_codes = [c for c, _ in free_agent_services]
@@ -297,6 +326,20 @@ def settlement_quote(request):
     for i, key in enumerate(month_keys):
         settlement_i18n[f'month_{i + 1}'] = get_display_text(key, lang)
     settlement_i18n['lang'] = lang
+    settlement_i18n['can_show_plan_prices'] = can_show_plan_prices
+    settlement_i18n['price_masked_label'] = get_display_text('견적 후 공개', lang)
+    can_assign_agent = customer_can_assign_agent(request.user) if request.user.is_authenticated else False
+    assigned_agent = None
+    if request.user.is_authenticated:
+        try:
+            plan = request.user.settlement_plan
+            assigned_agent = getattr(plan, 'assigned_agent', None)
+        except UserSettlementPlan.DoesNotExist:
+            pass
+    settlement_i18n['dedicated_agent_title'] = get_display_text('전담 Agent 선택', lang)
+    settlement_i18n['dedicated_agent_assigned'] = get_display_text('배정된 전담 Agent', lang)
+    settlement_i18n['assign_agent_btn'] = get_display_text('이 Agent로 배정', lang)
+    settlement_i18n['assign_agent_success'] = get_display_text('전담 Agent가 배정되었습니다.', lang)
 
     return render(request, 'services/settlement_quote.html', {
         'form': form,
@@ -306,11 +349,359 @@ def settlement_quote(request):
         'can_use_llm': can_use_llm_user,
         'initial_schedule_json': json.dumps(initial_schedule),
         'saved_checkout_total': saved_checkout,
+        'can_show_plan_prices': can_show_plan_prices,
+        'price_masked_label': get_display_text('견적 후 공개', lang),
         'free_agent_services': free_agent_services,
         'service_prices_json': service_prices_json,
         'free_agent_service_codes_json': free_agent_service_codes_json,
         'settlement_i18n': settlement_i18n,
+        'can_assign_agent': can_assign_agent,
+        'assigned_agent': assigned_agent,
     })
+
+
+@require_GET
+@ensure_csrf_cookie
+def customer_quote(request):
+    """
+    고객 견적 페이지. 상태별 분기:
+    status < FINAL_SENT: 가격 전부 마스킹 + 진행 안내
+    status == FINAL_SENT: 가격/총액/결제 버튼 노출
+    status == PAID: 결제 완료 + 대시보드/달력 링크
+    """
+    if not request.user.is_authenticated:
+        from django.contrib.auth.views import redirect_to_login
+        return redirect_to_login(request.get_full_path())
+    if getattr(request.user, 'role', None) == 'AGENT':
+        return redirect(reverse('app_agent_appointments'))
+
+    quote = (
+        SettlementQuote.objects.filter(submission__user=request.user)
+        .order_by('-updated_at')
+        .select_related('submission')
+        .first()
+    )
+    checkout_error = request.GET.get('error', '').strip()
+    if not quote:
+        return render(request, 'services/customer_quote.html', {
+            'quote': None,
+            'can_view_price': False,
+            'quote_payload': None,
+            'checkout_error': checkout_error,
+            'i18n': _customer_quote_i18n(get_request_language(request)),
+        })
+
+    lang = get_request_language(request)
+    can_show = can_view_price(request.user, quote)
+    payload = quote_for_customer(quote)
+
+    return render(request, 'services/customer_quote.html', {
+        'quote': quote,
+        'can_view_price': can_show,
+        'quote_payload': payload,
+        'checkout_error': checkout_error,
+        'i18n': _customer_quote_i18n(lang),
+    })
+
+
+@require_GET
+@ensure_csrf_cookie
+def api_my_quote(request):
+    """고객 본인 견적 API. quote_for_customer 적용으로 status < FINAL_SENT이면 가격/합계 필드 제거."""
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': '로그인이 필요합니다.', 'quote': None}, status=403)
+    quote = (
+        SettlementQuote.objects.filter(submission__user=request.user)
+        .order_by('-updated_at')
+        .first()
+    )
+    payload = quote_for_customer(quote) if quote else None
+    return JsonResponse({'ok': True, 'quote': payload})
+
+
+def _build_plan_schedule_from_quote(quote):
+    """견적 항목으로 UserSettlementPlan용 service_schedule 생성. post_payment 모듈 위임."""
+    from .post_payment import build_initial_schedule_from_quote
+    return build_initial_schedule_from_quote(quote)
+
+
+def _process_quote_checkout(user, quote_id=None):
+    """
+    견적 결제 처리: PAID 설정, UserSettlementPlan, 구독 업데이트.
+    Returns (quote, error_message). error_message가 있으면 실패.
+    """
+    if quote_id is not None:
+        quote = SettlementQuote.objects.filter(
+            id=quote_id,
+            submission__user=user,
+        ).select_related('submission').first()
+    else:
+        quote = (
+            SettlementQuote.objects.filter(
+                submission__user=user,
+                status=SettlementQuote.Status.FINAL_SENT,
+            )
+            .order_by('-updated_at')
+            .select_related('submission')
+            .first()
+        )
+    if not quote:
+        return None, '결제 가능한 견적이 없습니다.'
+    if quote.status == SettlementQuote.Status.PAID:
+        return None, '이미 결제되었습니다.'
+    if quote.status != SettlementQuote.Status.FINAL_SENT:
+        return None, '이 견적은 아직 결제할 수 없습니다.'
+
+    quote.status = SettlementQuote.Status.PAID
+    quote.save(update_fields=['status'])
+    from survey.models import SurveySubmission, SurveySubmissionEvent
+    if quote.submission_id and quote.submission.status != SurveySubmission.Status.AGENT_ASSIGNMENT:
+        sub = quote.submission
+        sub.status = SurveySubmission.Status.AGENT_ASSIGNMENT
+        sub.save(update_fields=['status'])
+        SurveySubmissionEvent.objects.create(
+            submission=sub,
+            event_type=SurveySubmissionEvent.EventType.PAID,
+            created_by=user,
+        )
+
+    from decimal import Decimal
+    schedule = _build_plan_schedule_from_quote(quote)
+    total_val = Decimal(str(quote.total or 0))
+    region = (quote.region or '').strip()
+    state = region
+    city = ''
+    if region and ',' in region:
+        parts = [p.strip() for p in region.split(',', 1)]
+        state = parts[0] or region
+        city = parts[1] if len(parts) > 1 else ''
+    plan, _ = UserSettlementPlan.objects.update_or_create(
+        user=user,
+        defaults={
+            'state': state,
+            'city': city,
+            'entry_date': None,
+            'service_schedule': schedule,
+            'checkout_total': total_val,
+        },
+    )
+    from .post_payment import ensure_plan_service_tasks
+    ensure_plan_service_tasks(plan, quote)
+
+    from billing.models import Plan, Subscription
+    active_sub = (
+        user.subscriptions.filter(status=Subscription.Status.ACTIVE)
+        .order_by('-started_at')
+        .select_related('plan')
+        .first()
+    )
+    if not active_sub or (active_sub.plan and getattr(active_sub.plan, 'code', None) == Plan.Code.C_BASIC):
+        plan_standard = Plan.objects.filter(code=Plan.Code.C_STANDARD, is_active=True).first()
+        if plan_standard:
+            if active_sub:
+                active_sub.status = Subscription.Status.CANCELED
+                active_sub.save(update_fields=['status'])
+            Subscription.objects.create(
+                user=user,
+                plan=plan_standard,
+                status=Subscription.Status.ACTIVE,
+            )
+    return quote, None
+
+
+@require_POST
+@ensure_csrf_cookie
+def api_quote_checkout(request):
+    """
+    FINAL_SENT 견적 결제 처리. 결제 전에는 checkout/total 노출 안 됨(정책 유지).
+    - quote.status = PAID, 중복 결제 방지
+    - UserSettlementPlan 생성/업데이트, 구독 tier 업데이트
+    POST JSON: { "quote_id": optional } 또는 form POST: quote_id
+    """
+    if not request.user.is_authenticated:
+        if _is_form_post(request):
+            return redirect(reverse('customer_quote') + '?error=login')
+        return JsonResponse({'ok': False, 'error': '로그인이 필요합니다.'}, status=403)
+    if getattr(request.user, 'role', None) == 'AGENT':
+        if _is_form_post(request):
+            return redirect(reverse('customer_quote') + '?error=agent')
+        return JsonResponse({'ok': False, 'error': '고객만 결제할 수 있습니다.'}, status=403)
+
+    import json
+    quote_id = None
+    if _is_form_post(request):
+        raw = request.POST.get('quote_id')
+        if raw:
+            try:
+                quote_id = int(raw)
+            except (ValueError, TypeError):
+                pass
+    else:
+        try:
+            body = json.loads(request.body or '{}')
+            quote_id = body.get('quote_id')
+        except (ValueError, TypeError):
+            pass
+
+    quote, err = _process_quote_checkout(request.user, quote_id)
+    if err:
+        if _is_form_post(request):
+            return redirect(reverse('customer_quote') + '?error=' + ('already_paid' if '이미 결제' in err else 'invalid'))
+        status = 400 if '이미 결제' in err else 404
+        return JsonResponse({'ok': False, 'error': err, 'already_paid': '이미 결제' in err}, status=status)
+
+    try:
+        from .notifications import send_payment_complete_notifications
+        from translations.utils import get_request_language
+        plan = UserSettlementPlan.objects.filter(user=request.user).first()
+        send_payment_complete_notifications(quote, plan, language_code=get_request_language(request))
+    except Exception:
+        pass
+
+    redirect_url = reverse('app_customer_dashboard')
+    if _is_form_post(request):
+        return redirect(redirect_url)
+    return JsonResponse({
+        'ok': True,
+        'message': '결제가 완료되었습니다.',
+        'redirect_url': redirect_url,
+    })
+
+
+def _is_form_post(request):
+    """Content-Type이 form인지 (HTML form 제출)."""
+    ct = (request.content_type or '').lower()
+    return 'application/x-www-form-urlencoded' in ct or 'multipart/form-data' in ct
+
+
+def _customer_quote_i18n(lang):
+    """고객 견적 페이지 번역 키."""
+    return {
+        'title': get_display_text('내 견적', lang),
+        'no_quote': get_display_text('아직 견적이 없습니다. 설문 제출 후 Admin이 견적을 보내면 여기에 표시됩니다.', lang),
+        'quote_preparing': get_display_text('견적을 작성 중입니다. 송부 후 가격이 공개됩니다.', lang),
+        'quote_sent': get_display_text('견적이 도착했습니다. 아래 내용을 확인해 주세요.', lang),
+        'quote_paid': get_display_text('결제가 완료되었습니다.', lang),
+        'total': get_display_text('합계', lang),
+        'price_masked': get_display_text('견적 후 공개', lang),
+        'won': get_display_text('원', lang),
+        'pay': get_display_text('결제하기', lang),
+        'go_dashboard': get_display_text('대시보드로', lang),
+        'go_calendar': get_display_text('정착 플랜/달력', lang),
+        'region': get_display_text('지역', lang),
+    }
+
+
+def get_agents_for_survey_fragment(state, service_codes, request):
+    """
+    설문 fragment 렌더용: state + service_codes 로 가능한 Agent 목록 반환.
+    반환: [{"id", "name", "username", "rating_avg", "rating_count", "accept_rate_display", "profile_image_url", "states", "service_names"}, ...]
+    """
+    from django.contrib.auth import get_user_model
+    from django.db.models import Q, Count
+    from functools import reduce
+    import operator
+
+    if not service_codes:
+        return []
+    User = get_user_model()
+    state = (state or '').strip().upper()[:2]
+    service_codes = [c.strip() for c in service_codes if c and str(c).strip()]
+
+    from .models import SettlementService, AgentAppointmentRequest
+    service_ids = set()
+    for code in service_codes:
+        q = Q(code=code)
+        if str(code).isdigit():
+            try:
+                q = q | Q(id=int(code))
+            except (TypeError, ValueError):
+                pass
+        svc = SettlementService.objects.filter(q).first()
+        if svc:
+            service_ids.add(svc.id)
+    if not service_ids:
+        return []
+
+    q_services = reduce(
+        operator.or_,
+        [Q(agent_services__contains=[sid]) for sid in list(service_ids)[:20]],
+        Q(),
+    )
+    agents_qs = User.objects.filter(
+        role=User.Role.AGENT,
+        status=User.Status.ACTIVE,
+    ).filter(q_services)
+    if state:
+        agents_qs = agents_qs.filter(agent_states__contains=[state])
+    agents_qs = agents_qs.distinct()[:30]
+
+    agent_ids = list(agents_qs.values_list('id', flat=True))
+    accept_stats = {}
+    if agent_ids and service_codes:
+        code = service_codes[0]
+        stats_qs = (
+            AgentAppointmentRequest.objects.filter(agent_id__in=agent_ids, service_code=code)
+            .values('agent_id')
+            .annotate(
+                total=Count('id'),
+                confirmed=Count('id', filter=Q(status='CONFIRMED')),
+                cancelled=Count('id', filter=Q(status='CANCELLED')),
+            )
+        )
+        for row in stats_qs:
+            aid = row['agent_id']
+            total = row['total'] or 0
+            cancelled = row['cancelled'] or 0
+            total_effective = total - cancelled
+            confirmed = row['confirmed'] or 0
+            rate = (confirmed / total_effective) if total_effective else None
+            accept_stats[aid] = {
+                'rate': round(rate, 2) if rate is not None else None,
+                'display': f'{int(round(rate * 100))}%' if rate is not None else '-',
+            }
+
+    result = []
+    for u in agents_qs:
+        summary = u.get_agent_rating_summary() or {}
+        service_names = []
+        for sid in (u.agent_services or []):
+            s = SettlementService.objects.filter(id=sid).first()
+            if s:
+                service_names.append(s.name)
+        img_url = ''
+        if request and getattr(u, 'profile_image', None):
+            img_url = request.build_absolute_uri(u.profile_image.url)
+        stat = accept_stats.get(u.id) or {}
+        result.append({
+            'id': u.id,
+            'name': u.get_full_name() or u.username,
+            'username': u.username,
+            'rating_avg': round(summary.get('avg') or 0, 1),
+            'rating_count': summary.get('count') or 0,
+            'accept_rate': stat.get('rate'),
+            'accept_rate_display': stat.get('display', '-'),
+            'profile_image_url': img_url,
+            'states': u.agent_states or [],
+            'service_names': service_names[:10],
+        })
+    return result
+
+
+@require_GET
+@ensure_csrf_cookie
+def api_available_agents_for_survey(request):
+    """
+    설문용: Agent 직접 도움 선택 시 가능한 Agent 목록 (프로필 포함).
+    결제 여부와 무관하게 설문 단계에서 호출. GET ?state=NC&service_codes=CODE1,CODE2
+    """
+    state = (request.GET.get('state') or '').strip().upper()[:2]
+    service_codes_raw = (request.GET.get('service_codes') or '').strip()
+    service_codes = [c.strip() for c in service_codes_raw.split(',') if c.strip()]
+    if not service_codes:
+        return JsonResponse({'agents': [], 'error': 'service_codes가 필요합니다.'}, status=400)
+    agents = get_agents_for_survey_fragment(state, service_codes, request)
+    return JsonResponse({'agents': agents})
 
 
 @require_GET
@@ -318,13 +709,21 @@ def settlement_quote(request):
 def api_agents_for_service(request):
     """
     서비스·지역 기준 가능한 Agent 목록. 서비스별 수락률(accept rate) 포함.
+    결제 전에는 Agent 목록/가격 노출 금지: 고객은 결제(PAID) 후에만 호출 가능.
     GET ?service_code=DRIVERS_LICENSE&state=CA
-    응답: {"agents": [{"id": 1, "name": "...", "rating_avg": 4.5, "accept_rate": 0.85, "accept_rate_display": "85%"}, ...]}
     """
     from django.contrib.auth import get_user_model
     from django.db.models import Q, Count
 
     User = get_user_model()
+    if request.user.is_authenticated and getattr(request.user, 'role', None) == 'CUSTOMER':
+        if not customer_can_assign_agent(request.user):
+            return JsonResponse({
+                'agents': [],
+                'error': '결제 후에만 Agent 목록을 볼 수 있습니다.',
+                'require_payment': True,
+            }, status=403)
+
     service_code = (request.GET.get('service_code') or '').strip()
     state = (request.GET.get('state') or '').strip()
 
@@ -401,6 +800,133 @@ def api_agents_for_service(request):
             'service_names': service_names,
         })
     return JsonResponse({'agents': result})
+
+
+@require_GET
+@ensure_csrf_cookie
+def api_available_agents_for_plan(request):
+    """
+    결제 후 전담 Agent 선택용: 플랜의 서비스·지역을 커버할 수 있는 Agent 목록.
+    customer_can_assign_agent가 True일 때만 호출 가능. 결제 전 노출 금지.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'agents': [], 'error': '로그인이 필요합니다.'}, status=403)
+    if not customer_can_assign_agent(request.user):
+        return JsonResponse({
+            'agents': [],
+            'error': '결제 후에만 Agent 목록을 볼 수 있습니다.',
+            'require_payment': True,
+        }, status=403)
+    try:
+        plan = UserSettlementPlan.objects.get(user=request.user)
+    except UserSettlementPlan.DoesNotExist:
+        return JsonResponse({'agents': [], 'error': '정착 플랜이 없습니다.'}, status=404)
+    schedule = plan.service_schedule or {}
+    service_codes = set()
+    for items in schedule.values():
+        if not isinstance(items, list):
+            continue
+        for it in items:
+            if isinstance(it, dict) and (it.get('code') or '').strip():
+                service_codes.add((it.get('code') or '').strip())
+    state = (plan.state or '').strip()
+    if not service_codes:
+        return JsonResponse({'agents': []})
+    from django.contrib.auth import get_user_model
+    from django.db.models import Q
+    from functools import reduce
+    import operator
+    User = get_user_model()
+    from .models import SettlementService
+    service_ids = set()
+    for code in service_codes:
+        q = Q(code=code)
+        if str(code).isdigit():
+            q = q | Q(id=int(code))
+        svc = SettlementService.objects.filter(q).first()
+        if svc:
+            service_ids.add(svc.id)
+    if not service_ids:
+        return JsonResponse({'agents': []})
+    q_services = reduce(
+        operator.or_,
+        [Q(agent_services__contains=[sid]) for sid in list(service_ids)[:20]],
+        Q(),
+    )
+    agents_qs = User.objects.filter(
+        role=User.Role.AGENT,
+        status=User.Status.ACTIVE,
+    ).filter(q_services)
+    if state:
+        agents_qs = agents_qs.filter(agent_states__contains=[state])
+    agents_qs = agents_qs.distinct()[:30]
+    result = []
+    for u in agents_qs:
+        summary = u.get_agent_rating_summary() or {}
+        result.append({
+            'id': u.id,
+            'name': u.get_full_name() or u.username,
+            'username': u.username,
+            'rating_avg': round(summary.get('avg') or 0, 1),
+            'rating_count': summary.get('count') or 0,
+        })
+    return JsonResponse({'agents': result})
+
+
+@require_POST
+@ensure_csrf_cookie
+def api_assign_dedicated_agent(request):
+    """
+    결제 후 전담 Agent 1명 배정. customer_can_assign_agent일 때만.
+    POST JSON 또는 form: agent_id
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': '로그인이 필요합니다.'}, status=403)
+    if not customer_can_assign_agent(request.user):
+        return JsonResponse({'ok': False, 'error': '결제 후에만 전담 Agent를 배정할 수 있습니다.', 'require_payment': True}, status=403)
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    import json
+    agent_id = None
+    if request.content_type and 'application/json' in request.content_type:
+        try:
+            body = json.loads(request.body or '{}')
+            agent_id = body.get('agent_id')
+        except (ValueError, TypeError):
+            pass
+    else:
+        agent_id = request.POST.get('agent_id')
+    if agent_id is None:
+        return JsonResponse({'ok': False, 'error': 'agent_id가 필요합니다.'}, status=400)
+    try:
+        agent_id = int(agent_id)
+    except (ValueError, TypeError):
+        return JsonResponse({'ok': False, 'error': '유효하지 않은 agent_id입니다.'}, status=400)
+    try:
+        agent = User.objects.get(id=agent_id, role=User.Role.AGENT, status=User.Status.ACTIVE)
+    except User.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': '해당 Agent를 찾을 수 없습니다.'}, status=404)
+    plan, _ = UserSettlementPlan.objects.get_or_create(
+        user=request.user,
+        defaults={'state': '', 'city': '', 'service_schedule': {}, 'checkout_total': 0},
+    )
+    plan.assigned_agent = agent
+    plan.save(update_fields=['assigned_agent', 'updated_at'])
+    from survey.models import SurveySubmission
+    paid_sub = SurveySubmission.objects.filter(
+        user=request.user,
+        settlement_quotes__status=SettlementQuote.Status.PAID,
+    ).order_by('-submitted_at').distinct().first()
+    if paid_sub and paid_sub.status != SurveySubmission.Status.SERVICE_IN_PROGRESS:
+        paid_sub.status = SurveySubmission.Status.SERVICE_IN_PROGRESS
+        paid_sub.save(update_fields=['status'])
+    try:
+        from .notifications import send_agent_assigned_notification
+        from translations.utils import get_request_language
+        send_agent_assigned_notification(plan, agent, request.user, language_code=get_request_language(request))
+    except Exception:
+        pass
+    return JsonResponse({'ok': True, 'message': '전담 Agent가 배정되었습니다.', 'agent_id': agent.id, 'agent_name': agent.get_full_name() or agent.username})
 
 
 @require_POST
@@ -567,6 +1093,58 @@ def api_appointment_accept(request, pk):
 
 @require_POST
 @ensure_csrf_cookie
+def api_appointment_confirm(request, pk):
+    """
+    Agent가 일정 확정: confirmed_at, confirmed_time_slot 설정 후 고객에게 메시지 발송.
+    번역 룰 유지(get_display_text). 확정 시 고객 달력 상태는 CONFIRMED로 이미 반영됨.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': '로그인이 필요합니다.'}, status=403)
+    try:
+        req = AgentAppointmentRequest.objects.get(pk=pk, agent=request.user)
+    except AgentAppointmentRequest.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': '약속을 찾을 수 없습니다.'}, status=404)
+    if req.status == 'CANCELLED':
+        return JsonResponse({'ok': False, 'error': '이미 취소된 약속입니다.'}, status=400)
+
+    confirmed_time_slot = (request.POST.get('confirmed_time_slot') or '').strip()
+    if request.content_type and 'application/json' in (request.content_type or ''):
+        try:
+            import json
+            body = json.loads(request.body or '{}')
+            confirmed_time_slot = (body.get('confirmed_time_slot') or '').strip() or confirmed_time_slot
+        except (ValueError, TypeError):
+            pass
+
+    req.status = 'CONFIRMED'
+    req.confirmed_at = timezone.now()
+    req.confirmed_time_slot = confirmed_time_slot[:100] if confirmed_time_slot else ''
+    req.save(update_fields=['status', 'confirmed_at', 'confirmed_time_slot'])
+
+    lang = get_request_language(request)
+    msg_parts = [get_display_text('일정이 확정되었습니다.', lang), str(req.service_date)]
+    if req.confirmed_time_slot:
+        msg_parts.append(req.confirmed_time_slot)
+    msg_body = ' '.join(msg_parts)
+
+    from messaging.models import Conversation, Message
+    conv = Conversation.objects.filter(appointment=req).first()
+    if not conv and req.customer_id:
+        conv = Conversation.objects.create(appointment=req)
+    if conv:
+        Message.objects.create(
+            conversation=conv,
+            sender=request.user,
+            body=msg_body,
+        )
+        conv.updated_at = timezone.now()
+        conv.save(update_fields=['updated_at'])
+
+    return JsonResponse({'ok': True, 'message': '일정이 확정되었습니다.', 'confirmed_at': req.confirmed_at.isoformat() if req.confirmed_at else None})
+
+
+@require_POST
+@ensure_csrf_cookie
 def api_checkout(request):
     """
     결제 확정: 스케줄의 Agent 신청 항목에 대해 약속을 생성하고 agent 수락 대기(PENDING)로 둠.
@@ -586,8 +1164,14 @@ def api_checkout(request):
     from django.contrib.auth import get_user_model
     User = get_user_model()
 
-    # DB에 저장된 현재 스케줄을 기준으로 함. (admin에서 약속 삭제 시 해당 슬롯은 이미 제거된 상태)
-    # 클라이언트가 새로고침 없이 보낸 스케줄에 삭제된 슬롯이 있으면 약속 재생성·슬롯 재추가를 막음.
+    if customer_can_assign_agent(request.user):
+        try:
+            p = UserSettlementPlan.objects.get(user=request.user)
+            if not p.assigned_agent_id:
+                return JsonResponse({'ok': False, 'error': '전담 Agent를 먼저 선택해 주세요.', 'require_assign_agent': True}, status=400)
+        except UserSettlementPlan.DoesNotExist:
+            pass
+
     try:
         plan = UserSettlementPlan.objects.get(user=request.user)
         current_schedule = plan.service_schedule or {}
@@ -596,6 +1180,14 @@ def api_checkout(request):
         current_schedule = {}
     if not isinstance(current_schedule, dict):
         current_schedule = {}
+    # 결제 후 전담 Agent: plan.assigned_agent가 있으면 서비스별 agent_id 없이 해당 Agent로 전체 약속 생성
+    dedicated_agent_id = getattr(plan, 'assigned_agent_id', None) if plan else None
+    if dedicated_agent_id:
+        try:
+            User.objects.get(id=dedicated_agent_id, role=User.Role.AGENT)
+        except User.DoesNotExist:
+            dedicated_agent_id = None
+
     current_slots = set()
     for _date, _items in (current_schedule or {}).items():
         if not isinstance(_items, list):
@@ -617,10 +1209,9 @@ def api_checkout(request):
             if not isinstance(item, dict):
                 continue
             code = (item.get('code') or '').strip()
-            agent_id = item.get('agent_id')
+            agent_id = dedicated_agent_id or item.get('agent_id')
             if not code or not agent_id:
                 continue
-            # DB 현재 스케줄에 없는 (date, code)는 admin에서 삭제된 슬롯일 수 있으므로 약속 생성하지 않음
             if (date_str, code) not in current_slots:
                 continue
             try:
@@ -634,7 +1225,7 @@ def api_checkout(request):
                 service_date=service_date,
             ).exclude(status='CANCELLED').exists()
             if not existing:
-                AgentAppointmentRequest.objects.create(
+                req = AgentAppointmentRequest.objects.create(
                     agent=agent,
                     customer=request.user,
                     service_code=code,
@@ -644,6 +1235,18 @@ def api_checkout(request):
                     status='PENDING',
                 )
                 created += 1
+                # 결제 후 생성된 PlanServiceTask에 약속 연결 (Admin 필요작업 현황 반영)
+                try:
+                    from .models import PlanServiceTask
+                    plan = UserSettlementPlan.objects.get(user=request.user)
+                    task = PlanServiceTask.objects.filter(
+                        plan=plan, service_code=code, appointment__isnull=True
+                    ).first()
+                    if task:
+                        task.appointment = req
+                        task.save(update_fields=['appointment_id'])
+                except (UserSettlementPlan.DoesNotExist, Exception):
+                    pass
 
     # 저장 시 요청 스케줄을 그대로 덮어쓰지 않고, 현재 DB 스케줄과 합침.
     # 요청에만 있고 DB에는 없는 슬롯 중 agent_id가 있는 것은 admin 삭제로 제거된 것이므로 재추가하지 않음.

@@ -51,6 +51,7 @@
   .agent-detail-actions { margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
 </style>
 <div class="card">
+  {% csrf_token %}
   <h1>{{ calendar_title_i18n }}</h1>
   <p class="text-muted">{{ calendar_desc_i18n }}</p>
   <div class="agent-cal-wrap">
@@ -83,8 +84,10 @@
       <div class="detail-row"><span class="label">희망 시간</span><span id="agentDetailTime"></span></div>
       <div class="detail-row"><span class="label">메시지</span><span id="agentDetailMessage" style="white-space:pre-wrap;"></span></div>
       <div class="detail-row"><span class="label">상태</span><span id="agentDetailStatus"></span></div>
+      <div class="detail-row"><span class="label">확정 시간대</span><input type="text" id="agentConfirmTimeSlot" placeholder="예: 10:00-12:00" style="max-width:200px; padding:0.35rem;"></div>
       <div class="agent-detail-actions">
         <button type="button" class="btn btn-primary" id="agentAcceptBtn" style="display:none;">수락</button>
+        <button type="button" class="btn btn-primary" id="agentConfirmBtn" style="display:none;">일정 확정</button>
         <button type="button" class="btn btn-outline" id="agentCancelBtn" style="display:none; color:#dc2626;">취소</button>
         <a href="#" id="agentMessageLink" class="btn btn-outline" style="display:none;">메시지 보내기</a>
       </div>
@@ -102,6 +105,8 @@
   var messageEl = document.getElementById('agentDetailMessage');
   var statusEl = document.getElementById('agentDetailStatus');
   var acceptBtn = document.getElementById('agentAcceptBtn');
+  var confirmBtn = document.getElementById('agentConfirmBtn');
+  var confirmTimeSlotEl = document.getElementById('agentConfirmTimeSlot');
   var cancelBtn = document.getElementById('agentCancelBtn');
   var messageLink = document.getElementById('agentMessageLink');
   var csrfEl = document.querySelector('[name=csrfmiddlewaretoken]');
@@ -125,8 +130,11 @@
       if (status === 'PENDING') {
         acceptBtn.style.display = '';
         acceptBtn.disabled = false;
+        if (confirmBtn) { confirmBtn.style.display = ''; confirmBtn.disabled = false; }
+        if (confirmTimeSlotEl) confirmTimeSlotEl.value = '';
       } else {
         acceptBtn.style.display = 'none';
+        if (confirmBtn) confirmBtn.style.display = 'none';
       }
       cancelBtn.style.display = '';
       cancelBtn.disabled = false;
@@ -157,6 +165,29 @@
       })
       .catch(function() { alert('요청에 실패했습니다.'); acceptBtn.disabled = false; });
   });
+
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', function() {
+      if (!currentId) return;
+      confirmBtn.disabled = true;
+      var fd = new FormData();
+      fd.append('csrfmiddlewaretoken', csrfEl ? csrfEl.value : '');
+      var slot = confirmTimeSlotEl ? confirmTimeSlotEl.value.trim() : '';
+      if (slot) fd.append('confirmed_time_slot', slot);
+      fetch('/api/settlement/appointment/' + currentId + '/confirm/', { method: 'POST', body: fd, credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.ok) {
+            alert(data.message || '일정이 확정되었습니다.');
+            window.location.reload();
+          } else {
+            alert(data.error || '확정 처리에 실패했습니다.');
+            confirmBtn.disabled = false;
+          }
+        })
+        .catch(function() { alert('요청에 실패했습니다.'); confirmBtn.disabled = false; });
+    });
+  }
 
   cancelBtn.addEventListener('click', function() {
     if (!currentId) return;

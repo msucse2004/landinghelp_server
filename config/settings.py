@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'billing',
     'content',
     'settlement',
+    'survey',
     'community',
     'messaging',
     'translations',
@@ -54,6 +55,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'config.middleware.CsrfTrustCloudflareMiddleware',  # DEBUG 시 Cloudflare Tunnel Origin 허용 (CsrfViewMiddleware 전에 실행)
     'django.middleware.csrf.CsrfViewMiddleware',
+    'config.middleware.LogoutCsrfFallbackMiddleware',  # 로그아웃 POST 403 시 홈으로 리다이렉트
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -138,8 +140,8 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Email (개발: Console 출력, 운영: SMTP 설정)
-# EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, DEFAULT_FROM_EMAIL는 .env가 아닌 시스템 환경변수로 설정 (보안)
+# Email: 환경변수로만 읽음. 키/비밀/계정은 코드·깃에 넣지 말 것. .env는 gitignore.
+# 확인: python manage.py check_email_env
 EMAIL_BACKEND = os.environ.get(
     'EMAIL_BACKEND',
     'django.core.mail.backends.console.EmailBackend',
@@ -148,8 +150,11 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@landinghelp.l
 EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'true').lower() in ('true', '1', 'yes')
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER') or ''
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD') or ''
+EMAIL_HOST_USER = (os.environ.get('EMAIL_HOST_USER') or '').strip()
+EMAIL_HOST_PASSWORD = (os.environ.get('EMAIL_HOST_PASSWORD') or '').strip()
+
+# 설문 리마인드 등 이메일 링크용 절대 URL (예: https://yoursite.com). 미설정 시 상대 경로만 사용.
+SITE_URL = os.environ.get('SITE_URL', '').strip().rstrip('/') or None
 
 # 에러 페이지에서 민감 설정(이메일 등) 숨김
 DEFAULT_EXCEPTION_REPORTER_FILTER = 'config.debug.SensitiveDataExceptionFilter'
@@ -171,3 +176,9 @@ GOOGLE_TRANSLATE_API_KEY = os.environ.get('GOOGLE_TRANSLATE_API_KEY', '')
 # 웹 요청 시에도 config.deepl_env.get_deepl_auth_key()로 env+레지스트리 재조회함
 from config.deepl_env import get_deepl_auth_key
 DEEPL_AUTH_KEY = get_deepl_auth_key()
+
+# 견적서 공식 포맷 (Admin 검토 화면·이메일)
+# QUOTATION_COMPANY_NAME = 'LifeAI US'
+# QUOTATION_VALID_DAYS = 30
+# QUOTATION_TERMS = 'Payment due upon acceptance. This quotation is valid until the date stated above.'
+# QUOTATION_CONTACT = 'For questions, please contact us via message or email.'

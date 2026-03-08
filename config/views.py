@@ -2,10 +2,11 @@ from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.contrib.auth import login
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.views import LoginView as AuthLoginView
 from django.views.decorators.http import require_POST, require_GET
-from django.utils import translation
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils import translation, timezone
 from billing.utils import get_user_grade_display
 from billing.models import Plan
 from content.models import CarouselSlide
@@ -89,6 +90,7 @@ def api_i18n(request, lang):
     return JsonResponse(out)
 
 
+@ensure_csrf_cookie
 def home(request):
     from settlement.models import UserSettlementPlan
 
@@ -143,7 +145,21 @@ def home(request):
             'entry_planned': get_display_text('입국 예정', lang),
             'saved_schedule': get_display_text('저장된 일정이 있습니다', lang),
             'edit_plan': get_display_text('정착 플랜 수정', lang),
+            'price_masked': get_display_text('견적 후 공개', lang),
         }
+    can_show_plan_prices = True
+    if request.user.is_authenticated:
+        try:
+            from settlement.constants import has_pending_survey_quote
+            can_show_plan_prices = not has_pending_survey_quote(request.user)
+        except Exception:
+            pass
+    is_customer = request.user.is_authenticated and getattr(request.user, 'role', None) == 'CUSTOMER'
+    if is_customer and home_plan_i18n:
+        from translations.utils import get_display_text
+        lang = get_request_language(request)
+        home_plan_i18n = dict(home_plan_i18n)
+        home_plan_i18n['survey_link'] = get_display_text('설문 작성', lang)
 
     return render(request, 'home.html', {
         'carousel_slides': slides,
@@ -154,6 +170,8 @@ def home(request):
         'plan_calendar_year_suffix': plan_calendar_year_suffix,
         'plan_calendar_month_suffix': plan_calendar_month_suffix,
         'home_plan_i18n': home_plan_i18n,
+        'can_show_plan_prices': can_show_plan_prices,
+        'is_customer': is_customer,
     })
 
 
@@ -204,6 +222,7 @@ def corporate_ad_register(request):
 
 
 @login_required
+@ensure_csrf_cookie
 def app_entry(request):
     """/app/ 진입점 - role별 대시보드 리다이렉트"""
     role = request.user.role
@@ -429,7 +448,11 @@ def customer_dashboard(request):
         'prev': get_display_text('이전', lang),
         'next': get_display_text('다음', lang),
         'edit_plan': get_display_text('정착 플랜 수정', lang),
+        'my_quote': get_display_text('내 견적', lang),
         'create_plan': get_display_text('정착 플랜 만들기', lang),
+        'survey_link': get_display_text('설문 작성', lang),
+        'survey_title': get_display_text('서비스 이용을 위해 설문을 작성해 주세요', lang),
+        'survey_desc': get_display_text('설문 제출 후 견적을 받으실 수 있습니다.', lang),
         'view_content': get_display_text('컨텐츠 보기', lang),
         'edit_appointment': get_display_text('예약 수정', lang),
         'preferred_time': get_display_text('희망 시간대', lang),
@@ -444,6 +467,29 @@ def customer_dashboard(request):
         (code, get_display_text(label, lang)) for code, label in free_agent_services
     ] if free_agent_services else []
 
+    can_show_plan_prices = True
+    try:
+        from settlement.constants import has_pending_survey_quote
+        can_show_plan_prices = not has_pending_survey_quote(request.user)
+    except Exception:
+        pass
+    dashboard_i18n['price_masked'] = get_display_text('견적 후 공개', lang)
+
+    submission_status_label = ''
+    try:
+        from survey.models import SurveySubmission
+        sub = SurveySubmission.objects.filter(user=request.user).exclude(
+            status=SurveySubmission.Status.DRAFT
+        ).order_by('-submitted_at').first()
+        if sub:
+            submission_status_label = get_display_text(sub.get_status_display(), lang) or sub.get_status_display()
+            if sub.status == SurveySubmission.Status.SERVICE_IN_PROGRESS:
+                completed, total = sub.get_service_progress()
+                if total:
+                    submission_status_label += f' ({completed}/{total} ' + (get_display_text('완료', lang) or '완료') + ')'
+    except Exception:
+        pass
+
     return render(request, 'app/customer_dashboard.html', {
         'tier_label': get_user_grade_display(request.user, lang),
         'user_plan': user_plan,
@@ -455,4 +501,464 @@ def customer_dashboard(request):
         'calendar_year_suffix': get_display_text('년', lang),
         'calendar_month_suffix': get_display_text('월', lang),
         'dashboard_i18n': dashboard_i18n,
+        'can_show_plan_prices': can_show_plan_prices,
+        'submission_status_label': submission_status_label,
     })
+
+
+def _staff_required(user):
+    return user.is_authenticated and user.is_staff
+
+
+@login_required
+@user_passes_test(_staff_required, login_url='/login/')
+def submission_review_list(request):
+    """Staff: 설문 제출 목록 (검토용). DRAFT 제외, 최신순."""
+    from survey.models import SurveySubmission
+    from django.core.paginator import Paginator
+
+    qs = SurveySubmission.objects.exclude(
+        status=SurveySubmission.Status.DRAFT
+    ).select_related('user').order_by('-updated_at')
+    paginator = Paginator(qs, 20)
+    page = request.GET.get('page', 1)
+    try:
+        page_num = int(page)
+    except (ValueError, TypeError):
+        page_num = 1
+    submissions = paginator.get_page(page_num)
+    return render(request, 'app/submission_review_list.html', {
+        'submissions': submissions,
+        'page_obj': submissions,
+    })
+
+
+@login_required
+@user_passes_test(_staff_required, login_url='/login/')
+def submission_review(request, submission_id):
+    """Staff: 제출 단건 검토 — 요청 요약, 견적 초안, 워크플로우, 결제/일정 요약, 조치 버튼."""
+    from survey.models import SurveySubmission
+    from survey.quote_input import get_quote_input_data
+    from settlement.models import SettlementQuote, UserSettlementPlan, AgentAppointmentRequest
+    from settlement.constants import get_service_label
+    from django.shortcuts import get_object_or_404
+
+    submission = get_object_or_404(SurveySubmission, id=submission_id)
+    lang = get_request_language(request)
+
+    # 고객 요약
+    customer_name = ''
+    if submission.user_id:
+        u = submission.user
+        customer_name = (u.get_full_name() or u.username or u.email or '').strip() or submission.email
+    else:
+        customer_name = submission.email
+    customer_summary = {
+        'name': customer_name,
+        'email': submission.email,
+        'user_id': submission.user_id,
+        'username': submission.user.username if submission.user_id else None,
+    }
+
+    # 요청 요약 (정규화된 답변)
+    request_data = get_quote_input_data(submission)
+    service_codes = request_data.get('service_codes') or []
+    add_on_codes = request_data.get('add_on_codes') or []
+    request_summary = {
+        'service_codes': service_codes,
+        'add_on_codes': add_on_codes,
+        'region': request_data.get('region') or '',
+        'entry_date': request_data.get('entry_date') or '',
+        'household_size': request_data.get('household_size'),
+        'special_requirements': (request_data.get('special_requirements') or '').strip(),
+        'raw': request_data,
+    }
+    # 선택 서비스 라벨 (표시용)
+    request_summary['service_labels'] = [(c, get_service_label(c)) for c in service_codes]
+    request_summary['add_on_labels'] = [(c, get_service_label(c)) for c in add_on_codes]
+
+    # 견적 초안 (DRAFT)
+    quote_draft = (
+        SettlementQuote.objects.filter(
+            submission=submission,
+            status=SettlementQuote.Status.DRAFT,
+        ).order_by('-updated_at').first()
+    )
+    # 고객 요청 서비스 형태 라벨 (직접 검색 / AI 서비스 / Agent 직접 도움)
+    _delivery_labels = {
+        'direct_search': '직접 검색',
+        'ai_service': 'AI 서비스',
+        'agent_direct': 'Agent 직접 도움',
+    }
+    answers = getattr(submission, 'answers', None) or {}
+    per_service = answers.get('service_delivery_per_service') or {}
+    bulk_preference = (answers.get('service_delivery_preference') or '').strip()
+
+    items_with_flags = []
+    if quote_draft and quote_draft.items:
+        for it in quote_draft.items:
+            if not isinstance(it, dict):
+                continue
+            item = dict(it)
+            needs_review = item.pop('_needs_review', False)
+            is_auto = item.pop('_auto', False)
+            code = item.get('code', '')
+            delivery_key = per_service.get(code) or bulk_preference
+            delivery_label = _delivery_labels.get(delivery_key, '') if delivery_key else ''
+            items_with_flags.append({
+                **item,
+                'needs_review': needs_review,
+                'is_auto': is_auto,
+                'delivery_label': delivery_label,
+            })
+    quote_draft_display = None
+    if quote_draft:
+        quote_draft_display = {
+            'id': quote_draft.id,
+            'region': quote_draft.region or '',
+            'total': int(quote_draft.total or 0),
+            'items': items_with_flags,
+            'draft_source': quote_draft.draft_source or '',
+            'auto_generated_at': quote_draft.auto_generated_at,
+            'version': quote_draft.version,
+        }
+    needs_quote_review = any(i.get('needs_review') for i in items_with_flags)
+
+    # 워크플로우 상태
+    workflow_status = {
+        'status': submission.status,
+        'label': submission.get_status_display(),
+        'submitted_at': submission.submitted_at,
+        'revision_requested_at': submission.revision_requested_at,
+        'revision_message': (submission.revision_requested_message or '').strip(),
+    }
+    if submission.status == SurveySubmission.Status.SERVICE_IN_PROGRESS:
+        completed, total = submission.get_service_progress()
+        workflow_status['service_progress_completed'] = completed
+        workflow_status['service_progress_total'] = total
+
+    # 결제 요약 (FINAL_SENT / PAID 견적)
+    payment_quote = (
+        SettlementQuote.objects.filter(
+            submission=submission,
+            status__in=(SettlementQuote.Status.FINAL_SENT, SettlementQuote.Status.PAID),
+        ).order_by('-updated_at').first()
+    )
+    payment_summary = None
+    if payment_quote:
+        payment_summary = {
+            'status': payment_quote.status,
+            'status_label': payment_quote.get_status_display(),
+            'total': int(payment_quote.total or 0),
+            'sent_at': payment_quote.sent_at,
+        }
+
+    # 일정 준비도 및 필요 작업 (결제 후)
+    scheduling_summary = None
+    required_tasks = []
+    if submission.user_id and payment_quote and payment_quote.status == SettlementQuote.Status.PAID:
+        try:
+            from settlement.models import PlanServiceTask
+            plan = UserSettlementPlan.objects.get(user_id=submission.user_id)
+            appointments = list(
+                AgentAppointmentRequest.objects.filter(
+                    customer_id=submission.user_id,
+                ).exclude(status='CANCELLED').select_related('agent').order_by('service_date')
+            )
+            assigned = plan.assigned_agent_id
+            pending = sum(1 for a in appointments if a.status == 'PENDING')
+            confirmed = sum(1 for a in appointments if a.status == 'CONFIRMED')
+            scheduling_summary = {
+                'has_plan': True,
+                'assigned_agent': plan.assigned_agent,
+                'assigned_agent_name': (plan.assigned_agent.get_full_name() or plan.assigned_agent.username) if assigned else None,
+                'total_appointments': len(appointments),
+                'pending': pending,
+                'confirmed': confirmed,
+            }
+            # 견적 기준 필요 작업(PlanServiceTask) 목록 — Admin 확인·에이전트 배정 현황
+            tasks_qs = PlanServiceTask.objects.filter(plan=plan).order_by('display_order').select_related('appointment')
+            for t in tasks_qs:
+                if t.appointment_id:
+                    status_key = t.appointment.status if t.appointment else 'PENDING'
+                    status_label = {'PENDING': '수락 대기', 'CONFIRMED': '확정', 'CANCELLED': '취소'}.get(status_key, status_key)
+                else:
+                    status_key = 'NOT_SCHEDULED'
+                    status_label = '미배정'
+                required_tasks.append({
+                    'service_code': t.service_code,
+                    'label': t.label or t.service_code,
+                    'status': status_key,
+                    'status_label': status_label,
+                    'appointment_id': t.appointment_id,
+                })
+        except UserSettlementPlan.DoesNotExist:
+            scheduling_summary = {'has_plan': False, 'total_appointments': 0, 'pending': 0, 'confirmed': 0}
+
+    # Admin 조치 필요 영역
+    needs_admin_decision = []
+    if submission.status == SurveySubmission.Status.SUBMITTED:
+        if not quote_draft:
+            needs_admin_decision.append('견적 초안 없음 — 생성 또는 수동 작성 필요')
+        elif needs_quote_review:
+            needs_admin_decision.append('일부 항목 가격/코드 검토 필요 (_needs_review)')
+        if not request_summary['service_codes'] and not request_summary['add_on_codes']:
+            needs_admin_decision.append('선택된 서비스 없음 — 확인 필요')
+    if submission.status == SurveySubmission.Status.REVISION_REQUESTED:
+        needs_admin_decision.append('고객 수정 대기 중')
+
+    # 자동 체크 포인트 (운영자 수동 확인 최소화)
+    from survey.submission_checks import run_submission_checks
+    submission_readiness = run_submission_checks(submission, quote_draft)
+
+    # 카드별 수정 요청: 고객 노출 카드 목록, 현재 미해결 수정 요청 카드
+    from survey.models import SurveySection, SurveySubmissionSectionRequest
+    available_sections = list(
+        SurveySection.objects.filter(is_active=True, is_internal=False)
+        .order_by('display_order').values('id', 'title')
+    )
+    pending_section_requests = list(
+        SurveySubmissionSectionRequest.objects.filter(
+            submission=submission, resolved_at__isnull=True
+        ).values_list('section_id', flat=True)
+    )
+
+    # 견적서 공식 포맷용 컨텍스트
+    from datetime import timedelta
+    _now = timezone.now()
+    _company = getattr(settings, 'QUOTATION_COMPANY_NAME', 'LifeAI US')
+    quotation_context = {
+        'company_name': _company,
+        'quotation_number': f'Q-{submission.id}-{quote_draft.version if quote_draft else 1}',
+        'quotation_date': _now.strftime('%Y-%m-%d'),
+        'valid_until': (_now + timedelta(days=getattr(settings, 'QUOTATION_VALID_DAYS', 30))).strftime('%Y-%m-%d'),
+        'terms': getattr(settings, 'QUOTATION_TERMS', 'Payment due upon acceptance. This quotation is valid until the date stated above. Services and pricing are subject to the scope agreed at the time of order.'),
+        'contact_footer': getattr(settings, 'QUOTATION_CONTACT', 'For questions, please contact us via message or email.'),
+    }
+
+    return render(request, 'app/submission_review.html', {
+        'submission': submission,
+        'customer_summary': customer_summary,
+        'request_summary': request_summary,
+        'quote_draft': quote_draft,
+        'quote_draft_display': quote_draft_display,
+        'needs_quote_review': needs_quote_review,
+        'workflow_status': workflow_status,
+        'payment_summary': payment_summary,
+        'scheduling_summary': scheduling_summary,
+        'needs_admin_decision': needs_admin_decision,
+        'available_sections': available_sections,
+        'pending_section_requests': pending_section_requests,
+        'required_tasks': required_tasks,
+        'submission_readiness': submission_readiness,
+        'quotation_context': quotation_context,
+    })
+
+
+@require_POST
+@login_required
+@user_passes_test(_staff_required, login_url='/login/')
+def submission_review_request_revision(request, submission_id):
+    """Staff: 고객에게 수정 요청 (REVISION_REQUESTED)."""
+    from survey.models import SurveySubmission, SurveySubmissionEvent
+    from django.shortcuts import get_object_or_404
+
+    submission = get_object_or_404(SurveySubmission, id=submission_id)
+    if submission.status != SurveySubmission.Status.SUBMITTED:
+        return redirect('app_submission_review', submission_id=submission_id)
+    message = (request.POST.get('revision_message') or '').strip()
+    submission.status = SurveySubmission.Status.REVISION_REQUESTED
+    submission.revision_requested_at = timezone.now()
+    submission.revision_requested_message = message
+    submission.save(update_fields=['status', 'revision_requested_at', 'revision_requested_message'])
+    SurveySubmissionEvent.objects.create(
+        submission=submission,
+        event_type=SurveySubmissionEvent.EventType.REVISION_REQUESTED,
+        created_by=request.user,
+        meta={'message': message[:500]},
+    )
+    try:
+        from settlement.notifications import send_revision_requested_customer_message
+        lang = 'ko'
+        if getattr(submission, 'user_id', None) and submission.user_id:
+            lang = (getattr(submission.user, 'preferred_language', None) or '').strip() or lang
+        send_revision_requested_customer_message(submission, language_code=lang, revision_message=message)
+    except Exception:
+        pass
+    return redirect('app_submission_review', submission_id=submission_id)
+
+
+@require_POST
+@login_required
+@user_passes_test(_staff_required, login_url='/login/')
+def submission_review_request_section_updates(request, submission_id):
+    """Staff: 특정 카드(섹션)만 고객에게 수정 요청. 구조화된 재입력 유도."""
+    from survey.models import SurveySubmission, SurveySection, SurveySubmissionSectionRequest, SurveySubmissionEvent
+    from django.shortcuts import get_object_or_404
+
+    submission = get_object_or_404(SurveySubmission, id=submission_id)
+    if submission.status != SurveySubmission.Status.SUBMITTED:
+        return redirect('app_submission_review', submission_id=submission_id)
+
+    section_ids = request.POST.getlist('section_ids')
+    section_ids = [int(x) for x in section_ids if str(x).isdigit()]
+    message = (request.POST.get('section_update_message') or '').strip()
+
+    valid_section_ids = set(
+        SurveySection.objects.filter(
+            is_active=True, is_internal=False, id__in=section_ids
+        ).values_list('id', flat=True)
+    )
+    section_ids = [i for i in section_ids if i in valid_section_ids]
+    if not section_ids:
+        return redirect('app_submission_review', submission_id=submission_id)
+
+    existing = set(
+        SurveySubmissionSectionRequest.objects.filter(
+            submission=submission, section_id__in=section_ids, resolved_at__isnull=True
+        ).values_list('section_id', flat=True)
+    )
+    for sid in section_ids:
+        if sid not in existing:
+            SurveySubmissionSectionRequest.objects.create(
+                submission=submission,
+                section_id=sid,
+                message=message,
+                requested_by=request.user,
+            )
+            existing.add(sid)
+
+    sections = list(SurveySection.objects.filter(id__in=section_ids).order_by('display_order').values_list('title', flat=True))
+    revision_message = '다음 카드를 수정해 주세요: ' + ', '.join(sections)
+    if message:
+        revision_message += '\n\n' + message
+    submission.status = SurveySubmission.Status.REVISION_REQUESTED
+    submission.revision_requested_at = timezone.now()
+    submission.revision_requested_message = revision_message
+    submission.save(update_fields=['status', 'revision_requested_at', 'revision_requested_message'])
+
+    SurveySubmissionEvent.objects.create(
+        submission=submission,
+        event_type=SurveySubmissionEvent.EventType.SECTIONS_UPDATE_REQUESTED,
+        created_by=request.user,
+        meta={'section_ids': section_ids, 'section_titles': list(sections), 'message': message[:500]},
+    )
+    try:
+        from settlement.notifications import send_revision_requested_customer_message
+        lang = 'ko'
+        if getattr(submission, 'user_id', None) and submission.user_id:
+            lang = (getattr(submission.user, 'preferred_language', None) or '').strip() or lang
+        send_revision_requested_customer_message(
+            submission,
+            language_code=lang,
+            section_titles=list(sections),
+            revision_message=message,
+        )
+    except Exception:
+        pass
+    return redirect('app_submission_review', submission_id=submission_id)
+
+
+@require_POST
+@login_required
+@user_passes_test(_staff_required, login_url='/login/')
+def submission_review_generate_draft(request, submission_id):
+    """Staff: 견적 초안 자동 생성/갱신."""
+    from survey.models import SurveySubmission
+    from settlement.quote_draft import generate_quote_draft_from_submission
+    from django.shortcuts import get_object_or_404
+    from django.contrib import messages
+
+    submission = get_object_or_404(SurveySubmission, id=submission_id)
+    generate_quote_draft_from_submission(submission, actor=request.user)
+    messages.success(request, '견적 초안을 생성·갱신했습니다.')
+    return redirect('app_submission_review', submission_id=submission_id)
+
+
+@require_POST
+@login_required
+@user_passes_test(_staff_required, login_url='/login/')
+def submission_review_update_quote_prices(request, submission_id):
+    """Staff: 견적 초안 항목 가격을 USD로 수정 저장."""
+    from survey.models import SurveySubmission
+    from settlement.models import SettlementQuote
+    from django.shortcuts import get_object_or_404
+    from django.contrib import messages
+    from decimal import Decimal
+
+    submission = get_object_or_404(SurveySubmission, id=submission_id)
+    quote = (
+        SettlementQuote.objects.filter(
+            submission=submission,
+            status=SettlementQuote.Status.DRAFT,
+        ).order_by('-updated_at').first()
+    )
+    if not quote or not quote.items:
+        messages.error(request, '수정할 견적 초안이 없습니다.')
+        return redirect('app_submission_review', submission_id=submission_id)
+    items = list(quote.items)
+    total = Decimal('0')
+    for i in range(len(items)):
+        if not isinstance(items[i], dict):
+            continue
+        key = 'price_%d' % i
+        val = request.POST.get(key)
+        try:
+            price = int(Decimal(str(val or 0)))
+        except Exception:
+            price = int(items[i].get('price') or 0)
+        items[i]['price'] = price
+        total += price
+    quote.items = items
+    quote.total = total
+    quote.save(update_fields=['items', 'total', 'updated_at'])
+    messages.success(request, '견적 가격(USD)을 저장했습니다.')
+    return redirect('app_submission_review', submission_id=submission_id)
+
+
+@require_POST
+@login_required
+@user_passes_test(_staff_required, login_url='/login/')
+def submission_review_approve_quote(request, submission_id):
+    """Staff: 초안 견적을 최종 승인하고 고객에게 송부. POST에 price_N 있으면 먼저 반영 후 승인."""
+    from survey.models import SurveySubmission
+    from settlement.models import SettlementQuote
+    from settlement.quote_approval import finalize_and_send_quote
+    from django.shortcuts import get_object_or_404
+    from django.contrib import messages
+    from decimal import Decimal
+
+    submission = get_object_or_404(SurveySubmission, id=submission_id)
+    quote = (
+        SettlementQuote.objects.filter(
+            submission=submission,
+            status=SettlementQuote.Status.DRAFT,
+        ).order_by('-updated_at').first()
+    )
+    if not quote:
+        messages.error(request, '이 제출에 대한 견적 초안이 없습니다. 먼저 초안을 생성하세요.')
+        return redirect('app_submission_review', submission_id=submission_id)
+    # 견적서 폼에서 넘어온 가격(price_0, price_1, ...)이 있으면 먼저 저장
+    if quote.items:
+        items = list(quote.items)
+        total = Decimal('0')
+        for i in range(len(items)):
+            if not isinstance(items[i], dict):
+                continue
+            key = 'price_%d' % i
+            val = request.POST.get(key)
+            try:
+                price = int(Decimal(str(val or 0)))
+            except Exception:
+                price = int(items[i].get('price') or 0)
+            items[i]['price'] = price
+            total += price
+        quote.items = items
+        quote.total = total
+        quote.save(update_fields=['items', 'total', 'updated_at'])
+    success, err = finalize_and_send_quote(quote, actor=request.user)
+    if success:
+        messages.success(request, '견적을 최종 승인하고 고객에게 송부했습니다. 고객은 내 견적 페이지에서 확인할 수 있습니다.')
+    else:
+        messages.error(request, err or '송부 처리 중 오류가 발생했습니다.')
+    return redirect('app_submission_review', submission_id=submission_id)

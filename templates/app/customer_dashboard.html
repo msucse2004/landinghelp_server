@@ -59,6 +59,9 @@
   <h1>{{ user.username }}{{ dashboard_i18n.welcome_suffix|default:"님, 환영합니다" }}</h1>
   <p class="text-muted">{{ dashboard_i18n.customer_account|default:"고객 계정입니다." }}</p>
   <p><strong>{{ dashboard_i18n.my_plan|default:"내 플랜:" }}</strong> {{ tier_label }}</p>
+  {% if submission_status_label %}
+  <p class="text-muted" style="font-size:0.9rem;"><strong>{% trans "설문 상태" %}:</strong> {{ submission_status_label }}</p>
+  {% endif %}
   {% if free_agent_services %}
   <p class="text-muted" style="font-size:0.9rem; margin-top:0.25rem;">
     <strong>{{ dashboard_i18n.free_agent_services_label|default:"무료 Agent 서비스:" }}</strong> {% for code, label in free_agent_services %}{{ label }}{% if not forloop.last %}, {% endif %}{% endfor %}
@@ -86,8 +89,8 @@
   {% if user_plan %}
   <div class="dashboard-calendar">
     <h2 style="font-size:1.1rem; margin:1rem 0 0.5rem;">{{ dashboard_i18n.my_schedule|default:"내 정착 일정" }}</h2>
-    {% if user_plan.has_agent_assignment and user_plan.checkout_total and user_plan.checkout_total > 0 %}
-    <p style="font-size:0.95rem; font-weight:600; margin-bottom:0.5rem;"><span>{{ dashboard_i18n.estimated_checkout|default:"예상 Checkout" }}</span>: {{ user_plan.checkout_total|floatformat:0 }}{{ dashboard_i18n.won|default:"원" }}</p>
+    {% if user_plan.has_agent_assignment %}
+    <p style="font-size:0.95rem; font-weight:600; margin-bottom:0.5rem;"><span>{{ dashboard_i18n.estimated_checkout|default:"예상 Checkout" }}</span>: {% if can_show_plan_prices and user_plan.checkout_total and user_plan.checkout_total > 0 %}{{ user_plan.checkout_total|floatformat:0 }}{{ dashboard_i18n.won|default:"원" }}{% else %}<span class="text-muted">{{ dashboard_i18n.price_masked|default:"견적 후 공개" }}</span>{% endif %}</p>
     {% endif %}
     <p class="text-muted" style="font-size:0.9rem;">
       {% if user_plan.state %}{{ user_plan.state }}{% endif %}
@@ -103,7 +106,8 @@
       {% for w in calendar_weekdays %}<span class="calendar-weekday">{{ w }}</span>{% endfor %}
     </div>
     <p style="margin-top:1rem;">
-      <a href="{% url 'settlement_quote' %}" class="btn btn-primary">{{ dashboard_i18n.edit_plan|default:"정착 플랜 수정" }}</a>
+      <a href="{% url 'survey:survey_start' %}" class="btn btn-primary">{{ dashboard_i18n.survey_link|default:"설문 작성" }}</a>
+      <a href="{% url 'customer_quote' %}" class="btn btn-outline" style="margin-left:0.5rem;">{{ dashboard_i18n.my_quote|default:"내 견적" }}</a>
     </p>
   </div>
   {{ dashboard_calendar_i18n|json_script:"dashboard-calendar-i18n" }}
@@ -185,10 +189,13 @@
   })();
   </script>
   {% else %}
-  <p style="margin-top: 1rem;">
-    <a href="{% url 'settlement_quote' %}" class="btn btn-primary">{{ dashboard_i18n.create_plan|default:"정착 플랜 만들기" }}</a>
+  <div style="margin-top: 1rem; padding: 1rem; border: 1px solid var(--color-border); border-radius: var(--radius); background: #f8fafc;">
+    <p style="margin: 0 0 0.75rem; font-weight: 600;">{{ dashboard_i18n.survey_title|default:"서비스 이용을 위해 설문을 작성해 주세요" }}</p>
+    <p style="margin: 0 0 0.75rem; font-size: 0.95rem; color: var(--color-muted);">{{ dashboard_i18n.survey_desc|default:"설문 제출 후 견적을 받으실 수 있습니다." }}</p>
+    <a href="{% url 'survey:survey_start' %}" class="btn btn-primary">{{ dashboard_i18n.survey_link|default:"설문 작성하기" }}</a>
+    <a href="{% url 'customer_quote' %}" class="btn btn-outline" style="margin-left:0.5rem;">{{ dashboard_i18n.my_quote|default:"내 견적" }}</a>
     <a href="{% url 'content:list' %}" class="btn btn-outline" style="margin-left:0.5rem;">{{ dashboard_i18n.view_content|default:"컨텐츠 보기" }}</a>
-  </p>
+  </div>
   {% endif %}
 </div>
 

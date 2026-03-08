@@ -150,6 +150,7 @@ def inbox(request):
         'request_change_sent': get_display_text('일정 수정을 요청드립니다. 가능한 시간을 알려주세요.', lang),
         'send_failed': get_display_text('메시지 전송에 실패했습니다.', lang),
         'image_only': get_display_text('이미지 파일만 전송할 수 있습니다.', lang),
+        'view_survey': get_display_text('고객 설문 확인', lang),
     }
     viewer_preferred = (getattr(request.user, 'preferred_language', None) or '').strip() or 'en'
     return render(request, 'messaging/inbox.html', {
@@ -257,7 +258,9 @@ def api_conversation_list(request):
     """
     user = request.user
     viewer_preferred_language = (getattr(user, 'preferred_language', None) or '').strip() or 'en'
-    qs = _user_conversations(user).select_related('appointment', 'appointment__customer', 'appointment__agent').prefetch_related(
+    qs = _user_conversations(user).select_related(
+        'appointment', 'appointment__customer', 'appointment__agent', 'survey_submission'
+    ).prefetch_related(
         'participants__user', 'messages'
     ).order_by('-updated_at')
     out = []
@@ -270,6 +273,7 @@ def api_conversation_list(request):
             'type': conv.type,
             'subject': conv.subject or '',
             'appointment_id': conv.appointment_id,
+            'submission_id': getattr(conv, 'survey_submission_id', None),
             'display_title': title_pref,
             'display_title_preferred': title_pref,
             'display_title_en': title_en,
@@ -517,11 +521,15 @@ def api_conversation_detail(request, conversation_id):
     """
     대화 한 건 정보 (참여자, 약속 정보 등).
     GET /api/messaging/conversations/<id>/
+    Staff일 때 설문 제출 연결된 공지면 submission_id, survey_review_url 포함.
     """
+    from django.urls import reverse
     user = request.user
     if not ConversationParticipant.objects.filter(conversation_id=conversation_id, user=user).exists():
         return JsonResponse({'error': '권한이 없습니다.'}, status=403)
-    conv = Conversation.objects.select_related('appointment', 'appointment__customer', 'appointment__agent').prefetch_related(
+    conv = Conversation.objects.select_related(
+        'appointment', 'appointment__customer', 'appointment__agent', 'survey_submission'
+    ).prefetch_related(
         'participants__user'
     ).get(pk=conversation_id)
     unread = Message.objects.filter(conversation=conv).exclude(sender=user).exclude(
@@ -545,7 +553,7 @@ def api_conversation_detail(request, conversation_id):
             'status': a.status,
             'can_accept': can_accept,
         }
-    return JsonResponse({
+    payload = {
         'id': conv.id,
         'type': conv.type,
         'subject': conv.subject or '',
@@ -558,4 +566,11 @@ def api_conversation_detail(request, conversation_id):
         'unread_count': unread,
         'created_at': conv.created_at.isoformat(),
         'updated_at': conv.updated_at.isoformat(),
-    })
+    }
+    if getattr(user, 'is_staff', False) and getattr(conv, 'survey_submission_id', None):
+        payload['submission_id'] = conv.survey_submission_id
+        try:
+            payload['survey_review_url'] = reverse('app_submission_review', args=[conv.survey_submission_id])
+        except Exception:
+            payload['survey_review_url'] = '/admin/review/{}/'.format(conv.survey_submission_id)
+    return JsonResponse(payload)

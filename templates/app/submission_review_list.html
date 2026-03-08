@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "고객 설문 확인 요청 리스트" %} – LifeAI US{% endblock %}
+{% block content %}
+<div class="card">
+  <h1 style="margin-top: 0;">{% trans "고객 설문 확인 요청 리스트" %}</h1>
+  <p class="text-muted">{% trans "고객이 제출한 설문을 검토하고 견적·조치를 진행하세요. 최신 순으로 표시됩니다. (DRAFT 제외)" %}</p>
+  <p>
+    <a href="{% url 'app_admin_dashboard' %}" class="btn btn-outline">← {% trans "관리자 대시보드" %}</a>
+  </p>
+</div>
+
+<div class="card">
+  <h2 style="margin-top: 0; font-size: 1.1rem;">{% trans "요청 목록" %}</h2>
+  {% if page_obj %}
+  <table style="width:100%; border-collapse: collapse;" class="submission-review-list-table">
+    <thead>
+      <tr style="border-bottom: 2px solid var(--color-border); text-align: left;">
+        <th style="padding: 0.5rem 0.75rem;">ID</th>
+        <th style="padding: 0.5rem 0.75rem;">{% trans "고객" %}</th>
+        <th style="padding: 0.5rem 0.75rem;">{% trans "상태" %}</th>
+        <th style="padding: 0.5rem 0.75rem;">{% trans "최근 업데이트" %}</th>
+        <th style="padding: 0.5rem 0.75rem;"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for sub in page_obj %}
+      <tr style="border-bottom: 1px solid var(--color-border); cursor: pointer;" class="submission-review-row" data-href="{% url 'app_submission_review' submission_id=sub.id %}">
+        <td style="padding: 0.5rem 0.75rem;">#{{ sub.id }}</td>
+        <td style="padding: 0.5rem 0.75rem;">{{ sub.email }}{% if sub.user %} ({{ sub.user.username }}){% endif %}</td>
+        <td style="padding: 0.5rem 0.75rem;">{{ sub.get_status_display }}</td>
+        <td style="padding: 0.5rem 0.75rem;">{{ sub.updated_at|date:"Y-m-d H:i" }}</td>
+        <td style="padding: 0.5rem 0.75rem;">
+          <a href="{% url 'app_submission_review' submission_id=sub.id %}" class="btn btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.9rem;">{% trans "검토" %}</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <style>
+  .submission-review-list-table .submission-review-row:hover { background: #f1f5f9; }
+  </style>
+  <script>
+  (function(){
+    document.querySelectorAll('.submission-review-row').forEach(function(row){
+      row.addEventListener('click', function(e){
+        if (!e.target.closest('a')) window.location.href = row.dataset.href || row.getAttribute('data-href');
+      });
+    });
+  })();
+  </script>
+  {% if page_obj.has_other_pages %}
+  <p style="margin-top: 1rem;">
+    {% if page_obj.has_previous %}
+    <a href="?page={{ page_obj.previous_page_number }}">{% trans "이전" %}</a>
+    {% endif %}
+    <span style="margin: 0 0.75rem;">{% trans "페이지" %} {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}">{% trans "다음" %}</a>
+    {% endif %}
+  </p>
+  {% endif %}
+  {% else %}
+  <p class="text-muted">{% trans "제출된 설문이 없습니다." %}</p>
+  {% endif %}
+</div>
+{% endblock %}

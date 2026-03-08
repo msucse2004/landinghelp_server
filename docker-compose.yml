@@ -29,13 +29,13 @@ services:
       DJANGO_DEBUG: ${DJANGO_DEBUG:-1}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0}
       DB_NAME: ${DB_NAME:-landinghelp}
-      # SMTP ( .env 에 설정 시 로드, 없으면 백엔드만 console)
+      # SMTP: 환경변수로만 전달(키/비밀 노출 금지). 미설정 시 콘솔 백엔드로 리마인더 등 비활성
       EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.console.EmailBackend}
       EMAIL_HOST: ${EMAIL_HOST:-}
       EMAIL_PORT: ${EMAIL_PORT:-587}
       EMAIL_USE_TLS: ${EMAIL_USE_TLS:-true}
-      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
-      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@landinghelp.local}
       DB_USER: ${DB_USER:-landinghelp}
       DB_PASSWORD: ${DB_PASSWORD:-landinghelp}

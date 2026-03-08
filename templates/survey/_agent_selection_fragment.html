@@ -1,0 +1,61 @@
+{% load i18n %}
+{% if on_agent_selection_step %}
+<div id="survey-agent-selection-wrap" class="survey-agent-selection {% if show_agent_selection %}survey-agent-wrap-visible{% endif %}" style="margin-top: 1.25rem; padding: 1.25rem; border-radius: 12px; background: #f0fdf4; border: 1px solid #bbf7d0; {% if not show_agent_selection %}display: none !important;{% else %}display: block !important;{% endif %}"
+     data-state="{{ state_for_agent|default:'' }}"
+     data-service-codes="{{ agent_direct_service_codes_str }}"
+     data-preferred="{{ preferred_agent_id|default:'' }}">
+  <p style="font-weight: 600; margin: 0 0 0.5rem; font-size: 1rem;">{% trans "희망 Agent 선택" %}</p>
+  <p class="text-muted" style="font-size: 0.9rem; margin: 0 0 1rem;">{% trans "Agent 직접 도움을 선택하셨습니다. 선호하는 Agent를 프로필에서 골라 주세요." %}</p>
+  <div id="survey-agent-list" class="survey-agent-cards" style="display: flex; flex-wrap: wrap; gap: 1rem;">
+    {% if show_agent_selection and agents %}
+      {% for a in agents %}
+      <div class="survey-agent-card" data-agent-id="{{ a.id }}" style="background:#fff;border:2px solid {% if preferred_agent_id|stringformat:'s' == a.id|stringformat:'s' %}#16a34a;box-shadow:0 0 0 1px #16a34a;{% else %}#e5e7eb;{% endif %} border-radius:12px; overflow:hidden; transition:border-color 0.2s,box-shadow 0.2s; min-width:280px; max-width:320px; cursor:default;">
+        <div style="padding:1rem 1.25rem;">
+          <div style="display:flex; align-items:center; gap:1rem; margin-bottom:0.75rem;">
+            <div style="width:64px; height:64px; border-radius:50%; background:#e5e7eb; flex-shrink:0; overflow:hidden;">
+              {% if a.profile_image_url %}
+              <img src="{{ a.profile_image_url }}" alt="" style="width:100%; height:100%; object-fit:cover;">
+              {% else %}
+              <span style="display:block; text-align:center; line-height:64px; font-size:1.5rem; color:#6b7280;">{{ a.name|slice:":1"|default:"?" }}</span>
+              {% endif %}
+            </div>
+            <div style="flex:1;">
+              <strong style="display:block; font-size:1.05rem; margin-bottom:0.2rem;">{{ a.name|default:a.username }}</strong>
+              <span style="font-size:0.8rem; color:#6b7280;">{{ a.accept_rate_display|default:"-" }} {% trans "수락률" %}</span>
+              {% if a.rating_avg %}<span style="font-size:0.8rem;"> · ★ {{ a.rating_avg }}{% if a.rating_count %} ({{ a.rating_count }}){% endif %}</span>{% endif %}
+            </div>
+          </div>
+          {% if a.service_names %}
+          <p style="font-size:0.8rem; color:#64748b; margin:0 0 0.5rem; line-height:1.4;">{% trans "담당 서비스" %}: {% for s in a.service_names %}{% if forloop.counter <= 3 %}{{ s }}{% if forloop.counter < 3 %}, {% endif %}{% endif %}{% endfor %}{% if a.service_names|length > 3 %} …{% endif %}</p>
+          {% endif %}
+          <div style="margin-top:0.5rem;">
+            <button type="button" class="btn btn-outline survey-agent-detail-btn" style="font-size:0.85rem; padding:0.35rem 0.75rem;" data-agent-id="{{ a.id }}">{% trans "상세보기" %}</button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    {% elif show_agent_selection %}
+      <p class="text-muted" style="margin:0;">{% trans "해당 지역·서비스를 담당하는 Agent가 없습니다." %}</p>
+    {% endif %}
+  </div>
+  <input type="hidden" name="preferred_agent_id" id="id_preferred_agent_id" value="{{ preferred_agent_id|default:'' }}">
+</div>
+<div id="survey-agent-modal-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:1000; align-items:center; justify-content:center; padding:1rem;" class="survey-agent-modal-backdrop">
+  <div id="survey-agent-modal" style="background:#fff; border-radius:16px; max-width:420px; width:100%; max-height:90vh; overflow:auto; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
+    <div style="padding:1.5rem;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1rem;">
+        <h3 id="survey-agent-modal-title" style="margin:0; font-size:1.15rem;">{% trans "Agent 상세" %}</h3>
+        <button type="button" id="survey-agent-modal-close" aria-label="{% trans '닫기' %}" style="background:none; border:none; font-size:1.5rem; line-height:1; cursor:pointer; color:#6b7280;">&times;</button>
+      </div>
+      <div id="survey-agent-modal-body"></div>
+      <div style="margin-top:1.25rem; display:flex; gap:0.75rem; flex-wrap:wrap;">
+        <button type="button" id="survey-agent-modal-select" class="btn btn-primary">{% trans "이 Agent로 선택" %}</button>
+        <button type="button" id="survey-agent-modal-close-btn" class="btn btn-outline">{% trans "닫기" %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% if show_agent_selection %}
+<script id="survey-agents-json" type="application/json">{{ agents_json|default:"[]" }}</script>
+{% endif %}
+{% endif %}

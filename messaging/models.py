@@ -23,6 +23,15 @@ class Conversation(models.Model):
         related_name='conversations',
         verbose_name='약속 신청',
     )
+    survey_submission = models.ForeignKey(
+        'survey.SurveySubmission',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='conversations',
+        verbose_name='설문 제출',
+        help_text='공지 대화가 설문 제출/견적 알림일 때 연결된 제출 건.',
+    )
     subject = models.CharField(
         max_length=200,
         blank=True,

@@ -6,6 +6,7 @@
 <div class="card" style="margin-bottom: 1.5rem;">
   <h2 style="margin-top: 0;" data-i18n-key="관리 메뉴">{% trans "관리 메뉴" %}</h2>
   <ul style="line-height: 2; padding-left: 1.25rem;">
+    <li><a href="{% url 'app_submission_review_list' %}" data-i18n-key="설문 제출 검토">{% trans "설문 제출 검토" %}</a> — <span data-i18n-key="요청·견적 초안 검토, 조치">{% trans "요청·견적 초안 검토, 조치" %}</span></li>
     <li><a href="{% url 'member_list' %}" data-i18n-key="가입자">{% trans "가입자" %}</a> — <span data-i18n-key="회원 목록, 비밀번호 리셋">{% trans "회원 목록, 비밀번호 리셋" %}</span></li>
     <li><strong data-i18n-key="캐러셀">{% trans "캐러셀" %}</strong> — <span data-i18n-key="슬라이드 추가·수정·삭제">{% trans "슬라이드 추가·수정·삭제" %}</span>
       <ul style="margin: 0.25rem 0 0 1rem; padding-left: 1rem;">

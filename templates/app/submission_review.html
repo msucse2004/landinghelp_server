@@ -1,0 +1,332 @@
+{% extends "base.html" %}
+{% load i18n settlement_extras %}
+{% block title %}{% trans "제출 검토" %} #{{ submission.id }} – LifeAI US{% endblock %}
+{% block content %}
+<style>
+  .review-card { margin-bottom: var(--gap); }
+  .review-card h2 { font-size: 1rem; margin: 0 0 0.75rem; color: var(--color-muted); font-weight: 600; }
+  .review-card .row { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; margin-bottom: 0.5rem; }
+  .review-card .label { font-weight: 500; min-width: 6rem; }
+  .review-card .value { color: var(--color-text); }
+  .review-card ul { margin: 0.25rem 0 0 1rem; padding: 0; }
+  .review-card table { width: 100%; border-collapse: collapse; }
+  .review-card th, .review-card td { padding: 0.4rem 0.6rem; text-align: left; border-bottom: 1px solid var(--color-border); }
+  .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
+  .badge-warning { background: #fef3c7; color: #92400e; }
+  .badge-info { background: #dbeafe; color: #1e40af; }
+  .needs-decision { background: #fef2f2; border: 1px solid #fecaca; border-radius: var(--radius); padding: 0.75rem 1rem; margin-bottom: 1rem; }
+  .needs-decision ul { margin: 0.5rem 0 0 1rem; padding: 0; }
+  .review-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-start; margin-top: 1rem; }
+  .review-actions form { display: inline-block; }
+  .readiness-badge { display: inline-block; padding: 0.35rem 0.75rem; border-radius: 6px; font-weight: 600; font-size: 0.95rem; margin-left: 0.5rem; }
+  .readiness-ready { background: #dcfce7; color: #166534; }
+  .readiness-waiting { background: #fef3c7; color: #92400e; }
+  .readiness-pricing { background: #fee2e2; color: #b91c1c; }
+  .readiness-incomplete { background: #e5e7eb; color: #374151; }
+  .check-pass { color: #16a34a; }
+  .check-fail { color: #b91c1c; }
+  .quotation-doc { max-width: 720px; background: #fff; border: 1px solid var(--color-border); border-radius: 8px; padding: 1.5rem 2rem; }
+  .quotation-letterhead { text-align: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid #1e293b; }
+  .quotation-letterhead .company { font-size: 1.35rem; font-weight: 700; letter-spacing: 0.02em; color: #0f172a; }
+  .quotation-letterhead .doc-type { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.15em; color: #64748b; margin-top: 0.25rem; }
+  .quotation-meta-block { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem 1.5rem; margin-bottom: 1.25rem; font-size: 0.9rem; }
+  .quotation-meta-block .label { font-weight: 600; color: #475569; margin-bottom: 0.2rem; }
+  .quotation-meta-block .value { color: var(--color-text); }
+  .quotation-bill-to { background: #f8fafc; padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1rem; }
+  .quotation-bill-to .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.35rem; }
+  .quotation-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+  .quotation-table th { text-align: left; padding: 0.5rem 0.6rem; background: #f1f5f9; border: 1px solid var(--color-border); font-weight: 600; }
+  .quotation-table td { padding: 0.45rem 0.6rem; border: 1px solid var(--color-border); }
+  .quotation-table .col-no { width: 2.5rem; text-align: center; }
+  .quotation-table .col-amount { text-align: right; white-space: nowrap; }
+  .quotation-totals { margin-top: 1rem; text-align: right; }
+  .quotation-totals .total-row { font-size: 1.1rem; font-weight: 700; padding: 0.5rem 0; border-top: 2px solid #1e293b; }
+  .quotation-terms { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--color-border); font-size: 0.8rem; color: #64748b; line-height: 1.5; }
+  .quotation-footer { margin-top: 1rem; font-size: 0.8rem; color: #94a3b8; text-align: center; }
+</style>
+
+{% if messages %}
+<ul class="form-errors" style="list-style:none; padding:0; margin-bottom:1rem;">
+  {% for message in messages %}
+  <li style="padding:0.5rem 0.75rem; border-radius:var(--radius); margin-bottom:0.35rem; {% if message.tags == 'error' %}background:#fef2f2; color:#b91c1c;{% else %}background:#ecfdf5; color:#047857;{% endif %}">{{ message }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+<div class="card">
+  <p style="margin: 0 0 0.75rem;">
+    <a href="{% url 'app_submission_review_list' %}" class="btn btn-outline" style="padding: 0.35rem 0.75rem;">← {% trans "제출 목록" %}</a>
+    <a href="/admin/survey/surveysubmission/{{ submission.id }}/change/" target="_blank" class="btn btn-outline" style="padding: 0.35rem 0.75rem; margin-left: 0.35rem;">Django Admin (설문)</a>
+    {% if quote_draft %}
+    <a href="/admin/settlement/settlementquote/{{ quote_draft.id }}/change/" target="_blank" class="btn btn-outline" style="padding: 0.35rem 0.75rem; margin-left: 0.35rem;">Django Admin (견적)</a>
+    {% endif %}
+  </p>
+  <h1 style="margin-top: 0;">{% trans "제출 검토" %} #{{ submission.id }}
+  {% if submission_readiness %}
+  <span class="readiness-badge readiness-{% if submission_readiness.readiness == 'ready_for_approval' %}ready{% elif submission_readiness.readiness == 'waiting_on_customer' %}waiting{% elif submission_readiness.readiness == 'needs_admin_pricing' %}pricing{% else %}incomplete{% endif %}">{{ submission_readiness.readiness_label }}</span>
+  {% endif %}
+  </h1>
+</div>
+
+<!-- 자동 체크 포인트 -->
+{% if submission_readiness and submission_readiness.checks %}
+<div class="card review-card">
+  <h2>{% trans "자동 체크" %}</h2>
+  <p class="text-muted" style="font-size:0.9rem; margin-bottom:0.75rem;">{% trans "규칙 기반 검사 결과. 운영자 수동 확인 최소화용." %}</p>
+  <table>
+    <thead>
+      <tr><th>{% trans "항목" %}</th><th>{% trans "결과" %}</th></tr>
+    </thead>
+    <tbody>
+      {% for c in submission_readiness.checks %}
+      <tr>
+        <td>{{ c.message }}</td>
+        <td class="{% if c.passed %}check-pass{% else %}check-fail{% endif %}">{% if c.passed %}✓{% else %}✗{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if needs_admin_decision %}
+<div class="card needs-decision">
+  <strong>{% trans "Admin 조치 필요" %}</strong>
+  <ul>
+    {% for msg in needs_admin_decision %}
+    <li>{{ msg }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<!-- 고객 요약 -->
+<div class="card review-card">
+  <h2>{% trans "고객 요약" %}</h2>
+  <div class="row"><span class="label">{% trans "이름/이메일" %}</span><span class="value">{{ customer_summary.name|default:customer_summary.email }} · {{ customer_summary.email }}</span></div>
+  {% if customer_summary.username %}
+  <div class="row"><span class="label">{% trans "계정" %}</span><span class="value">{{ customer_summary.username }} (user_id: {{ customer_summary.user_id }})</span></div>
+  {% else %}
+  <div class="row"><span class="label">{% trans "비로그인" %}</span><span class="value">—</span></div>
+  {% endif %}
+</div>
+
+<!-- 요청 요약 -->
+<div class="card review-card">
+  <h2>{% trans "요청 요약" %} (정규화된 답변)</h2>
+  <div class="row"><span class="label">{% trans "지역" %}</span><span class="value">{{ request_summary.region|default:"—" }}</span></div>
+  <div class="row"><span class="label">{% trans "입국/이주 예정일" %}</span><span class="value">{{ request_summary.entry_date|default:"—" }}</span></div>
+  {% if request_summary.household_size is not None %}
+  <div class="row"><span class="label">{% trans "가구원 수" %}</span><span class="value">{{ request_summary.household_size }}</span></div>
+  {% endif %}
+  <div class="row"><span class="label">{% trans "선택 서비스" %}</span>
+    <span class="value">
+      {% for code, label in request_summary.service_labels %}
+        {{ label }}{% if not forloop.last %}, {% endif %}
+      {% empty %}
+        —
+      {% endfor %}
+    </span>
+  </div>
+  {% if request_summary.add_on_labels %}
+  <div class="row"><span class="label">{% trans "추가 옵션" %}</span>
+    <span class="value">{% for code, label in request_summary.add_on_labels %}{{ label }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>
+  </div>
+  {% endif %}
+  {% if request_summary.special_requirements %}
+  <div class="row"><span class="label">{% trans "특별 요청" %}</span><span class="value">{{ request_summary.special_requirements }}</span></div>
+  {% endif %}
+</div>
+
+<!-- 견적서 (공식 형식, USD, 가격 수정 가능) -->
+<div class="card review-card quotation-card">
+  <h2>{% trans "견적서" %} (Quotation)</h2>
+  {% if quote_draft_display %}
+  <div class="quotation-doc">
+    {% if quotation_context %}
+    <div class="quotation-letterhead">
+      <div class="company">{{ quotation_context.company_name }}</div>
+      <div class="doc-type">{% trans "견적서" %} / Quotation</div>
+    </div>
+    <div class="quotation-meta-block">
+      <div>
+        <div class="label">{% trans "견적 번호" %} / Quotation No.</div>
+        <div class="value">{{ quotation_context.quotation_number }}</div>
+      </div>
+      <div>
+        <div class="label">{% trans "일자" %} / Date</div>
+        <div class="value">{{ quotation_context.quotation_date }}</div>
+      </div>
+      <div>
+        <div class="label">{% trans "유효 기한" %} / Valid Until</div>
+        <div class="value">{{ quotation_context.valid_until }}</div>
+      </div>
+      <div>
+        <div class="label">{% trans "참조" %} / Reference</div>
+        <div class="value">#{{ submission.id }}</div>
+      </div>
+    </div>
+    <div class="quotation-bill-to">
+      <div class="label">{% trans "청구처" %} / Bill To</div>
+      <div class="value">{{ customer_summary.name|default:customer_summary.email }}</div>
+      <div class="value">{{ customer_summary.email }}</div>
+      {% if quote_draft_display.region %}
+      <div class="value" style="margin-top:0.25rem;">{% trans "지역" %}: {{ quote_draft_display.region }}</div>
+      {% endif %}
+    </div>
+    {% endif %}
+    <form action="{% url 'app_submission_review_approve_quote' submission_id=submission.id %}" method="post">
+      {% csrf_token %}
+      <table class="quotation-table">
+        <thead>
+          <tr>
+            <th class="col-no">#</th>
+            <th>{% trans "서비스" %} / Description</th>
+            <th>{% trans "서비스 형태" %} / Delivery</th>
+            <th class="col-amount">{% trans "금액" %} (USD)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for it in quote_draft_display.items %}
+          <tr>
+            <td class="col-no">{{ forloop.counter }}</td>
+            <td>{{ it.label|default:it.code }}</td>
+            <td>{{ it.delivery_label|default:"—" }}</td>
+            <td class="col-amount"><input type="number" name="price_{{ forloop.counter0 }}" value="{{ it.price|default:0 }}" min="0" step="1" style="width:90px; padding:0.3rem 0.4rem; text-align:right;" /> USD</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="quotation-totals">
+        <div class="total-row">{% trans "합계" %} / Total: {{ quote_draft_display.total|usd_format }} USD</div>
+      </div>
+      {% if quotation_context.terms %}
+      <div class="quotation-terms">{{ quotation_context.terms }}</div>
+      {% endif %}
+      {% if quotation_context.contact_footer %}
+      <div class="quotation-footer">{{ quotation_context.contact_footer }}</div>
+      {% endif %}
+      {% if quote_draft and submission.status == 'SUBMITTED' %}
+      <button type="submit" class="btn btn-primary" style="margin-top:1rem;">{% trans "승인 후 고객에게 송부" %}</button>
+      {% endif %}
+    </form>
+  </div>
+  {% else %}
+  <p class="text-muted">{% trans "견적 초안이 없습니다. 아래 버튼으로 생성하세요." %}</p>
+  <form action="{% url 'app_submission_review_generate_draft' submission_id=submission.id %}" method="post" style="display:inline;">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-primary">{% trans "견적 초안 자동 생성" %}</button>
+  </form>
+  {% endif %}
+</div>
+
+<!-- 워크플로우 상태 -->
+<div class="card review-card">
+  <h2>{% trans "워크플로우 상태" %}</h2>
+  <div class="row"><span class="label">{% trans "상태" %}</span><span class="value">{{ workflow_status.label }}</span></div>
+  {% if workflow_status.submitted_at %}
+  <div class="row"><span class="label">{% trans "제출 시각" %}</span><span class="value">{{ workflow_status.submitted_at|date:"Y-m-d H:i" }}</span></div>
+  {% endif %}
+  {% if workflow_status.revision_requested_at %}
+  <div class="row"><span class="label">{% trans "수정 요청 시각" %}</span><span class="value">{{ workflow_status.revision_requested_at|date:"Y-m-d H:i" }}</span></div>
+  {% if workflow_status.revision_message %}
+  <div class="row"><span class="label">{% trans "수정 요청 메시지" %}</span><span class="value">{{ workflow_status.revision_message }}</span></div>
+  {% endif %}
+  {% endif %}
+  {% if workflow_status.service_progress_total %}
+  <div class="row"><span class="label">{% trans "서비스 진행" %}</span><span class="value">{{ workflow_status.service_progress_completed }}/{{ workflow_status.service_progress_total }} {% trans "완료" %}</span></div>
+  {% endif %}
+</div>
+
+<!-- 결제 요약 -->
+<div class="card review-card">
+  <h2>{% trans "결제 요약" %}</h2>
+  {% if payment_summary %}
+  <div class="row"><span class="label">{% trans "견적 상태" %}</span><span class="value">{{ payment_summary.status_label }}</span></div>
+  <div class="row"><span class="label">{% trans "합계" %}</span><span class="value">{{ payment_summary.total|usd_format }} USD</span></div>
+  {% if payment_summary.sent_at %}
+  <div class="row"><span class="label">{% trans "송부 시각" %}</span><span class="value">{{ payment_summary.sent_at|date:"Y-m-d H:i" }}</span></div>
+  {% endif %}
+  {% else %}
+  <p class="text-muted">{% trans "송부/결제된 견적 없음" %}</p>
+  {% endif %}
+</div>
+
+<!-- 일정 준비도 및 필요 작업 (결제 후) -->
+<div class="card review-card">
+  <h2>{% trans "일정 준비도" %} (결제 후)</h2>
+  {% if scheduling_summary %}
+  {% if scheduling_summary.has_plan %}
+  <div class="row"><span class="label">{% trans "전담 Agent" %}</span><span class="value">{{ scheduling_summary.assigned_agent_name|default:"—" }}</span></div>
+  <div class="row"><span class="label">{% trans "예약" %}</span><span class="value">{% trans "대기" %} {{ scheduling_summary.pending }}, {% trans "확정" %} {{ scheduling_summary.confirmed }} / {{ scheduling_summary.total_appointments }}</span></div>
+  {% if required_tasks %}
+  <p style="margin-top:0.75rem;"><strong>{% trans "필요 작업 (견적 기준)" %}</strong></p>
+  <table>
+    <thead>
+      <tr><th>{% trans "서비스" %}</th><th>{% trans "상태" %}</th></tr>
+    </thead>
+    <tbody>
+      {% for t in required_tasks %}
+      <tr>
+        <td>{{ t.label }}</td>
+        <td>
+          {% if t.status == 'NOT_SCHEDULED' %}<span class="badge badge-warning">{% trans "미배정" %}</span>
+          {% elif t.status == 'PENDING' %}<span class="badge badge-info">{% trans "수락 대기" %}</span>
+          {% elif t.status == 'CONFIRMED' %}<span class="badge" style="background:#16a34a;color:#fff;">{% trans "확정" %}</span>
+          {% else %}{{ t.status_label }}{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="text-muted" style="font-size:0.9rem; margin-top:0.5rem;">{% trans "고객이 에이전트 배정 후 약속이 생성되면 상태가 갱신됩니다. Admin은 Django Admin에서 약속 확인·관리할 수 있습니다." %}</p>
+  {% endif %}
+  {% else %}
+  <p class="text-muted">{% trans "정착 플랜 없음" %}</p>
+  {% endif %}
+  {% else %}
+  <p class="text-muted">{% trans "결제 완료 후 표시됩니다." %}</p>
+  {% endif %}
+</div>
+
+<!-- 조치: 카드별 수정 요청 (구조화된 재입력) -->
+{% if submission.status == 'SUBMITTED' and available_sections %}
+<div class="card review-card">
+  <h2>{% trans "카드별 수정 요청" %}</h2>
+  <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 0.75rem;">{% trans "수정이 필요한 카드만 선택하면, 고객은 해당 카드만 다시 입력합니다. 메시지보다 구조화된 재입력이 우선입니다." %}</p>
+  {% if pending_section_requests %}
+  <p style="margin-bottom: 0.5rem;"><strong>{% trans "현재 수정 요청된 카드" %}:</strong>
+    {% for s in available_sections %}{% if s.id in pending_section_requests %}{{ s.title }}{% if not forloop.last %}, {% endif %}{% endif %}{% endfor %}
+  </p>
+  {% endif %}
+  <form action="{% url 'app_submission_review_request_section_updates' submission_id=submission.id %}" method="post">
+    {% csrf_token %}
+    <div style="margin-bottom: 0.5rem;"><strong>{% trans "수정 요청할 카드 선택" %}</strong></div>
+    <ul style="list-style: none; padding: 0; margin: 0 0 0.75rem;">
+      {% for s in available_sections %}
+      <li><label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;"><input type="checkbox" name="section_ids" value="{{ s.id }}"> {{ s.title }}</label></li>
+      {% endfor %}
+    </ul>
+    <label for="section_update_message">{% trans "카드별 안내 메시지 (선택)" %}</label>
+    <textarea name="section_update_message" id="section_update_message" rows="2" style="width:100%; margin-top:0.35rem; padding:0.5rem;"></textarea>
+    <div class="review-actions">
+      <button type="submit" class="btn btn-primary">{% trans "선택 카드 수정 요청" %}</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+<!-- 조치: 고객에게 수정 요청 (전체 메시지) -->
+{% if submission.status == 'SUBMITTED' %}
+<div class="card review-card">
+  <h2>{% trans "고객에게 수정 요청" %} ({% trans "전체 메시지" %})</h2>
+  <form action="{% url 'app_submission_review_request_revision' submission_id=submission.id %}" method="post">
+    {% csrf_token %}
+    <label for="revision_message">{% trans "수정 요청 메시지 (고객에게 전달)" %}</label>
+    <textarea name="revision_message" id="revision_message" rows="3" style="width:100%; margin-top:0.35rem; padding:0.5rem;" placeholder="{% trans '예: 입국 예정일과 희망 서비스를 다시 확인해 주세요.' %}"></textarea>
+    <div class="review-actions">
+      <button type="submit" class="btn btn-outline">{% trans "수정 요청 보내기" %}</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

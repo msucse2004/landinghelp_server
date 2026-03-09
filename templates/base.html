@@ -421,10 +421,9 @@
     var backdrop = document.getElementById('new-message-popup-backdrop');
     var inboxLink = document.getElementById('new-message-popup-inbox');
     var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]') && document.querySelector('[name=csrfmiddlewaretoken]').value;
-    function dismissPopup() {
-      if (!backdrop) return;
-      backdrop.style.display = 'none';
-      sendDismissRequest();
+    function hidePopupNow() {
+      var el = document.getElementById('new-message-popup-backdrop');
+      if (el) { el.style.display = 'none'; el.setAttribute('aria-hidden', 'true'); }
     }
     function sendDismissRequest() {
       if (csrfToken) {
@@ -437,12 +436,20 @@
         }).catch(function(){});
       }
     }
-    document.getElementById('new-message-popup-close').addEventListener('click', function() { dismissPopup(); });
+    function dismissPopup() {
+      hidePopupNow();
+      sendDismissRequest();
+    }
+    if (document.getElementById('new-message-popup-close')) {
+      document.getElementById('new-message-popup-close').addEventListener('click', function() { dismissPopup(); });
+    }
     if (inboxLink) {
       inboxLink.addEventListener('click', function(e) {
         e.preventDefault();
-        if (backdrop) backdrop.style.display = 'none';
+        e.stopPropagation();
+        hidePopupNow();
         var href = inboxLink.getAttribute('href');
+        if (!href) return;
         if (csrfToken) {
           fetch('/api/messaging/dismiss-login-popup/', {
             method: 'POST',
@@ -455,7 +462,9 @@
         }
       });
     }
-    backdrop.addEventListener('click', function(e) { if (e.target === backdrop) dismissPopup(); });
+    if (backdrop) {
+      backdrop.addEventListener('click', function(e) { if (e.target === backdrop) dismissPopup(); });
+    }
     sendDismissRequest();
   })();
   </script>

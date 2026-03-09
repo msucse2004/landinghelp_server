@@ -7,7 +7,7 @@ from django.contrib import admin
 from django.core.management import call_command
 from django.http import HttpResponse
 from django.shortcuts import render
-from django.urls import path
+from django.urls import path, reverse
 from django.utils.encoding import force_str
 
 from .models import StaticTranslation, LANG_COLUMNS, LANG_CSV_HEADERS
@@ -57,6 +57,8 @@ class StaticTranslationAdmin(admin.ModelAdmin):
             path('export-csv/', self.admin_site.admin_view(self.export_csv_view), name='translations_statictranslation_export_csv'),
             path('import-csv/', self.admin_site.admin_view(self.import_csv_view), name='translations_statictranslation_import_csv'),
             path('sync-keys-and-csv/', self.admin_site.admin_view(self.sync_keys_and_csv_view), name='translations_statictranslation_sync_keys_and_csv'),
+            path('fill-translations-pipeline/', self.admin_site.admin_view(self.fill_translations_pipeline_view), name='translations_statictranslation_fill_translations_pipeline'),
+            path('fill-translations-pipeline/status/', self.admin_site.admin_view(self.fill_translations_pipeline_status_view), name='translations_statictranslation_fill_translations_pipeline_status'),
         ]
         return custom + urls
 
@@ -227,4 +229,76 @@ class StaticTranslationAdmin(admin.ModelAdmin):
             'csv_created': csv_created,
             'csv_updated': csv_updated,
             'csv_error': csv_error,
+        })
+
+    def fill_translations_pipeline_view(self, request):
+        """비어 있는 언어 컬럼을 번역 파이프라인(DeepL→Ollama)으로 채움. POST 시 백그라운드 실행 후 진행 페이지로 이동."""
+        import os
+        import uuid
+        import threading
+        from django.http import JsonResponse
+        from django.shortcuts import redirect
+        from django.core.cache import cache
+
+        auth_key = (
+            getattr(settings, 'DEEPL_AUTH_KEY', None)
+            or os.environ.get('DEEPL_AUTH_KEY', '')
+            or ''
+        ).strip()
+
+        job_id = request.GET.get('job_id', '').strip()
+        if request.method == 'GET' and job_id:
+            status_path = reverse('admin:translations_statictranslation_fill_translations_pipeline_status') + '?job_id=' + job_id
+            return render(request, 'admin/translations/fill_translations_pipeline_progress.html', {
+                'title': '비어 있는 번역 채우기 (파이프라인)',
+                'opts': self.model._meta,
+                'job_id': job_id,
+                'status_url': request.build_absolute_uri(status_path),
+            })
+
+        if request.method != 'POST':
+            return render(request, 'admin/translations/fill_translations_pipeline.html', {
+                'title': '비어 있는 번역 채우기 (파이프라인)',
+                'opts': self.model._meta,
+                'deepl_configured': bool(auth_key),
+            })
+
+        job_id = uuid.uuid4().hex
+        progress_key = f'fill_translations_progress_{job_id}'
+        cache.set(progress_key, {'total': 0, 'current': 0, 'filled': 0, 'done': False, 'output': '', 'error': ''}, timeout=3600)
+
+        def run_command():
+            import os as _os
+            _os.environ['FILL_TRANSLATIONS_PROGRESS_KEY'] = progress_key
+            try:
+                call_command('fill_translations_deepl')
+            except Exception:
+                pass
+            finally:
+                _os.environ.pop('FILL_TRANSLATIONS_PROGRESS_KEY', None)
+
+        thread = threading.Thread(target=run_command, daemon=True)
+        thread.start()
+
+        redirect_url = request.path + '?job_id=' + job_id
+        return redirect(redirect_url)
+
+    def fill_translations_pipeline_status_view(self, request):
+        """진행률 폴링용 JSON API."""
+        from django.http import JsonResponse
+        from django.core.cache import cache
+        job_id = (request.GET.get('job_id') or '').strip()
+        if not job_id:
+            return JsonResponse({'error': 'job_id required'}, status=400)
+        progress_key = f'fill_translations_progress_{job_id}'
+        data = cache.get(progress_key)
+        if data is None:
+            return JsonResponse({'done': False, 'total': 0, 'current': 0, 'filled': 0, 'output': '', 'error': ''})
+        return JsonResponse({
+            'total': data.get('total', 0),
+            'current': data.get('current', 0),
+            'filled': data.get('filled', 0),
+            'done': data.get('done', False),
+            'output': data.get('output', ''),
+            'error': data.get('error', ''),
         })

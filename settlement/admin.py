@@ -1,6 +1,17 @@
 from django.contrib import admin
 from django.utils import timezone
-from .models import SettlementService, ServiceStatePrice, SettlementQuoteRequest, AgentAppointmentRequest, UserSettlementPlan, SettlementQuote, PlanServiceTask
+from .models import (
+    SettlementService,
+    ServiceStatePrice,
+    SettlementQuoteRequest,
+    AgentAppointmentRequest,
+    UserSettlementPlan,
+    SettlementQuote,
+    PlanServiceTask,
+    ServiceSchedulePlan,
+    ServiceScheduleItem,
+    AgentAvailabilityWindow,
+)
 
 
 class ServiceStatePriceInline(admin.TabularInline):
@@ -137,3 +148,52 @@ class PlanServiceTaskAdmin(admin.ModelAdmin):
     def appointment_status(self, obj):
         return obj.appointment.get_status_display() if obj.appointment_id else '—'
     appointment_status.short_description = '약속 상태'
+
+
+# --- 스케줄 도메인: ML/Admin 일정 플랜·항목·Agent 가용창 ---
+
+
+class ServiceScheduleItemInline(admin.TabularInline):
+    model = ServiceScheduleItem
+    extra = 0
+    ordering = ('sort_order', 'starts_at')
+    raw_id_fields = ('assigned_agent',)
+    fields = (
+        'service_code', 'service_label', 'service_type', 'starts_at', 'ends_at', 'duration_minutes',
+        'assigned_agent', 'location_text', 'status', 'sort_order', 'notes',
+    )
+    verbose_name = '일정 항목'
+    verbose_name_plural = '일정 항목'
+
+
+@admin.register(ServiceSchedulePlan)
+class ServiceSchedulePlanAdmin(admin.ModelAdmin):
+    list_display = ('id', 'customer', 'submission', 'quote', 'status', 'source', 'version', 'updated_at')
+    list_display_links = ('id',)
+    list_filter = ('status', 'source', 'updated_at')
+    search_fields = ('customer__username', 'customer__email', 'submission__email')
+    raw_id_fields = ('submission', 'quote', 'customer', 'created_by', 'updated_by')
+    readonly_fields = ('created_at', 'updated_at')
+    inlines = (ServiceScheduleItemInline,)
+    ordering = ('-updated_at',)
+
+
+@admin.register(ServiceScheduleItem)
+class ServiceScheduleItemAdmin(admin.ModelAdmin):
+    list_display = ('id', 'schedule_plan', 'service_code', 'service_label', 'starts_at', 'status', 'assigned_agent', 'sort_order')
+    list_display_links = ('id',)
+    list_filter = ('status', 'service_type', 'schedule_plan')
+    search_fields = ('service_code', 'service_label')
+    raw_id_fields = ('schedule_plan', 'assigned_agent')
+    ordering = ('schedule_plan', 'sort_order', 'starts_at')
+
+
+@admin.register(AgentAvailabilityWindow)
+class AgentAvailabilityWindowAdmin(admin.ModelAdmin):
+    list_display = ('id', 'agent', 'starts_at', 'ends_at', 'source', 'status', 'submission', 'schedule_plan', 'created_at')
+    list_display_links = ('id',)
+    list_filter = ('source', 'status', 'created_at')
+    search_fields = ('agent__username',)
+    raw_id_fields = ('agent', 'submission', 'schedule_plan')
+    readonly_fields = ('created_at',)
+    ordering = ('agent', 'starts_at')

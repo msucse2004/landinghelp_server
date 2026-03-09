@@ -152,8 +152,31 @@ def _normalize_display_latin(text: str) -> str:
 
 
 def normalize_english_display(text: str) -> str:
-    """영어 표기 규칙. _normalize_display_latin과 동일 (문장/비문장 구분 + Title Case)."""
-    return _normalize_display_latin(text)
+    """영어 표기 규칙. 단어·문장 첫 글자 대문자 (Title Case + 문장 경계 첫 글자 대문자)."""
+    return normalize_english_for_translation(text)
+
+
+def normalize_english_for_translation(text: str) -> str:
+    """
+    영어 번역 DB 저장용 정규화: 단어의 첫 글자·문장의 첫 글자 대문자.
+    - 문장(. ! ? 뒤)이 여러 개면 각 문장 첫 글자 대문자.
+    - 단어별(공백·슬래시 구분) 첫 글자 대문자 (Title Case).
+    """
+    if not text or not isinstance(text, str):
+        return text
+    s = text.strip()
+    if not s:
+        return s
+    # 문장 경계(. ! ? 뒤 공백)로 나누어 각 조각에 Title Case 적용 → 문장 첫 글자 + 단어 첫 글자 모두 대문자
+    parts = re.split(r'(?<=[.!?])\s+', s)
+    result = []
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        part = _normalize_title_case_latin(part)
+        result.append(part)
+    return ' '.join(result) if result else _normalize_title_case_latin(s)
 
 
 def _normalize_display_cjk(text: str) -> str:
@@ -371,8 +394,8 @@ def get_from_cache(key: str, language_code: str) -> str | None:
 def save_translation_from_api(key: str, language_code: str, value: str) -> None:
     """
     번역 API 결과를 StaticTranslation에 저장하고 메모리 캐시에 반영.
-    모든 언어 동일 룰:
-    - en, es, vi: 문장은 첫 글자만 대문자, 비문장은 단어별 띄어쓰기·첫 글자 대문자(Healthcare/Education 등).
+    - en: 단어·문장 첫 글자 대문자 (normalize_english_for_translation).
+    - es, vi: 문장/비문장 구분 + 단어별 첫 글자 대문자.
     - zh-hans, zh-hant: 앞뒤 공백 제거, 연속 공백 정리.
     """
     if not key or not value:
@@ -380,7 +403,9 @@ def save_translation_from_api(key: str, language_code: str, value: str) -> None:
     from translations.models import LANG_CODE_TO_FIELD
     if language_code not in LANG_CODE_TO_FIELD:
         return
-    if language_code in ('en', 'es', 'vi'):
+    if language_code == 'en':
+        value = normalize_english_for_translation(value)
+    elif language_code in ('es', 'vi'):
         value = _normalize_display_latin(value)
     elif language_code in ('zh-hans', 'zh-hant'):
         value = _normalize_display_cjk(value)

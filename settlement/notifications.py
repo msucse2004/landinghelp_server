@@ -115,9 +115,10 @@ def send_survey_submitted_admin_notification(submission, language_code='ko'):
         return False
 
 
-def send_survey_submitted_customer_email(submission, language_code='ko'):
+def send_survey_submitted_customer_email(submission, language_code='ko', is_revision_resubmit=False):
     """
     설문 제출(SUBMITTED) 시 고객에게 확인 이메일 발송. 금액 미포함.
+    is_revision_resubmit=True면 수정 제출용 문구 사용.
     """
     if not submission or submission.status != 'SUBMITTED':
         return False
@@ -125,9 +126,14 @@ def send_survey_submitted_customer_email(submission, language_code='ko'):
     if not email or not _is_email_configured():
         logger.debug("Survey submitted customer email skipped: no email or email not configured.")
         return False
-    subject = _get_display_text('설문이 제출되었습니다', language_code)
+    if is_revision_resubmit:
+        subject = _get_display_text('설문 수정이 제출되었습니다', language_code)
+        intro = _get_display_text('안녕하세요. 정착 서비스 설문 수정이 정상적으로 제출되었습니다.', language_code)
+    else:
+        subject = _get_display_text('설문이 제출되었습니다', language_code)
+        intro = _get_display_text('안녕하세요. 정착 서비스 설문이 정상적으로 제출되었습니다.', language_code)
     body_lines = [
-        _get_display_text('안녕하세요. 정착 서비스 설문이 정상적으로 제출되었습니다.', language_code),
+        intro,
         '',
         _get_display_text('제출 시각', language_code) + ': ' + (str(submission.submitted_at) if getattr(submission, 'submitted_at', None) else '-'),
         '',
@@ -148,10 +154,20 @@ def send_survey_submitted_customer_email(submission, language_code='ko'):
         return False
 
 
-def send_survey_submitted_customer_message(submission, language_code='ko'):
+def _customer_name_for_conversation(submission):
+    """대화 제목용 고객 이름 (submission.user 또는 email)."""
+    customer = getattr(submission, 'user', None)
+    if customer and getattr(customer, 'is_authenticated', True):
+        return (getattr(customer, 'get_full_name', lambda: '')() or getattr(customer, 'username', '') or getattr(customer, 'email', '') or '').strip()
+    return (getattr(submission, 'email', None) or '-').strip() or '-'
+
+
+def send_survey_submitted_customer_message(submission, language_code='ko', is_revision_resubmit=False):
     """
     설문 제출(SUBMITTED) 시 고객 메시지함에 확인 메시지 추가. 로그인한 고객(submission.user)만 대상.
+    is_revision_resubmit=True면 수정 제출용 문구 사용.
     고객 + Admin 모두 참여자로 추가하여 같은 thread에서 대화 가능.
+    대화 제목: [이름] 정착 서비스 (상태는 메시지함 API에서 표시).
     """
     if not submission or submission.status != 'SUBMITTED':
         return False
@@ -165,8 +181,13 @@ def send_survey_submitted_customer_message(submission, language_code='ko'):
         return False
     try:
         from messaging.models import Message
-        subject = _get_display_text('설문 제출 확인', language_code)
-        body = '✨ ' + _get_display_text('정착 서비스 설문이 제출되었습니다. 😊 Admin 검토 후 견적을 보내드리겠습니다.', language_code)
+        base_subject = _get_display_text('정착 서비스', language_code)
+        customer_name = _customer_name_for_conversation(submission)
+        subject = f'[{customer_name}] {base_subject}'
+        if is_revision_resubmit:
+            body = '✨ ' + _get_display_text('정착 서비스 설문 수정이 제출되었습니다. 😊 Admin 검토 후 견적을 보내드리겠습니다.', language_code)
+        else:
+            body = '✨ ' + _get_display_text('정착 서비스 설문이 제출되었습니다. 😊 Admin 검토 후 견적을 보내드리겠습니다.', language_code)
         body += '\n\n💬 ' + _get_display_text('필요한 사항이 있으시면 메시지로 보내 주세요.', language_code)
         conv = _get_or_create_shared_conversation(submission, subject_fallback=subject)
         msg = Message(conversation=conv, sender=system_sender, body=body)
@@ -177,10 +198,56 @@ def send_survey_submitted_customer_message(submission, language_code='ko'):
         return False
 
 
+def _build_revision_requested_body(language_code, section_titles=None, revision_message=None):
+    """수정 요청 시 고객에게 보낼 본문 텍스트 (메시지/이메일 공통)."""
+    body = _get_display_text('설문 수정이 요청되었습니다.', language_code)
+    body += '\n\n' + _get_display_text('정착 서비스 > 정착 설문 화면에서 다시 접속하여 요청된 내용을 수정해 주세요.', language_code)
+    if section_titles:
+        body += '\n\n' + _get_display_text('수정 요청된 카드', language_code) + ': ' + ', '.join(section_titles)
+    extra = (revision_message or '').strip()
+    if extra:
+        body += '\n\n' + extra
+    return body
+
+
+def send_revision_requested_customer_email(submission, language_code='ko', section_titles=None, revision_message=None):
+    """
+    수정 요청(REVISION_REQUESTED) 시 고객에게 이메일 발송. 이메일 설정이 되어 있을 때만.
+    메시지함과 동일한 요약 본문 사용. 금액/총액 미포함.
+    """
+    from survey.models import SurveySubmission
+    if not submission or submission.status != SurveySubmission.Status.REVISION_REQUESTED:
+        return False
+    email = (getattr(submission, 'email', None) or '').strip()
+    if not email and getattr(submission, 'user', None) and getattr(submission.user, 'email', None):
+        email = (submission.user.email or '').strip()
+    if not email:
+        logger.debug("Revision requested customer email skipped: no email for submission_id=%s", getattr(submission, 'id'))
+        return False
+    if not _is_email_configured():
+        logger.debug("Revision requested customer email skipped: email not configured.")
+        return False
+    subject = _get_display_text('설문 수정 요청', language_code)
+    body = _build_revision_requested_body(language_code, section_titles=section_titles, revision_message=revision_message)
+    try:
+        send_mail(
+            subject,
+            body,
+            getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@example.com'),
+            [email],
+            fail_silently=True,
+        )
+        return True
+    except Exception as e:
+        logger.warning("Revision requested customer email failed: submission_id=%s error=%s", getattr(submission, 'id'), e, exc_info=True)
+        return False
+
+
 def send_revision_requested_customer_message(submission, language_code='ko', section_titles=None, revision_message=None):
     """
     수정 요청(REVISION_REQUESTED) 시 고객 메시지함에 안내. 로그인한 고객만 대상.
     설문 화면에서 다시 수정할 수 있다는 안내 + (선택) 수정 요청 카드명·메시지.
+    공유 대화(submission 연결) 생성/재사용 후 메시지 추가.
     """
     from survey.models import SurveySubmission
     if not submission or submission.status != SurveySubmission.Status.REVISION_REQUESTED:
@@ -196,13 +263,8 @@ def send_revision_requested_customer_message(submission, language_code='ko', sec
     try:
         from messaging.models import Message
         subject = _get_display_text('설문 수정 요청', language_code)
-        body = _get_display_text('설문 수정이 요청되었습니다.', language_code)
-        body += '\n\n' + _get_display_text('정착 서비스 > 정착 설문 화면에서 다시 접속하여 요청된 내용을 수정해 주세요.', language_code)
-        if section_titles:
-            body += '\n\n' + _get_display_text('수정 요청된 카드', language_code) + ': ' + ', '.join(section_titles)
-        extra = (revision_message or '').strip()
-        if extra:
-            body += '\n\n' + extra
+        body = _build_revision_requested_body(language_code, section_titles=section_titles, revision_message=revision_message)
+        # Reuse shared conversation so customer and admin see the same thread
         conv = _get_or_create_shared_conversation(submission, subject_fallback=subject)
         msg = Message(conversation=conv, sender=sender, body=body)
         msg.save()
@@ -214,41 +276,26 @@ def send_revision_requested_customer_message(submission, language_code='ko', sec
 
 def send_survey_submitted_admin_message(submission, language_code='ko'):
     """
-    설문 제출(SUBMITTED) 시 Admin 메시지함에 알림 메시지 추가.
-    send_survey_submitted_customer_message 에서 만든 공유 대화가 있으면 거기에 추가, 없으면 새로 생성.
+    설문 제출(SUBMITTED) 시 Admin 메시지함 알림.
+    고객 가독성을 위해 공유 대화에는 메시지를 추가하지 않음(고객은 '설문 제출됨' 안내 메시지만 보게 함).
+    Admin은 이메일(send_survey_submitted_admin_notification)으로 상세 안내를 받음.
     """
     if not submission or submission.status != 'SUBMITTED':
         return False
-    admin_users = _get_admin_users()
-    if not admin_users:
-        logger.debug("Survey submitted admin message skipped: no staff users.")
-        return False
-    sender = getattr(submission, 'user', None) if getattr(submission, 'user_id', None) else None
-    if not sender or not sender.is_authenticated:
-        sender = _get_system_sender()
-    if not sender:
-        logger.warning("Survey submitted admin message skipped: no sender.")
-        return False
+    # 공유 대화가 있으면 제목만 [이름] 정착 서비스로 맞춤(이미 customer_message에서 생성된 경우)
     try:
-        from messaging.models import Message
-        customer = getattr(submission, 'user', None)
-        if customer and getattr(customer, 'is_authenticated', True):
-            customer_name = (customer.get_full_name() or getattr(customer, 'username', '') or getattr(customer, 'email', '') or '').strip() or (getattr(submission, 'email', None) or '-')
-        else:
-            customer_name = (getattr(submission, 'email', None) or '-').strip() or '-'
-        subject_suffix = _get_display_text('새 설문 제출 알림', language_code)
-        subject = f'[{customer_name}] {subject_suffix}'
-        conv = _get_or_create_shared_conversation(submission, subject_fallback=subject)
-        email = getattr(submission, 'email', None) or '-'
-        submitted_at = str(getattr(submission, 'submitted_at', None) or '-')
-        body = _get_display_text('고객이 정착 서비스 설문을 제출했습니다.', language_code)
-        body += '\n' + _get_display_text('이메일', language_code) + ': ' + email
-        body += '\n' + _get_display_text('제출 시각', language_code) + ': ' + submitted_at
-        msg = Message(conversation=conv, sender=sender, body=body)
-        msg.save()
+        from messaging.models import Conversation
+        conv = Conversation.objects.filter(survey_submission=submission).first()
+        if conv:
+            base_subject = _get_display_text('정착 서비스', language_code)
+            customer_name = _customer_name_for_conversation(submission)
+            new_subject = f'[{customer_name}] {base_subject}'
+            if conv.subject != new_subject:
+                conv.subject = new_subject
+                conv.save(update_fields=['subject'])
         return True
     except Exception as e:
-        logger.warning("Survey submitted admin message failed: submission_id=%s error=%s", getattr(submission, 'id'), e, exc_info=True)
+        logger.warning("Survey submitted admin message (subject sync) failed: submission_id=%s error=%s", getattr(submission, 'id'), e, exc_info=True)
         return False
 
 
@@ -267,6 +314,7 @@ def send_quote_sent_customer_message(quote, language_code='ko'):
     """
     견적 송부(FINAL_SENT) 시 고객 메시지함에 안내 메시지 추가.
     로그인한 고객(submission.user)만 대상. 견적서를 보냈다는 안내 + 추가 필요 시 Admin에게 메시지 보내라는 안내.
+    (결제 링크 포함 메시지는 send_quote_release_message 사용.)
     """
     if not quote or not quote.submission_id:
         return False
@@ -295,54 +343,241 @@ def send_quote_sent_customer_message(quote, language_code='ko'):
         return False
 
 
+def send_schedule_sent_to_customer(submission, language_code='ko'):
+    """
+    Admin이 일정 확정·송부 시 고객에게 앱 메시지 + 이메일 발송.
+    submission에 연결된 공유 대화에 메시지 추가, 고객 이메일로 요약 발송(설정 시).
+    """
+    if not submission:
+        return False
+    customer = getattr(submission, 'user', None)
+    if not customer or not getattr(customer, 'is_authenticated', True):
+        logger.debug("Schedule sent customer notification skipped: no linked user.")
+        return False
+    sender = _get_system_sender()
+    if not sender:
+        logger.warning("Schedule sent customer notification skipped: no system sender.")
+        return False
+    subject = _get_display_text('일정이 확정되었습니다', language_code)
+    body_msg = '📅 ' + _get_display_text('정착 서비스 일정이 확정되어 전달되었습니다.', language_code)
+    body_msg += '\n\n' + _get_display_text('대시보드 > 내 정착 일정에서 확인하실 수 있습니다.', language_code)
+    try:
+        from messaging.models import Message
+        conv = _get_or_create_shared_conversation(submission, subject_fallback=subject)
+        msg = Message(conversation=conv, sender=sender, body=body_msg)
+        msg.save()
+    except Exception as e:
+        logger.warning("Schedule sent customer message failed: submission_id=%s error=%s", getattr(submission, 'id'), e, exc_info=True)
+    email = (getattr(customer, 'email', None) or getattr(submission, 'email', None) or '').strip()
+    if email and _is_email_configured():
+        try:
+            send_mail(
+                subject,
+                body_msg,
+                getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@example.com'),
+                [email],
+                fail_silently=True,
+            )
+        except Exception as e:
+            logger.warning("Schedule sent customer email failed: submission_id=%s error=%s", getattr(submission, 'id'), e, exc_info=True)
+    return True
+
+
+def send_quote_release_message(quote, language_code='ko'):
+    """
+    견적 송부(FINAL_SENT) 시 공유 대화에 메시지 추가: 견적 송부 안내 + 짧은 요약 + 결제 링크.
+    고객·Admin 모두 대화에서 확인 가능. message_may_include_price(quote) True일 때만.
+    """
+    if not quote or not quote.submission_id:
+        return False
+    if not message_may_include_price(quote):
+        return False
+    from .quote_email import build_quote_release_payload
+    payload = build_quote_release_payload(quote)
+    if not payload:
+        return False
+    sender = _get_system_sender()
+    if not sender:
+        logger.warning("Quote release message skipped: no system sender.")
+        return False
+    try:
+        from messaging.models import Message
+        lang = payload.get('lang_preferred') or language_code
+        subject = _get_display_text('견적서를 보냈습니다', lang)
+        # Notice + short summary + payment link
+        body = _get_display_text('요청하신 정착 서비스 견적을 보냈습니다.', lang)
+        body += '\n\n'
+        body += (_get_display_text('항목 수', lang) or '항목 수') + ': ' + str(payload.get('item_count', 0))
+        body += '  |  ' + (_get_display_text('합계', lang) or '합계') + ': $' + f"{payload.get('total_display', 0):,.2f}" + ' USD'
+        body += '\n\n'
+        body += _get_display_text('결제 및 자세한 내용은 아래 링크에서 확인해 주세요.', lang)
+        if payload.get('payment_link'):
+            body += '\n' + payload['payment_link']
+        body += '\n\n' + _get_display_text('추가로 필요한 사항이 있으면 메시지로 문의해 주세요.', lang)
+        submission = quote.submission
+        conv = _get_or_create_shared_conversation(submission, subject_fallback=subject)
+        msg = Message(conversation=conv, sender=sender, body=body)
+        msg.save()
+        return True
+    except Exception as e:
+        logger.warning("Quote release message failed: quote_id=%s error=%s", getattr(quote, 'id'), e, exc_info=True)
+        return False
+
+
+def send_payment_complete_customer_message(quote, language_code='ko'):
+    """
+    결제 완료(PAID) → 고객 앱 메시지. submission 공유 대화에 추가.
+    "결제가 완료되었습니다. Admin이 확인 후 일정을 보내드립니다."
+    """
+    if not quote or quote.status != 'PAID' or not quote.submission_id:
+        return False
+    if not message_may_include_price(quote):
+        return False
+    sender = _get_system_sender()
+    if not sender:
+        return False
+    try:
+        from messaging.models import Message
+        subject = _get_display_text('결제가 완료되었습니다', language_code)
+        body = _get_display_text('결제가 완료되었습니다. Admin이 확인 후 일정을 보내드립니다.', language_code)
+        body += '\n\n' + (_get_display_text('내 견적/정착 플랜에서 일정을 확인하실 수 있습니다.', language_code) or '내 견적/정착 플랜에서 일정을 확인하실 수 있습니다.')
+        submission = quote.submission
+        conv = _get_or_create_shared_conversation(submission, subject_fallback=subject)
+        msg = Message(conversation=conv, sender=sender, body=body)
+        msg.save()
+        return True
+    except Exception as e:
+        logger.warning("Payment complete customer message failed: quote_id=%s error=%s", quote.id, e, exc_info=True)
+        return False
+
+
+def send_payment_complete_admin_message(quote, language_code='ko'):
+    """
+    결제 완료(PAID) → Admin 앱 메시지. submission 공유 대화에 추가.
+    "고객이 결제를 완료했습니다. 서비스 일정을 생성·확정해 주세요."
+    """
+    if not quote or quote.status != 'PAID' or not quote.submission_id:
+        return False
+    if not message_may_include_price(quote):
+        return False
+    sender = _get_system_sender()
+    if not sender:
+        return False
+    try:
+        from messaging.models import Message
+        submission = quote.submission
+        customer_name = (getattr(submission, 'user', None) and submission.user and (submission.user.get_full_name() or submission.user.username or submission.email)) or (submission.email or '-')
+        subject = _get_display_text('고객 결제 완료', language_code)
+        body = _get_display_text('고객이 결제를 완료했습니다. 서비스 일정을 생성·확정해 주세요.', language_code)
+        body += '\n\n' + (_get_display_text('고객', language_code) or '고객') + ': ' + str(customer_name)
+        body += '\n' + (_get_display_text('합계', language_code) or '합계') + ': $' + f"{int(quote.total or 0):,}" + ' USD'
+        conv = _get_or_create_shared_conversation(submission, subject_fallback=subject)
+        msg = Message(conversation=conv, sender=sender, body=body)
+        msg.save()
+        return True
+    except Exception as e:
+        logger.warning("Payment complete admin message failed: quote_id=%s error=%s", quote.id, e, exc_info=True)
+        return False
+
+
+def send_payment_complete_customer_email(quote, language_code='ko'):
+    """결제 완료(PAID) → 고객 이메일. 설정 시에만 발송. 일정 안내 문구 포함."""
+    if not quote or quote.status != 'PAID' or not quote.submission_id:
+        return False
+    if not message_may_include_price(quote):
+        return False
+    customer_email = (quote.submission.email or '').strip()
+    if not customer_email or not _is_email_configured():
+        return False
+    subject = _get_display_text('결제가 완료되었습니다', language_code)
+    lines = [
+        _get_display_text('안녕하세요. 견적 결제가 완료되었습니다.', language_code),
+        '',
+        _get_display_text('결제가 완료되었습니다. Admin이 확인 후 일정을 보내드립니다.', language_code),
+        '',
+        (_get_display_text('합계', language_code) or '합계') + ': $' + f"{int(quote.total or 0):,}" + ' USD',
+        '',
+        _get_display_text('내 견적/정착 플랜에서 일정을 확인하실 수 있습니다.', language_code),
+    ]
+    try:
+        send_mail(
+            subject,
+            '\n'.join(lines),
+            getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@example.com'),
+            [customer_email],
+            fail_silently=True,
+        )
+        return True
+    except Exception as e:
+        logger.warning("Payment complete customer email failed: quote_id=%s error=%s", quote.id, e, exc_info=True)
+        return False
+
+
+def send_payment_complete_admin_email(quote, language_code='ko'):
+    """결제 완료(PAID) → Admin 이메일. 고객 결제 완료 안내 및 일정 생성 요청."""
+    if not quote or quote.status != 'PAID' or not quote.submission_id:
+        return False
+    if not message_may_include_price(quote):
+        return False
+    emails = _get_admin_emails()
+    if not emails or not _is_email_configured():
+        return False
+    submission = quote.submission
+    customer_name = (getattr(submission, 'user', None) and submission.user and (submission.user.get_full_name() or submission.user.username or submission.email)) or (submission.email or '-')
+    subject = _get_display_text('고객 결제 완료 알림', language_code)
+    lines = [
+        _get_display_text('고객이 결제를 완료했습니다. 서비스 일정을 생성·확정해 주세요.', language_code),
+        '',
+        (_get_display_text('고객', language_code) or '고객') + ': ' + str(customer_name),
+        (_get_display_text('합계', language_code) or '합계') + ': $' + f"{int(quote.total or 0):,}" + ' USD',
+        '',
+        _get_display_text('Admin 검토 페이지에서 해당 제출 건의 일정을 확인·확정할 수 있습니다.', language_code),
+    ]
+    try:
+        send_mail(
+            subject,
+            '\n'.join(lines),
+            getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@example.com'),
+            emails,
+            fail_silently=True,
+        )
+        return True
+    except Exception as e:
+        logger.warning("Payment complete admin email failed: quote_id=%s error=%s", quote.id, e, exc_info=True)
+        return False
+
+
 def send_payment_complete_notifications(quote, plan, language_code='ko'):
     """
-    결제 완료(PAID) → 고객·Agent 알림. 가격 포함 가능(PAID).
+    결제 완료(PAID) → 고객·Admin·Agent 알림 자동화.
+    - 고객: 앱 메시지(공유 대화) + 이메일(설정 시). "결제 완료, Admin이 일정 보내드림"
+    - Admin: 앱 메시지(공유 대화) + 이메일(설정 시). "고객 결제 완료, 일정 생성·확정 요청"
+    - Agent: 이메일(배정된 전담 Agent, 설정 시). 기존 동일.
+    모두 submission 공유 대화 재사용. language_code는 고객 기준(선호어) 권장.
     """
     if not quote or quote.status != 'PAID':
         return False
     if not message_may_include_price(quote):
         return False
     sent = False
-    # 고객 알림 (이메일)
-    customer_email = (quote.submission.email or '').strip() if quote.submission_id else ''
-    if customer_email and _is_email_configured():
-        subject = _get_display_text('결제가 완료되었습니다', language_code)
-        lines = [
-            _get_display_text('안녕하세요. 견적 결제가 완료되었습니다.', language_code),
-            '',
-            _get_display_text('합계', language_code) + ': ' + str(int(quote.total or 0)) + ' ' + _get_display_text('원', language_code),
-            '',
-            _get_display_text('내 견적/정착 플랜에서 일정을 확인하실 수 있습니다.', language_code),
-        ]
-        try:
-            send_mail(
-                subject,
-                '\n'.join(lines),
-                getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@example.com'),
-                [customer_email],
-                fail_silently=True,
-            )
-            sent = True
-        except Exception as e:
-            logger.warning("Payment complete customer notification failed: quote_id=%s error=%s", quote.id, e, exc_info=True)
-    # Agent 알림 (배정된 전담 Agent에게)
+    send_payment_complete_customer_message(quote, language_code=language_code)
+    send_payment_complete_admin_message(quote, language_code=language_code)
+    if send_payment_complete_customer_email(quote, language_code=language_code):
+        sent = True
+    if send_payment_complete_admin_email(quote, language_code=language_code):
+        sent = True
+    # Agent 알림 (배정된 전담 Agent에게 이메일)
     agent = getattr(plan, 'assigned_agent', None) if plan else None
     if agent and getattr(agent, 'email', None) and (agent.email or '').strip() and _is_email_configured():
         agent_email = (agent.email or '').strip()
-        subject = _get_display_text('고객 결제 완료 알림', language_code)
         sub = quote.submission
-        customer_name = '-'
-        if sub:
-            if getattr(sub, 'user', None):
-                customer_name = (sub.user.get_full_name() or sub.user.username or sub.email or '')
-            else:
-                customer_name = (sub.email or '')
+        customer_name = (getattr(sub, 'user', None) and sub.user and (sub.user.get_full_name() or sub.user.username or sub.email)) or (sub.email or '')
+        subject = _get_display_text('고객 결제 완료 알림', language_code)
         lines = [
             _get_display_text('배정된 고객이 견적 결제를 완료했습니다.', language_code),
             '',
-            _get_display_text('고객', language_code) + ': ' + str(customer_name),
-            _get_display_text('합계', language_code) + ': ' + str(int(quote.total or 0)) + ' ' + _get_display_text('원', language_code),
+            (_get_display_text('고객', language_code) or '고객') + ': ' + str(customer_name),
+            (_get_display_text('합계', language_code) or '합계') + ': $' + f"{int(quote.total or 0):,}" + ' USD',
             '',
             _get_display_text('고객 예약 달력에서 일정을 확인해 주세요.', language_code),
         ]
@@ -356,7 +591,7 @@ def send_payment_complete_notifications(quote, plan, language_code='ko'):
             )
             sent = True
         except Exception as e:
-            logger.warning("Payment complete agent notification failed: quote_id=%s agent_id=%s error=%s", quote.id, getattr(agent, 'id'), e, exc_info=True)
+            logger.warning("Payment complete agent email failed: quote_id=%s agent_id=%s error=%s", quote.id, getattr(agent, 'id'), e, exc_info=True)
     return sent
 
 

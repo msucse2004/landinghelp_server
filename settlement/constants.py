@@ -20,6 +20,24 @@ SCHEDULE_PRIORITY = {
     'AMAZON_PURCHASE': 32, 'LLC_FORMATION': 33,
 }
 
+# 주 전체 이름 → 2글자 코드 (Agent 담당 주 매칭용; "North Carolina" → "NC")
+_US_STATE_NAMES_TO_CODE = {
+    'ALABAMA': 'AL', 'ALASKA': 'AK', 'ARIZONA': 'AZ', 'ARKANSAS': 'AR',
+    'CALIFORNIA': 'CA', 'COLORADO': 'CO', 'CONNECTICUT': 'CT',
+    'DELAWARE': 'DE', 'FLORIDA': 'FL', 'GEORGIA': 'GA', 'HAWAII': 'HI',
+    'IDAHO': 'ID', 'ILLINOIS': 'IL', 'INDIANA': 'IN', 'IOWA': 'IA',
+    'KANSAS': 'KS', 'KENTUCKY': 'KY', 'LOUISIANA': 'LA', 'MAINE': 'ME',
+    'MARYLAND': 'MD', 'MASSACHUSETTS': 'MA', 'MICHIGAN': 'MI', 'MINNESOTA': 'MN',
+    'MISSISSIPPI': 'MS', 'MISSOURI': 'MO', 'MONTANA': 'MT', 'NEBRASKA': 'NE',
+    'NEVADA': 'NV', 'NEW HAMPSHIRE': 'NH', 'NEW JERSEY': 'NJ', 'NEW MEXICO': 'NM',
+    'NEW YORK': 'NY', 'NORTH CAROLINA': 'NC', 'NORTH DAKOTA': 'ND', 'OHIO': 'OH',
+    'OKLAHOMA': 'OK', 'OREGON': 'OR', 'PENNSYLVANIA': 'PA', 'RHODE ISLAND': 'RI',
+    'SOUTH CAROLINA': 'SC', 'SOUTH DAKOTA': 'SD', 'TENNESSEE': 'TN', 'TEXAS': 'TX',
+    'UTAH': 'UT', 'VERMONT': 'VT', 'VIRGINIA': 'VA', 'WASHINGTON': 'WA',
+    'WEST VIRGINIA': 'WV', 'WISCONSIN': 'WI', 'WYOMING': 'WY',
+    'WASHINGTON D.C.': 'DC',
+}
+
 
 def _get_services_qs():
     from .models import SettlementService
@@ -134,20 +152,23 @@ def quote_for_customer(quote):
 
 
 def _normalize_state_code(region_or_state):
-    """지역/State 문자열에서 2글자 State 코드 추출 (예: 'NC, Morrisville' -> 'NC')."""
+    """지역/State 문자열에서 2글자 State 코드 추출 (예: 'NC, Morrisville' -> 'NC', 'North Carolina' -> 'NC')."""
     if not region_or_state or not isinstance(region_or_state, str):
         return ''
     s = (region_or_state or '').strip()
     if not s:
         return ''
-    # 쉼표 있으면 앞부분만 (e.g. "NC, Morrisville")
+    # 쉼표 있으면 앞부분만 (e.g. "NC, Morrisville" or "North Carolina, Raleigh")
     if ',' in s:
         s = s.split(',')[0].strip()
-    s = s.upper()
-    # 2글자면 그대로 (CA, NC, NY 등)
-    if len(s) >= 2:
-        return s[:2]
-    return s
+    s_upper = s.upper()
+    # 전체 주 이름이면 2글자 코드로 변환 (North Carolina -> NC)
+    if s_upper in _US_STATE_NAMES_TO_CODE:
+        return _US_STATE_NAMES_TO_CODE[s_upper]
+    # 이미 2글자 코드인 경우 (NC, CA 등)
+    if len(s_upper) >= 2:
+        return s_upper[:2]
+    return s_upper
 
 
 def get_service_customer_price(service_code, state_code=None):

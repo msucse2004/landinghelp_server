@@ -1,7 +1,7 @@
 """
 번역 DB(StaticTranslation)의 영어(en) 컬럼에 표기 규칙을 적용합니다.
-- 문장(끝이 . ! ?): 첫 단어만 대문자
-- 문장이 아닌 경우: CamelCase
+- 단어의 첫 글자 대문자 (공백·슬래시 구분 단어별 Title Case)
+- 문장의 첫 글자 대문자 (. ! ? 뒤 새 문장 시작도 대문자)
 
   python manage.py normalize_english_in_db
   python manage.py normalize_english_in_db --dry-run  # 변경 예정만 출력
@@ -13,7 +13,7 @@ from translations.utils import normalize_english_display, invalidate_cache
 
 
 class Command(BaseCommand):
-    help = '번역 DB의 en 컬럼에 영어 표기 규칙(문장=첫 글자 대문자, 비문장=CamelCase) 적용'
+    help = '번역 DB의 en 컬럼에 영어 표기 규칙(단어·문장 첫 글자 대문자) 적용'
 
     def add_arguments(self, parser):
         parser.add_argument(

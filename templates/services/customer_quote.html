@@ -51,12 +51,41 @@
     </ul>
     <p style="margin-top: 1rem;"><strong>{{ i18n.total|default:"합계" }}</strong>: {{ quote.total|mask_price:can_view_price }}{% if can_view_price %} {{ i18n.won|default:"원" }}{% endif %}</p>
     <p style="margin-top: 1rem;">
-      <form id="quote-checkout-form" method="post" action="{% url 'api_settlement_quote_checkout' %}" style="display:inline;">
-        {% csrf_token %}
-        <input type="hidden" name="quote_id" value="{{ quote.id }}">
-        <button type="submit" class="btn btn-primary" id="btn-quote-pay">{{ i18n.pay|default:"결제하기" }}</button>
-      </form>
+      <a href="{% url 'settlement_quote_checkout_mock' %}?quote_id={{ quote.id }}" class="btn btn-primary" id="btn-quote-pay">{{ i18n.pay|default:"결제하기" }}</a>
     </p>
+    <div class="card" style="margin-top: 1.5rem; padding: 1rem; background: #f8fafc; border-radius: var(--radius);">
+      <p style="margin: 0 0 0.5rem; font-weight: 600;">{{ i18n.request_revision|default:"견적서 수정 요청" }}</p>
+      <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 0.75rem;">{{ i18n.request_revision_help|default:"금액·항목 등 수정이 필요하면 내용을 적어 보내주세요. Admin이 검토 후 수정된 견적을 보내드립니다." }}</p>
+      <textarea id="quote-revision-message" rows="3" style="width: 100%; padding: 0.5rem; border: 1px solid var(--color-border); border-radius: var(--radius); margin-bottom: 0.5rem;" placeholder="{{ i18n.request_revision_placeholder|default:'예: OO 서비스 금액 조정 요청, 일정 변경 등' }}" maxlength="2000"></textarea>
+      <button type="button" class="btn btn-outline" id="btn-quote-request-revision">{{ i18n.send_revision_request|default:"수정 요청 보내기" }}</button>
+      <p id="quote-revision-result" class="text-muted" style="font-size: 0.9rem; margin-top: 0.5rem; display: none;"></p>
+    </div>
+    <script>
+    (function(){
+      var btn = document.getElementById('btn-quote-request-revision');
+      var textarea = document.getElementById('quote-revision-message');
+      var resultEl = document.getElementById('quote-revision-result');
+      if (btn && textarea) {
+        btn.addEventListener('click', function(){
+          var msg = (textarea.value || '').trim();
+          if (!msg) { resultEl.style.display = 'block'; resultEl.textContent = '{% trans "수정 요청 내용을 입력해 주세요." %}'; resultEl.style.color = '#b91c1c'; return; }
+          btn.disabled = true;
+          var csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+          var payload = JSON.stringify({ quote_id: {{ quote.id }}, message: msg });
+          fetch('{% url "api_settlement_quote_request_revision" %}', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': (csrf && csrf.value) || '', 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: payload,
+            credentials: 'same-origin',
+          }).then(function(r){ return r.json(); }).then(function(res){
+            resultEl.style.display = 'block';
+            if (res.ok) { resultEl.textContent = res.message || '{% trans "전달되었습니다." %}'; resultEl.style.color = '#047857'; textarea.value = ''; }
+            else { resultEl.textContent = res.error || '{% trans "전송에 실패했습니다." %}'; resultEl.style.color = '#b91c1c'; }
+          }).catch(function(){ resultEl.style.display = 'block'; resultEl.textContent = '{% trans "전송에 실패했습니다." %}'; resultEl.style.color = '#b91c1c'; }).finally(function(){ btn.disabled = false; });
+        });
+      }
+    })();
+    </script>
     {% endif %}
 
     {% if quote.status == 'PAID' %}

@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'community',
     'messaging',
     'translations',
+    'ai_agent',
 ]
 
 MIDDLEWARE = [
@@ -176,6 +177,16 @@ GOOGLE_TRANSLATE_API_KEY = os.environ.get('GOOGLE_TRANSLATE_API_KEY', '')
 # 웹 요청 시에도 config.deepl_env.get_deepl_auth_key()로 env+레지스트리 재조회함
 from config.deepl_env import get_deepl_auth_key
 DEEPL_AUTH_KEY = get_deepl_auth_key()
+
+# AI assistant (ai_agent): stub by default; set AI_AGENT_LLM_ADAPTER to a dotted path for production.
+# AI_AGENT_BOT_USER_ID: User pk to use as sender for assistant messages (default: first staff).
+AI_AGENT_BOT_USER_ID = os.environ.get('AI_AGENT_BOT_USER_ID', None)
+if AI_AGENT_BOT_USER_ID is not None:
+    try:
+        AI_AGENT_BOT_USER_ID = int(AI_AGENT_BOT_USER_ID)
+    except (TypeError, ValueError):
+        AI_AGENT_BOT_USER_ID = None
+AI_AGENT_LLM_ADAPTER = os.environ.get('AI_AGENT_LLM_ADAPTER', 'stub')  # 'stub' or e.g. 'ai_agent.llm_ollama.Adapter'
 
 # 견적서 공식 포맷 (Admin 검토 화면·이메일)
 # QUOTATION_COMPANY_NAME = 'LifeAI US'

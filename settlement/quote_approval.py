@@ -1,6 +1,7 @@
 """
 최종 견적 승인·송부 공통 로직.
 Django Admin 저장과 검토 페이지 "승인 후 송부"에서 동일한 흐름을 사용해 로직 중복을 제거합니다.
+송부 시: 고객 선호어/영어 2종 PDF 첨부 이메일 + 앱 메시지(요약·결제 링크). 이메일 실패해도 FINAL_SENT 유지.
 """
 import logging
 from django.utils import timezone
@@ -11,10 +12,10 @@ logger = logging.getLogger(__name__)
 def finalize_and_send_quote(quote, actor=None):
     """
     견적을 최종 승인하고 고객에게 송부합니다.
-    - quote.status를 FINAL_SENT로 설정(아직이면)
-    - submission 상태를 고객 결재 대기중(AWAITING_PAYMENT)으로 변경
+    - quote.status → FINAL_SENT, submission.status → AWAITING_PAYMENT, sent_at 기록
     - QUOTE_SENT 이벤트 로그
-    - 이메일 발송 및 sent_at 갱신(아직 미송부인 경우만)
+    - 이메일: localized subject/body + 결제 링크 + 견적서 PDF 2종(고객 선호어, 영어) 첨부. 실패 시에도 quote는 FINAL_SENT 유지, 로그만 남김.
+    - 앱 메시지: 공유 대화에 견적 송부 안내 + 짧은 요약 + 결제 링크 (이메일 실패 여부와 무관하게 발송)
 
     quote: SettlementQuote (DRAFT 또는 NEGOTIATING 권장; 이미 FINAL_SENT/PAID여도 sent_at만 보완 가능)
     actor: 요청자 User (이벤트 로그용, None 가능)
@@ -40,25 +41,30 @@ def finalize_and_send_quote(quote, actor=None):
             created_by=actor,
         )
 
+    # sent_at은 송부 시점으로 기록 (이메일 성공 여부와 무관)
     if not quote.sent_at:
-        from .quote_email import send_quote_to_customer
-        try:
-            lang = 'ko'
-            if getattr(quote.submission, 'user_id', None) and quote.submission.user_id:
-                u = quote.submission.user
-                lang = (getattr(u, 'preferred_language', None) or '').strip() or lang
-        except Exception:
-            lang = 'ko'
-        if send_quote_to_customer(quote, language_code=lang):
-            quote.sent_at = timezone.now()
-            quote.save(update_fields=['sent_at'])
-        else:
-            logger.warning("Quote %s: send_quote_to_customer returned False.", quote.id)
-        # 고객 메시지함에 견적 송부 안내 + 추가 필요 시 Admin에게 메시지 보내라는 안내
-        try:
-            from .notifications import send_quote_sent_customer_message
-            send_quote_sent_customer_message(quote, language_code=lang)
-        except Exception as e:
-            logger.warning("Quote %s: send_quote_sent_customer_message failed: %s", quote.id, e, exc_info=True)
+        quote.sent_at = timezone.now()
+        quote.save(update_fields=['sent_at'])
+
+    # 이메일: PDF 2종 첨부 + 결제 링크. 실패해도 quote 상태는 이미 FINAL_SENT/sent_at 반영됨.
+    lang = 'ko'
+    try:
+        if getattr(quote.submission, 'user_id', None) and quote.submission.user_id:
+            lang = (getattr(quote.submission.user, 'preferred_language', None) or '').strip() or lang
+    except Exception:
+        pass
+    try:
+        from .quote_email import send_quote_release_email_with_attachments
+        if not send_quote_release_email_with_attachments(quote, lang_preferred=lang):
+            logger.warning("Quote %s: release email (with PDFs) failed or skipped; in-app message still sent.", quote.id)
+    except Exception as e:
+        logger.warning("Quote %s: release email exception: %s", quote.id, e, exc_info=True)
+
+    # 앱 메시지: 항상 발송 (견적 송부 안내 + 요약 + 결제 링크)
+    try:
+        from .notifications import send_quote_release_message
+        send_quote_release_message(quote, language_code=lang)
+    except Exception as e:
+        logger.warning("Quote %s: send_quote_release_message failed: %s", quote.id, e, exc_info=True)
 
     return True, None

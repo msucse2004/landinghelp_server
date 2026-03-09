@@ -221,7 +221,7 @@ class UserSettlementPlan(models.Model):
         verbose_name_plural = DisplayKey('사용자 정착 플랜')
 
     def has_schedule(self):
-        """일정 데이터가 있는지"""
+        """일정 데이터가 있는지 (기존 service_schedule JSON 기준). 새 모델은 뷰에서 get_schedule_for_display()로 판단."""
         if not self.service_schedule or not isinstance(self.service_schedule, dict):
             return False
         return bool(self.service_schedule)
@@ -337,3 +337,227 @@ class PlanServiceTask(models.Model):
 
     def __str__(self):
         return f'{self.plan_id} · {self.service_code} ({self.label or "-"})'
+
+
+# --- 스케줄 도메인: ML 초안 / Admin 수정 / 확정 이력 분리. 기존 UserSettlementPlan.service_schedule JSON은 유지하여 하위 호환. ---
+
+
+class ServiceSchedulePlan(models.Model):
+    """
+    서비스 일정 "플랜" 1건. draft → reviewing → finalized → sent → active 흐름.
+    ML 초안 생성 후 Admin이 수정·확정하고, 고객에게 송부(sent)하면 달력에 반영(active).
+    submission/quote/customer로 설문·견적과 연결. 기존 service_schedule JSON 대신 버전·출처·이력 관리용.
+    """
+    class Status(models.TextChoices):
+        DRAFT = 'DRAFT', '초안'
+        REVIEWING = 'REVIEWING', '검토 중'
+        FINALIZED = 'FINALIZED', '확정'
+        SENT = 'SENT', '고객 송부'
+        ACTIVE = 'ACTIVE', '활성(달력 반영)'
+
+    class Source(models.TextChoices):
+        ML = 'ML', 'ML 추천'
+        ADMIN = 'ADMIN', 'Admin 작성'
+        HYBRID = 'HYBRID', 'ML+Admin 혼합'
+
+    submission = models.ForeignKey(
+        'survey.SurveySubmission',
+        on_delete=models.CASCADE,
+        related_name='service_schedule_plans',
+        null=True,
+        blank=True,
+        verbose_name='설문 제출',
+    )
+    quote = models.ForeignKey(
+        'SettlementQuote',
+        on_delete=models.CASCADE,
+        related_name='service_schedule_plans',
+        null=True,
+        blank=True,
+        verbose_name='견적',
+    )
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='service_schedule_plans',
+        verbose_name='고객',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.DRAFT,
+        db_index=True,
+        verbose_name='상태',
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.ADMIN,
+        blank=True,
+        verbose_name='출처',
+    )
+    version = models.PositiveIntegerField(default=1, verbose_name='버전')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_schedule_plans',
+        verbose_name='생성자',
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_schedule_plans',
+        verbose_name='수정자',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = '서비스 일정 플랜'
+        verbose_name_plural = '서비스 일정 플랜'
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f'일정 플랜 #{self.id} (v{self.version}, {self.get_status_display()})'
+
+
+class ServiceScheduleItem(models.Model):
+    """
+    일정 플랜 내 개별 서비스 1건. 날짜/시간, 담당 Agent, 서비스 유형(직접검색/AI/대면) 등.
+    AgentAppointmentRequest와 별도: Item은 "슬롯", Appointment는 실제 약속 신청/확정.
+    """
+    class ServiceType(models.TextChoices):
+        SELF_SEARCH = 'SELF_SEARCH', '직접 검색'
+        AI_AGENT = 'AI_AGENT', 'AI 서비스'
+        IN_PERSON_AGENT = 'IN_PERSON_AGENT', 'Agent 대면'
+
+    class ItemStatus(models.TextChoices):
+        SCHEDULED = 'SCHEDULED', '예정'
+        CONFIRMED = 'CONFIRMED', '확정'
+        CANCELLED = 'CANCELLED', '취소'
+
+    schedule_plan = models.ForeignKey(
+        ServiceSchedulePlan,
+        on_delete=models.CASCADE,
+        related_name='items',
+        verbose_name='일정 플랜',
+    )
+    service_code = models.CharField(max_length=50, verbose_name='서비스 코드')
+    service_label = models.CharField(max_length=200, blank=True, verbose_name='서비스 표시명')
+    service_type = models.CharField(
+        max_length=30,
+        choices=ServiceType.choices,
+        default=ServiceType.AI_AGENT,
+        blank=True,
+        verbose_name='서비스 유형',
+    )
+    starts_at = models.DateTimeField(null=True, blank=True, verbose_name='시작 시각')
+    ends_at = models.DateTimeField(null=True, blank=True, verbose_name='종료 시각')
+    duration_minutes = models.PositiveIntegerField(null=True, blank=True, verbose_name='소요 시간(분)')
+    assigned_agent = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_schedule_items',
+        verbose_name='배정 Agent',
+    )
+    location_text = models.CharField(max_length=300, blank=True, verbose_name='장소/위치')
+    status = models.CharField(
+        max_length=20,
+        choices=ItemStatus.choices,
+        default=ItemStatus.SCHEDULED,
+        db_index=True,
+        verbose_name='상태',
+    )
+    source_score = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='ML 추천 점수',
+        help_text='ML 생성 시 신뢰도/점수.',
+    )
+    source_reason = models.CharField(
+        max_length=500,
+        blank=True,
+        verbose_name='출처 사유',
+        help_text='ML/Admin 선택 이유 요약.',
+    )
+    notes = models.TextField(blank=True, verbose_name='메모')
+    sort_order = models.PositiveIntegerField(default=0, verbose_name='정렬 순서')
+
+    class Meta:
+        verbose_name = '서비스 일정 항목'
+        verbose_name_plural = '서비스 일정 항목'
+        ordering = ['schedule_plan', 'sort_order', 'starts_at', 'id']
+
+    def __str__(self):
+        return f'{self.service_code} @ {self.starts_at or "날짜미정"} ({self.get_status_display()})'
+
+
+class AgentAvailabilityWindow(models.Model):
+    """
+    Agent 가용 시간대. when2meet 스타일 수집용.
+    manual: Admin/Agent가 직접 입력, link_response: 링크 응답, admin_entered: Admin 대신 입력.
+    """
+    class Source(models.TextChoices):
+        MANUAL = 'manual', '직접 입력'
+        LINK_RESPONSE = 'link_response', '링크 응답'
+        ADMIN_ENTERED = 'admin_entered', 'Admin 입력'
+
+    class WindowStatus(models.TextChoices):
+        AVAILABLE = 'AVAILABLE', '가능'
+        USED = 'USED', '사용됨'
+        CANCELLED = 'CANCELLED', '취소'
+
+    agent = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='availability_windows',
+        verbose_name='Agent',
+    )
+    submission = models.ForeignKey(
+        'survey.SurveySubmission',
+        on_delete=models.CASCADE,
+        related_name='agent_availability_windows',
+        null=True,
+        blank=True,
+        verbose_name='설문 제출',
+    )
+    schedule_plan = models.ForeignKey(
+        ServiceSchedulePlan,
+        on_delete=models.CASCADE,
+        related_name='agent_availability_windows',
+        null=True,
+        blank=True,
+        verbose_name='일정 플랜',
+    )
+    starts_at = models.DateTimeField(verbose_name='시작 시각')
+    ends_at = models.DateTimeField(verbose_name='종료 시각')
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.MANUAL,
+        verbose_name='입력 출처',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=WindowStatus.choices,
+        default=WindowStatus.AVAILABLE,
+        db_index=True,
+        verbose_name='상태',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Agent 가용 시간대'
+        verbose_name_plural = 'Agent 가용 시간대'
+        ordering = ['agent', 'starts_at']
+
+    def __str__(self):
+        return f'{self.agent_id} {self.starts_at}–{self.ends_at} ({self.get_status_display()})'

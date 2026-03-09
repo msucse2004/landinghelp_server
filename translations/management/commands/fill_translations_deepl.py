@@ -37,6 +37,12 @@ class Command(BaseCommand):
             action='store_true',
             help='행 단위 진행 상황 출력',
         )
+        parser.add_argument(
+            '--progress-key',
+            type=str,
+            default='',
+            help='진행률을 캐시에 저장할 키 (Admin progress bar용)',
+        )
 
     def handle(self, *args, **options):
         import os
@@ -44,6 +50,7 @@ class Command(BaseCommand):
         force = options.get('force', False)
         limit = options.get('limit') or 0
         verbose = options.get('verbose', False)
+        progress_key = (options.get('progress_key') or os.environ.get('FILL_TRANSLATIONS_PROGRESS_KEY') or '').strip()
 
         auth_key = (getattr(settings, 'DEEPL_AUTH_KEY', None) or os.environ.get('DEEPL_AUTH_KEY', '') or '').strip()
         if not auth_key:
@@ -57,12 +64,28 @@ class Command(BaseCommand):
         from translations.utils import invalidate_cache
         from translations.services import _translate_for_save
         from translations.utils import get_supported_language_codes, save_translation_from_api
+        from django.core.cache import cache
+
+        def report_progress(total, current, filled, done=False, output='', error=''):
+            if not progress_key:
+                return
+            cache.set(progress_key, {
+                'total': total,
+                'current': current,
+                'filled': filled,
+                'done': done,
+                'output': output,
+                'error': error,
+            }, timeout=3600)
 
         invalidate_cache()
         qs = StaticTranslation.objects.all().order_by('key')
         total_expected = limit if limit > 0 else qs.count()
         if limit > 0:
             qs = qs[:limit]
+
+        if progress_key:
+            report_progress(total=total_expected, current=0, filled=0, done=False)
 
         total_rows = 0
         total_filled = 0
@@ -78,6 +101,38 @@ class Command(BaseCommand):
             if hasattr(self.stdout, 'flush'):
                 self.stdout.flush()
 
+        try:
+            total_rows, total_filled = self._run_loop(
+                qs, dry_run, force, total_expected, target_langs, lang_to_field,
+                verbose, progress_key, report_progress,
+            )
+        except Exception as e:
+            if progress_key:
+                report_progress(total=total_expected, current=total_rows, filled=total_filled, done=True, error=str(e))
+            raise
+
+        if dry_run:
+            try:
+                self.stdout.write(self.style.SUCCESS(f'Rows: {total_rows}, to fill: {total_filled} (dry-run)'))
+            except UnicodeEncodeError:
+                self.stdout.write(self.style.SUCCESS(f'Done. Rows={total_rows}, to_fill={total_filled}'))
+            if progress_key:
+                report_progress(total=total_expected, current=total_rows, filled=total_filled, done=True, output=f'Rows: {total_rows}, to fill: {total_filled} (dry-run)')
+        else:
+            invalidate_cache()
+            done_msg = f'Done. Rows: {total_rows}, filled: {total_filled}'
+            try:
+                self.stdout.write(self.style.SUCCESS(done_msg))
+            except UnicodeEncodeError:
+                self.stdout.write(self.style.SUCCESS(f'Done. Rows={total_rows} Filled={total_filled}'))
+            if progress_key:
+                report_progress(total=total_expected, current=total_rows, filled=total_filled, done=True, output=done_msg)
+
+    def _run_loop(self, qs, dry_run, force, total_expected, target_langs, lang_to_field, verbose, progress_key, report_progress):
+        from translations.services import _translate_for_save
+        from translations.utils import save_translation_from_api, invalidate_cache
+        total_rows = 0
+        total_filled = 0
         for row in qs:
             source_text = (row.ko or row.key or '').strip()
             if not source_text:
@@ -89,6 +144,8 @@ class Command(BaseCommand):
                     val = getattr(row, f, None) if hasattr(row, f) else None
                     if force or not (val and str(val).strip()):
                         total_filled += 1
+                if progress_key:
+                    report_progress(total=total_expected, current=total_rows, filled=total_filled, done=False)
                 continue
 
             row_filled = 0
@@ -111,15 +168,7 @@ class Command(BaseCommand):
                         self.stdout.flush()
                 except UnicodeEncodeError:
                     pass
+            if progress_key and not dry_run:
+                report_progress(total=total_expected, current=total_rows, filled=total_filled, done=False)
 
-        if dry_run:
-            try:
-                self.stdout.write(self.style.SUCCESS(f'Rows: {total_rows}, to fill: {total_filled} (dry-run)'))
-            except UnicodeEncodeError:
-                self.stdout.write(self.style.SUCCESS(f'Done. Rows={total_rows}, to_fill={total_filled}'))
-        else:
-            invalidate_cache()
-            try:
-                self.stdout.write(self.style.SUCCESS(f'Done. Rows: {total_rows}, filled: {total_filled}'))
-            except UnicodeEncodeError:
-                self.stdout.write(self.style.SUCCESS(f'Done. Rows={total_rows} Filled={total_filled}'))
+        return (total_rows, total_filled)

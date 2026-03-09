@@ -112,11 +112,13 @@ def home(request):
     if request.user.is_authenticated and request.user.role == 'CUSTOMER':
         try:
             plan = request.user.settlement_plan
-            if plan.has_schedule():
+            from settlement.schedule_utils import get_schedule_for_display
+            schedule_data = get_schedule_for_display(plan) or {}
+            if isinstance(schedule_data, dict) and schedule_data:
                 user_plan = plan
                 import json
                 from settlement.constants import enrich_schedule_with_appointment_status
-                enriched = enrich_schedule_with_appointment_status(request.user, plan.service_schedule or {})
+                enriched = enrich_schedule_with_appointment_status(request.user, schedule_data)
                 plan_schedule_json = json.dumps(enriched)
         except UserSettlementPlan.DoesNotExist:
             pass
@@ -377,12 +379,22 @@ def customer_dashboard(request):
     lang = get_request_language(request)
     user_plan = None
     plan_schedule_json = '{}'
+    schedule_data = {}
     try:
         plan = request.user.settlement_plan
-        if plan.has_schedule():
-            user_plan = plan
+        user_plan = plan
+        from settlement.schedule_utils import (
+            get_schedule_for_display,
+            get_paid_service_codes_for_user,
+            filter_schedule_to_paid_services,
+        )
+        schedule_data = get_schedule_for_display(plan) or {}
+        paid_codes = get_paid_service_codes_for_user(request.user)
+        if paid_codes and isinstance(schedule_data, dict):
+            schedule_data = filter_schedule_to_paid_services(schedule_data, paid_codes)
+        if isinstance(schedule_data, dict) and schedule_data:
             from settlement.constants import enrich_schedule_with_appointment_status
-            enriched = enrich_schedule_with_appointment_status(request.user, plan.service_schedule or {})
+            enriched = enrich_schedule_with_appointment_status(request.user, schedule_data)
             # 달력에 표시할 서비스명·상태 라벨을 현재 언어로 번역
             for date_str, items in enriched.items():
                 if not isinstance(items, list):
@@ -429,6 +441,22 @@ def customer_dashboard(request):
         dashboard_calendar_i18n[f'month_{i}'] = get_calendar_month_display(i, lang)
     for i in range(7):
         dashboard_calendar_i18n[['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][i]] = get_calendar_weekday_display(i, lang)
+    dashboard_calendar_i18n['detail_title'] = get_display_text('서비스 상세', lang)
+    dashboard_calendar_i18n['detail_service_name'] = get_display_text('서비스', lang)
+    dashboard_calendar_i18n['detail_time'] = get_display_text('시간', lang)
+    dashboard_calendar_i18n['detail_type'] = get_display_text('유형', lang)
+    dashboard_calendar_i18n['detail_agent'] = get_display_text('담당 Agent', lang)
+    dashboard_calendar_i18n['detail_location'] = get_display_text('장소 / 미팅 안내', lang)
+    dashboard_calendar_i18n['detail_notes'] = get_display_text('메모 / 준비사항', lang)
+    dashboard_calendar_i18n['detail_message_shortcut'] = get_display_text('메시지 보내기', lang)
+    dashboard_calendar_i18n['close'] = get_display_text('닫기', lang)
+    dashboard_calendar_i18n['type_self_search'] = get_display_text('직접 진행', lang)
+    dashboard_calendar_i18n['type_ai'] = get_display_text('AI 지원', lang)
+    dashboard_calendar_i18n['type_in_person'] = get_display_text('Agent 대면', lang)
+    dashboard_calendar_i18n['no_time'] = get_display_text('—', lang)
+    dashboard_calendar_i18n['no_location'] = get_display_text('—', lang)
+    dashboard_calendar_i18n['no_notes'] = get_display_text('—', lang)
+    dashboard_calendar_i18n['todays_services'] = get_display_text('오늘의 서비스', lang)
     calendar_weekdays = [get_calendar_weekday_display(i, lang) for i in range(7)]
 
     # 대시보드 문구 전체 StaticTranslation
@@ -460,6 +488,8 @@ def customer_dashboard(request):
         'message': get_display_text('메시지', lang),
         'message_placeholder': get_display_text('에이전트에게 전달할 메시지', lang),
         'save': get_display_text('저장', lang),
+        'detail_title': get_display_text('서비스 상세', lang),
+        'close': get_display_text('닫기', lang),
     }
 
     # 무료 Agent 서비스 라벨 번역
@@ -490,10 +520,25 @@ def customer_dashboard(request):
     except Exception:
         pass
 
+    schedule_has_items = bool(user_plan and isinstance(schedule_data, dict) and schedule_data)
+    dashboard_i18n['schedule_empty'] = get_display_text('아직 확정된 일정이 없습니다.', lang)
+    dashboard_i18n['assistant_link'] = get_display_text('AI 어시스턴트', lang)
+    dashboard_i18n['rateable_title'] = get_display_text('완료된 서비스 평가', lang)
+    dashboard_i18n['rateable_desc'] = get_display_text('서비스가 완료된 Agent에 대해 별점과 한줄평을 남겨 주세요.', lang)
+    dashboard_i18n['rate_modal_title'] = get_display_text('서비스 평가', lang)
+    dashboard_i18n['rate_stars'] = get_display_text('별점', lang)
+    dashboard_i18n['rate_comment'] = get_display_text('한줄평 (선택)', lang)
+    dashboard_i18n['rate_comment_placeholder'] = get_display_text('서비스에 대한 짧은 후기를 남겨 주세요.', lang)
+    dashboard_i18n['rate_submit'] = get_display_text('제출', lang)
+    dashboard_i18n['task_self_search'] = get_display_text('직접 진행', lang)
+    dashboard_i18n['task_ai'] = get_display_text('AI 지원', lang)
+    dashboard_i18n['meeting_agent'] = get_display_text('Agent 대면', lang)
+
     return render(request, 'app/customer_dashboard.html', {
         'tier_label': get_user_grade_display(request.user, lang),
         'user_plan': user_plan,
         'plan_schedule_json': plan_schedule_json,
+        'schedule_has_items': schedule_has_items,
         'free_agent_services': free_agent_services_display,
         'pending_appointments': pending_appointments,
         'dashboard_calendar_i18n': dashboard_calendar_i18n,
@@ -531,6 +576,102 @@ def submission_review_list(request):
         'submissions': submissions,
         'page_obj': submissions,
     })
+
+
+def _format_answer_value(raw, question_dict):
+    """설문 문항 정의(choices 등)에 따라 답변 표시 문자열 반환."""
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return ''
+    choices = question_dict.get('choices') or []
+    if isinstance(raw, list):
+        if not raw:
+            return ''
+        # 선택지가 있으면 value -> label 매핑
+        choice_map = {str(c.get('value', '')).strip(): (c.get('label') or c.get('value') or '') for c in choices if c}
+        labels = [choice_map.get(str(v).strip(), str(v)) for v in raw if v is not None]
+        return ', '.join(labels) if labels else ', '.join(str(v) for v in raw)
+    raw_str = str(raw).strip()
+    for c in choices:
+        if not c:
+            continue
+        v = c.get('value')
+        if v is not None and str(v).strip() == raw_str:
+            return (c.get('label') or c.get('value') or raw_str)
+    return raw_str
+
+
+def _build_customer_answers_by_section(submission):
+    """
+    Admin 검토용: 고객이 입력한 설문 전체를 섹션(카드)별로 묶어 반환.
+    설문지에서 숨겨진 항목(내부 전용 섹션, 숨김 처리된 문항 키)은 검토 화면에서도 제외.
+    반환: [ { 'section_title': str, 'section_id': int, 'items': [ {'key', 'label', 'value_display'} ] }, ... ]
+    """
+    from survey.models import SurveySection, SurveyQuestion
+    from survey.constants import SURVEY_KEYS_HIDDEN_ON_FORM
+    answers = getattr(submission, 'answers', None) or {}
+    # 고객 설문에 노출되는 섹션만 (is_internal=False)
+    sections = list(
+        SurveySection.objects.filter(is_active=True, is_internal=False)
+        .order_by('display_order', 'id')
+        .prefetch_related('questions')
+    )
+    out = []
+    for section in sections:
+        questions = sorted(
+            [q for q in section.questions.all() if q.is_active and q.key not in SURVEY_KEYS_HIDDEN_ON_FORM],
+            key=lambda q: (q.order_in_section, q.order, q.id),
+        )
+        items = []
+        for q in questions:
+            raw = answers.get(q.key)
+            value_display = _format_answer_value(raw, {
+                'choices': q.choices or [],
+                'field_type': q.field_type,
+            })
+            items.append({
+                'key': q.key,
+                'label': q.label,
+                'value_display': value_display,
+                'value_raw': raw,
+            })
+        if items:
+            out.append({
+                'section_title': section.title,
+                'section_id': section.id,
+                'items': items,
+            })
+    # 섹션에 묶이지 않은 문항(step만 있는 구 문항 등): answers에만 있는 키, 숨김 키 제외
+    section_keys = set()
+    for s in sections:
+        for q in s.questions.all():
+            if q.is_active:
+                section_keys.add(q.key)
+
+    def _has_value(v):
+        if v is None:
+            return False
+        if isinstance(v, list):
+            return len(v) > 0
+        return str(v).strip() != ''
+
+    orphan_keys = [
+        k for k in answers.keys()
+        if k not in section_keys and k not in SURVEY_KEYS_HIDDEN_ON_FORM and _has_value(answers.get(k))
+    ]
+    if orphan_keys:
+        from survey.models import SurveyQuestion
+        orphan_qs = SurveyQuestion.objects.filter(key__in=orphan_keys, is_active=True).order_by('step', 'order')
+        q_map = {q.key: q for q in orphan_qs}
+        items = []
+        for key in orphan_keys:
+            q = q_map.get(key)
+            label = q.label if q else key
+            raw = answers.get(key)
+            value_display = _format_answer_value(raw, {'choices': (q.choices or []) if q else [], 'field_type': (q.field_type if q else 'text')})
+            items.append({'key': key, 'label': label, 'value_display': value_display, 'value_raw': raw})
+        if items:
+            out.append({'section_title': '기타', 'section_id': None, 'items': items})
+    return out
 
 
 @login_required
@@ -653,6 +794,31 @@ def submission_review(request, submission_id):
             'sent_at': payment_quote.sent_at,
         }
 
+    # DRAFT 없고 송부/결제된 견적만 있을 때: 해당 견적을 읽기 전용으로 견적서 카드에 표시(기존 견적서 유지)
+    quotation_read_only = False
+    if not quote_draft_display and payment_quote and payment_quote.items:
+        sent_items = []
+        for it in payment_quote.items:
+            if not isinstance(it, dict):
+                continue
+            item = dict(it).copy()
+            item.pop('_needs_review', None)
+            item.pop('_auto', None)
+            code = item.get('code', '')
+            delivery_key = per_service.get(code) or bulk_preference
+            delivery_label = _delivery_labels.get(delivery_key, '') if delivery_key else ''
+            sent_items.append({**item, 'delivery_label': delivery_label})
+        quote_draft_display = {
+            'id': payment_quote.id,
+            'region': payment_quote.region or '',
+            'total': int(payment_quote.total or 0),
+            'items': sent_items,
+            'draft_source': '',
+            'auto_generated_at': None,
+            'version': payment_quote.version,
+        }
+        quotation_read_only = True
+
     # 일정 준비도 및 필요 작업 (결제 후)
     scheduling_summary = None
     required_tasks = []
@@ -723,22 +889,60 @@ def submission_review(request, submission_id):
         ).values_list('section_id', flat=True)
     )
 
-    # 견적서 공식 포맷용 컨텍스트
+    # 견적서 공식 포맷용 컨텍스트 (견적 번호: Q-YYYY-MM-DD-{그날 견적서 순번}, 유효기간 견적일자 기준 10일)
     from datetime import timedelta
     _now = timezone.now()
     _company = getattr(settings, 'QUOTATION_COMPANY_NAME', 'LifeAI US')
+    _valid_days = 10  # 견적일자 기준 10일
+    display_quote = quote_draft or payment_quote
+    if display_quote:
+        _qdate = display_quote.created_at.date()
+        _daily_seq = SettlementQuote.objects.filter(
+            created_at__date=_qdate, id__lte=display_quote.id
+        ).count()
+        _quotation_number = f'Q-{_qdate:%Y-%m-%d}-{_daily_seq}'
+        _quotation_date = _qdate.strftime('%Y-%m-%d')
+    else:
+        _qdate = _now.date()
+        _daily_seq = SettlementQuote.objects.filter(created_at__date=_qdate).count() + 1
+        _quotation_number = f'Q-{_qdate:%Y-%m-%d}-{_daily_seq}'
+        _quotation_date = _now.strftime('%Y-%m-%d')
+    _quote_lang = 'en'
+    if getattr(submission, 'user_id', None) and submission.user_id:
+        try:
+            _pref = (getattr(submission.user, 'preferred_language', None) or '').strip().lower()
+            if _pref and _pref[:2] == 'ko':
+                _quote_lang = 'ko'
+            elif _pref:
+                _quote_lang = _pref[:2]
+        except Exception:
+            pass
+    _QUOTE_TERMS = {
+        'ko': '결제는 수락 시에 이루어집니다. 본 견적서는 위에 명시된 날짜까지 유효합니다. 서비스 및 가격은 주문 시 합의된 범위에 따릅니다.',
+        'en': 'Payment due upon acceptance. This quotation is valid until the date stated above. Services and pricing are subject to the scope agreed at the time of order.',
+    }
+    _QUOTE_CONTACT = {
+        'ko': '문의 사항은 메시지 또는 이메일로 연락 주세요.',
+        'en': 'For questions, please contact us via message or email.',
+    }
+    _terms_text = _QUOTE_TERMS.get(_quote_lang) or _QUOTE_TERMS['en']
+    _contact_text = _QUOTE_CONTACT.get(_quote_lang) or _QUOTE_CONTACT['en']
+    _valid_until_date = (_qdate + timedelta(days=_valid_days)).strftime('%Y-%m-%d')
     quotation_context = {
         'company_name': _company,
-        'quotation_number': f'Q-{submission.id}-{quote_draft.version if quote_draft else 1}',
-        'quotation_date': _now.strftime('%Y-%m-%d'),
-        'valid_until': (_now + timedelta(days=getattr(settings, 'QUOTATION_VALID_DAYS', 30))).strftime('%Y-%m-%d'),
-        'terms': getattr(settings, 'QUOTATION_TERMS', 'Payment due upon acceptance. This quotation is valid until the date stated above. Services and pricing are subject to the scope agreed at the time of order.'),
-        'contact_footer': getattr(settings, 'QUOTATION_CONTACT', 'For questions, please contact us via message or email.'),
+        'quotation_number': _quotation_number,
+        'quotation_date': _quotation_date,
+        'valid_until': _valid_until_date,
+        'terms': _terms_text,
+        'contact_footer': _contact_text,
     }
+
+    customer_answers_by_section = _build_customer_answers_by_section(submission)
 
     return render(request, 'app/submission_review.html', {
         'submission': submission,
         'customer_summary': customer_summary,
+        'customer_answers_by_section': customer_answers_by_section,
         'request_summary': request_summary,
         'quote_draft': quote_draft,
         'quote_draft_display': quote_draft_display,
@@ -752,6 +956,7 @@ def submission_review(request, submission_id):
         'required_tasks': required_tasks,
         'submission_readiness': submission_readiness,
         'quotation_context': quotation_context,
+        'quotation_read_only': quotation_read_only,
     })
 
 
@@ -759,12 +964,17 @@ def submission_review(request, submission_id):
 @login_required
 @user_passes_test(_staff_required, login_url='/login/')
 def submission_review_request_revision(request, submission_id):
-    """Staff: 고객에게 수정 요청 (REVISION_REQUESTED)."""
+    """
+    Staff: 고객에게 수정 요청 (REVISION_REQUESTED).
+    상태·revision_requested_at/message 갱신, 이벤트 로그, 공유 대화에 메시지 + 이메일(설정 시) 발송.
+    """
     from survey.models import SurveySubmission, SurveySubmissionEvent
     from django.shortcuts import get_object_or_404
+    from django.contrib import messages
 
     submission = get_object_or_404(SurveySubmission, id=submission_id)
     if submission.status != SurveySubmission.Status.SUBMITTED:
+        messages.warning(request, '수정 요청은 제출(SUBMITTED) 상태에서만 가능합니다.')
         return redirect('app_submission_review', submission_id=submission_id)
     message = (request.POST.get('revision_message') or '').strip()
     submission.status = SurveySubmission.Status.REVISION_REQUESTED
@@ -777,14 +987,16 @@ def submission_review_request_revision(request, submission_id):
         created_by=request.user,
         meta={'message': message[:500]},
     )
+    lang = 'ko'
+    if getattr(submission, 'user_id', None) and submission.user_id:
+        lang = (getattr(submission.user, 'preferred_language', None) or '').strip() or lang
     try:
-        from settlement.notifications import send_revision_requested_customer_message
-        lang = 'ko'
-        if getattr(submission, 'user_id', None) and submission.user_id:
-            lang = (getattr(submission.user, 'preferred_language', None) or '').strip() or lang
+        from settlement.notifications import send_revision_requested_customer_message, send_revision_requested_customer_email
         send_revision_requested_customer_message(submission, language_code=lang, revision_message=message)
+        send_revision_requested_customer_email(submission, language_code=lang, revision_message=message)
     except Exception:
         pass
+    messages.success(request, '고객에게 수정 요청을 보냈습니다. (앱 메시지함 + 이메일 발송됨)')
     return redirect('app_submission_review', submission_id=submission_id)
 
 
@@ -792,12 +1004,17 @@ def submission_review_request_revision(request, submission_id):
 @login_required
 @user_passes_test(_staff_required, login_url='/login/')
 def submission_review_request_section_updates(request, submission_id):
-    """Staff: 특정 카드(섹션)만 고객에게 수정 요청. 구조화된 재입력 유도."""
+    """
+    Staff: 특정 카드(섹션)만 고객에게 수정 요청. 구조화된 재입력 유도.
+    SurveySubmissionSectionRequest 생성, REVISION_REQUESTED 설정, 이벤트 로그, 메시지+이메일 발송.
+    """
     from survey.models import SurveySubmission, SurveySection, SurveySubmissionSectionRequest, SurveySubmissionEvent
     from django.shortcuts import get_object_or_404
+    from django.contrib import messages
 
     submission = get_object_or_404(SurveySubmission, id=submission_id)
     if submission.status != SurveySubmission.Status.SUBMITTED:
+        messages.warning(request, '카드별 수정 요청은 제출(SUBMITTED) 상태에서만 가능합니다.')
         return redirect('app_submission_review', submission_id=submission_id)
 
     section_ids = request.POST.getlist('section_ids')
@@ -811,6 +1028,7 @@ def submission_review_request_section_updates(request, submission_id):
     )
     section_ids = [i for i in section_ids if i in valid_section_ids]
     if not section_ids:
+        messages.warning(request, '수정 요청할 카드를 하나 이상 선택해 주세요.')
         return redirect('app_submission_review', submission_id=submission_id)
 
     existing = set(
@@ -843,12 +1061,18 @@ def submission_review_request_section_updates(request, submission_id):
         created_by=request.user,
         meta={'section_ids': section_ids, 'section_titles': list(sections), 'message': message[:500]},
     )
+    lang = 'ko'
+    if getattr(submission, 'user_id', None) and submission.user_id:
+        lang = (getattr(submission.user, 'preferred_language', None) or '').strip() or lang
     try:
-        from settlement.notifications import send_revision_requested_customer_message
-        lang = 'ko'
-        if getattr(submission, 'user_id', None) and submission.user_id:
-            lang = (getattr(submission.user, 'preferred_language', None) or '').strip() or lang
+        from settlement.notifications import send_revision_requested_customer_message, send_revision_requested_customer_email
         send_revision_requested_customer_message(
+            submission,
+            language_code=lang,
+            section_titles=list(sections),
+            revision_message=message,
+        )
+        send_revision_requested_customer_email(
             submission,
             language_code=lang,
             section_titles=list(sections),
@@ -856,6 +1080,7 @@ def submission_review_request_section_updates(request, submission_id):
         )
     except Exception:
         pass
+    messages.success(request, '선택한 카드에 대한 수정 요청을 고객에게 보냈습니다. (앱 메시지함 + 이메일)')
     return redirect('app_submission_review', submission_id=submission_id)
 
 
@@ -961,4 +1186,86 @@ def submission_review_approve_quote(request, submission_id):
         messages.success(request, '견적을 최종 승인하고 고객에게 송부했습니다. 고객은 내 견적 페이지에서 확인할 수 있습니다.')
     else:
         messages.error(request, err or '송부 처리 중 오류가 발생했습니다.')
+    return redirect('app_submission_review', submission_id=submission_id)
+
+
+@require_POST
+@login_required
+@user_passes_test(_staff_required, login_url='/login/')
+def submission_review_create_draft_from_sent(request, submission_id):
+    """Staff: 송부된 견적(FINAL_SENT/PAID)을 복사해 수정용 DRAFT 생성. 이후 견적서 수정 후 '승인 후 고객에게 송부'로 재송부 가능."""
+    from survey.models import SurveySubmission
+    from settlement.models import SettlementQuote
+    from django.shortcuts import get_object_or_404
+    from django.contrib import messages
+    from decimal import Decimal
+
+    submission = get_object_or_404(SurveySubmission, id=submission_id)
+    sent_quote = (
+        SettlementQuote.objects.filter(
+            submission=submission,
+            status__in=(SettlementQuote.Status.FINAL_SENT, SettlementQuote.Status.PAID),
+        ).order_by('-sent_at', '-updated_at').first()
+    )
+    if not sent_quote:
+        messages.error(request, '송부된 견적이 없습니다.')
+        return redirect('app_submission_review', submission_id=submission_id)
+    # 기존 DRAFT가 있으면 그대로 수정 화면으로 (중복 생성 방지)
+    existing_draft = (
+        SettlementQuote.objects.filter(
+            submission=submission,
+            status=SettlementQuote.Status.DRAFT,
+        ).order_by('-updated_at').first()
+    )
+    if existing_draft:
+        messages.info(request, '이미 수정용 초안이 있습니다. 아래에서 금액을 수정한 뒤 "승인 후 고객에게 송부"를 누르세요.')
+        return redirect('app_submission_review', submission_id=submission_id)
+    # 송부된 견적의 items 복사 (메타 키 제거)
+    items = []
+    for it in (sent_quote.items or []):
+        if not isinstance(it, dict):
+            continue
+        item = {k: v for k, v in it.items() if k not in ('_auto', '_needs_review')}
+        items.append(item)
+    next_version = (sent_quote.version or 1) + 1
+    new_draft = SettlementQuote(
+        submission=submission,
+        status=SettlementQuote.Status.DRAFT,
+        version=next_version,
+        region=sent_quote.region or '',
+        items=items,
+        total=sent_quote.total or Decimal('0'),
+        draft_source='admin',
+    )
+    new_draft.save()
+    messages.success(request, '송부된 견적을 바탕으로 수정용 초안을 만들었습니다. 금액을 수정한 뒤 "승인 후 고객에게 송부"를 눌러 보내세요.')
+    return redirect('app_submission_review', submission_id=submission_id)
+
+
+@require_POST
+@login_required
+@user_passes_test(_staff_required, login_url='/login/')
+def submission_review_resend_quote(request, submission_id):
+    """Staff: 이미 송부된 견적(FINAL_SENT)을 고객에게 이메일·앱 메시지로 다시 보냄."""
+    from survey.models import SurveySubmission
+    from settlement.models import SettlementQuote
+    from settlement.quote_approval import finalize_and_send_quote
+    from django.shortcuts import get_object_or_404
+    from django.contrib import messages
+
+    submission = get_object_or_404(SurveySubmission, id=submission_id)
+    sent_quote = (
+        SettlementQuote.objects.filter(
+            submission=submission,
+            status=SettlementQuote.Status.FINAL_SENT,
+        ).order_by('-sent_at', '-updated_at').first()
+    )
+    if not sent_quote:
+        messages.error(request, '재송부할 견적(FINAL_SENT)이 없습니다.')
+        return redirect('app_submission_review', submission_id=submission_id)
+    success, err = finalize_and_send_quote(sent_quote, actor=request.user)
+    if success:
+        messages.success(request, '동일 견적을 고객에게 다시 보냈습니다(이메일·메시지).')
+    else:
+        messages.error(request, err or '재송부 처리 중 오류가 발생했습니다.')
     return redirect('app_submission_review', submission_id=submission_id)

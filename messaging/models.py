@@ -9,6 +9,7 @@ class Conversation(models.Model):
     class Type(models.TextChoices):
         APPOINTMENT = 'APPOINTMENT', '약속 대화'
         NOTICE = 'NOTICE', '공지'
+        AI_ASSISTANT = 'AI_ASSISTANT', 'AI 어시스턴트'
 
     type = models.CharField(
         max_length=20,

@@ -14,6 +14,7 @@ def set_show_new_message_popup_on_login(sender, request, user, **kwargs):
     """로그인 성공 시 세션에 플래그 설정 + DB 선호 언어를 읽어 세션·요청에 적용."""
     if not request:
         return
+    request.session.pop('popup_dismissed', None)  # 로그인 시 초기화하여 미읽음 있으면 팝업 표시
     request.session['show_new_message_popup'] = True
     # DB에서 선호 언어를 읽어서 세팅 (최신 값 보장)
     try:

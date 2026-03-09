@@ -6,7 +6,7 @@ from translations.utils import DisplayKey
 
 
 class AgentRating(models.Model):
-    """에이전트에 대한 고객 별점 평가"""
+    """에이전트에 대한 고객 별점 평가. appointment가 있으면 약속당 1건, 없으면 (rater, agent)당 1건(레거시)."""
 
     rater = models.ForeignKey(
         'User',
@@ -19,6 +19,15 @@ class AgentRating(models.Model):
         on_delete=models.CASCADE,
         related_name='ratings_received',
         verbose_name=DisplayKey('평가 대상 (Agent)'),  # 평가 대상 (Agent)
+    )
+    appointment = models.ForeignKey(
+        'settlement.AgentAppointmentRequest',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='ratings',
+        verbose_name=DisplayKey('연결된 약속'),  # 연결된 약속
+        help_text=DisplayKey('완료된 약속에 대한 후기일 때만 연결. 약속당 1건만 허용.'),
     )
     score = models.PositiveSmallIntegerField(
         verbose_name=DisplayKey('별점'),  # 별점
@@ -34,9 +43,17 @@ class AgentRating(models.Model):
         verbose_name_plural = DisplayKey('에이전트 별점')
         ordering = ('-created_at',)
         constraints = [
+            # 레거시: appointment 없을 때 (rater, agent)당 1건
             models.UniqueConstraint(
                 fields=['rater', 'agent'],
-                name='unique_agent_rating_per_customer',
+                condition=models.Q(appointment__isnull=True),
+                name='unique_agent_rating_per_customer_legacy',
+            ),
+            # 약속당 1건
+            models.UniqueConstraint(
+                fields=['rater', 'appointment'],
+                condition=models.Q(appointment__isnull=False),
+                name='unique_agent_rating_per_appointment',
             ),
         ]
 

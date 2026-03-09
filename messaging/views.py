@@ -151,8 +151,12 @@ def inbox(request):
         'send_failed': get_display_text('메시지 전송에 실패했습니다.', lang),
         'image_only': get_display_text('이미지 파일만 전송할 수 있습니다.', lang),
         'view_survey': get_display_text('고객 설문 확인', lang),
+        'edit_survey': get_display_text('설문 수정하기', lang),
+        'view_quote': get_display_text('견적서 보기', lang),
+        'pay': get_display_text('결제하기', lang),
     }
     request.session.pop('show_new_message_popup', None)
+    request.session.pop('popup_dismissed', None)  # 메시지함 진입 시 초기화 → 다음 미읽음 시 팝업 다시 표시
     viewer_preferred = (getattr(request.user, 'preferred_language', None) or '').strip() or 'en'
     return render(request, 'messaging/inbox.html', {
         'inbox_i18n': i18n,
@@ -227,14 +231,61 @@ def _appointment_display_title(appointment, language_code='ko', viewer_user=None
     return f'{part1}: {name_part} - {service_label}'
 
 
+def _submission_status_display(submission, language_code='ko'):
+    """설문 제출 상태 표시 텍스트 (선호어/영어). SurveySubmission.Status 라벨: Admin 검토중, 고객 수정 요청됨 등."""
+    if not submission:
+        return ''
+    from translations.utils import get_display_text
+    raw = getattr(submission, 'get_status_display', lambda: '')() or ''
+    return (get_display_text(raw, language_code) or raw).strip()
+
+
+def _notice_conversation_customer_name(conv):
+    """NOTICE 대화(설문 제출 연결)용 고객 이름."""
+    sub = getattr(conv, 'survey_submission', None)
+    if not sub:
+        return (conv.subject or '').strip() or '고객'
+    customer = getattr(sub, 'user', None)
+    if customer and getattr(customer, 'is_authenticated', True):
+        return (getattr(customer, 'get_full_name', lambda: '')() or getattr(customer, 'username', '') or getattr(customer, 'email', '') or '').strip()
+    return (getattr(sub, 'email', None) or '-').strip() or '-'
+
+
+def _other_party_display(conv, viewer_user, preferred_lang='ko'):
+    """열람자 기준 '누구와 대화 중인지' 표시. 고객이 보면 Admin, Admin이 보면 고객명."""
+    if not conv or not viewer_user:
+        return ''
+    from translations.utils import get_display_text
+    if conv.type == Conversation.Type.NOTICE and getattr(conv, 'survey_submission_id', None):
+        sub = getattr(conv, 'survey_submission', None)
+        if sub and getattr(sub, 'user_id', None) and sub.user_id == viewer_user.id:
+            return get_display_text('Admin', preferred_lang) or 'Admin'
+        return _notice_conversation_customer_name(conv)
+    if conv.appointment_id:
+        return _other_party_name(conv.appointment, viewer_user) or ''
+    return ''
+
+
 def _conversation_display_titles(conv, preferred_lang, viewer_user=None):
     """
     대화 제목을 선호어·영어로 반환. (display_title_preferred, display_title_en)
     viewer_user: 열람자. 약속 대화일 때 고객/에이전트에 따라 상대방 이름으로 제목 표시.
+    NOTICE+survey_submission: [이름] 정착 서비스 · 현재 상태
     """
     from translations.utils import get_display_text
     pref = (preferred_lang or '').strip() or 'en'
     if conv.type == Conversation.Type.NOTICE:
+        sub = getattr(conv, 'survey_submission', None)
+        if sub:
+            base_label = get_display_text('정착 서비스', pref) or '정착 서비스'
+            base_label_en = get_display_text('정착 서비스', 'en') or 'Settlement Service'
+            customer_name = _notice_conversation_customer_name(conv)
+            status_pref = _submission_status_display(sub, pref) or (getattr(sub, 'get_status_display', lambda: '')() or '')
+            status_en = _submission_status_display(sub, 'en') or (getattr(sub, 'get_status_display', lambda: '')() or '')
+            sep = get_display_text('·', pref) or '·'
+            title_pref = f'[{customer_name}] {base_label} {sep} {status_pref}'
+            title_en = f'[{customer_name}] {base_label_en} · {status_en}' if pref != 'en' else title_pref
+            return (title_pref, title_en)
         raw = conv.subject or '공지'
         title_pref = get_display_text(raw, pref) or raw
         title_en = get_display_text(raw, 'en') or raw if pref != 'en' else title_pref
@@ -465,10 +516,13 @@ def api_unread_count(request):
 @login_required
 def api_dismiss_login_popup(request):
     """
-    로그인 후 새 메시지 팝업을 닫았을 때 세션 플래그 제거.
+    새 메시지 팝업을 닫았을 때 세션 플래그 제거.
+    popup_dismissed=True 로 두어 같은 미읽음에 대해 재표시하지 않음. 메시지함 진입 시 초기화됨.
     POST /api/messaging/dismiss-login-popup/
     """
     request.session.pop('show_new_message_popup', None)
+    request.session['popup_dismissed'] = True
+    request.session.modified = True
     return JsonResponse({'ok': True})
 
 
@@ -574,4 +628,43 @@ def api_conversation_detail(request, conversation_id):
             payload['survey_review_url'] = reverse('app_submission_review', args=[conv.survey_submission_id])
         except Exception:
             payload['survey_review_url'] = '/admin/review/{}/'.format(conv.survey_submission_id)
+    # 고객: 설문 수정 요청(REVISION_REQUESTED) 상태일 때 메시지 창에서 설문 수정하기 버튼 노출
+    sub = getattr(conv, 'survey_submission', None)
+    if (
+        not getattr(user, 'is_staff', False)
+        and sub
+        and getattr(sub, 'user_id', None) == user.id
+        and getattr(sub, 'status', None) == 'REVISION_REQUESTED'
+    ):
+        payload['show_survey_edit_button'] = True
+        try:
+            payload['survey_edit_url'] = reverse('survey:survey_start')
+        except Exception:
+            payload['survey_edit_url'] = '/settlement/survey/'
+    # 고객: 송부된 견적(FINAL_SENT)이 있을 때 메시지 창에서 견적서 보기·결제하기 버튼 노출
+    if (
+        not getattr(user, 'is_staff', False)
+        and sub
+        and getattr(sub, 'user_id', None) == user.id
+    ):
+        from settlement.models import SettlementQuote
+        sent_quote = (
+            SettlementQuote.objects.filter(
+                submission=sub,
+                status=SettlementQuote.Status.FINAL_SENT,
+            )
+            .order_by('-sent_at', '-updated_at')
+            .first()
+        )
+        if sent_quote:
+            payload['show_quote_actions'] = True
+            payload['quote_id'] = sent_quote.id
+            try:
+                payload['quote_view_url'] = reverse('customer_quote') + '?quote_id=' + str(sent_quote.id)
+            except Exception:
+                payload['quote_view_url'] = '/services/settlement/my-quote/?quote_id=' + str(sent_quote.id)
+            try:
+                payload['quote_payment_url'] = reverse('settlement_quote_checkout_mock') + '?quote_id=' + str(sent_quote.id)
+            except Exception:
+                payload['quote_payment_url'] = '/services/settlement/quote/checkout/mock/?quote_id=' + str(sent_quote.id)
     return JsonResponse(payload)

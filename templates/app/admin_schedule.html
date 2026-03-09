@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "일정 편집" %} #{{ submission.id }} – LifeAI US{% endblock %}
+{% block content %}
+<style>
+  .schedule-page { display: flex; flex-direction: column; gap: 1rem; }
+  .schedule-summary { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; }
+  .schedule-summary .card { flex: 1; min-width: 200px; }
+  .schedule-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 1rem; }
+  .schedule-actions .btn { padding: 0.4rem 0.75rem; font-size: 0.9rem; }
+  .schedule-main { display: grid; grid-template-columns: 1fr 220px; gap: 1rem; }
+  @media (max-width: 900px) { .schedule-main { grid-template-columns: 1fr; } }
+  .admin-cal-wrap { overflow-x: auto; }
+  .admin-cal-grid { display: grid; grid-template-columns: 60px repeat(7, 1fr); grid-template-rows: auto; border: 1px solid var(--color-border); border-radius: var(--radius); background: #fff; min-width: 700px; }
+  .admin-cal-cell { min-height: 36px; border-right: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); padding: 2px; font-size: 0.8rem; }
+  .admin-cal-cell:nth-child(8n) { border-right: none; }
+  .admin-cal-cell.header { background: #f1f5f9; font-weight: 600; text-align: center; }
+  .admin-cal-cell.drop-target { background: #f8fafc; }
+  .admin-cal-cell.drop-target.drag-over { background: #dbeafe; }
+  .admin-cal-item { background: #e0f2fe; border: 1px solid #0ea5e9; border-radius: 4px; padding: 4px 6px; margin: 2px 0; cursor: grab; font-size: 0.8rem; }
+  .admin-cal-item:active { cursor: grabbing; }
+  .admin-cal-item.finalized { background: #dcfce7; border-color: #16a34a; }
+  .unscheduled-pool { background: #f8fafc; border: 1px solid var(--color-border); border-radius: var(--radius); padding: 0.75rem; max-height: 400px; overflow-y: auto; }
+  .unscheduled-pool h3 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+  .unscheduled-item { background: #fff; border: 1px solid var(--color-border); border-radius: 4px; padding: 6px 8px; margin-bottom: 4px; cursor: grab; font-size: 0.85rem; }
+  .unscheduled-item:active { cursor: grabbing; }
+  .item-edit-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; align-items: center; }
+  .item-edit-row select { font-size: 0.8rem; padding: 2px 4px; }
+  .item-edit-row input[type="number"] { width: 50px; font-size: 0.8rem; }
+  .schedule-status { color: var(--color-muted); font-size: 0.9rem; margin-left: 0.5rem; }
+</style>
+
+<div class="container schedule-page">
+  <form style="display:none;">{% csrf_token %}</form>
+  <div class="card">
+    <p style="margin: 0 0 0.75rem;">
+      <a href="{% url 'app_submission_review' submission.id %}" class="btn btn-outline" style="padding: 0.35rem 0.75rem;">← {% trans "제출 검토" %}</a>
+    </p>
+    <h1 style="margin-top: 0;">{% trans "일정 편집" %} #{{ submission.id }}</h1>
+  </div>
+
+  <div class="schedule-summary">
+    <div class="card" style="flex: 1;">
+      <h2 style="font-size: 1rem; margin: 0 0 0.5rem;">{% trans "고객" %}</h2>
+      <p style="margin: 0; font-size: 0.95rem;">{{ customer_summary.name|default:customer_summary.email }} · {{ customer_summary.email }}</p>
+    </div>
+    <div class="card" style="flex: 1;">
+      <h2 style="font-size: 1rem; margin: 0 0 0.5rem;">{% trans "결제/송부 서비스" %}</h2>
+      <p style="margin: 0; font-size: 0.9rem;">
+        {% for s in paid_services %}{{ s.label }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}
+      </p>
+      {% if request_summary.entry_date %}
+      <p style="margin: 0.35rem 0 0; font-size: 0.85rem; color: var(--color-muted);">{% trans "입국 예정" %}: {{ request_summary.entry_date }}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="schedule-actions">
+      <button type="button" id="btnGenerateDraft" class="btn btn-primary">{% trans "ML 초안 생성" %}</button>
+      <button type="button" id="btnRegenerateUnscheduled" class="btn btn-outline">{% trans "미배정만 재배치" %}</button>
+      <button type="button" id="btnRegenerateAgentDependent" class="btn btn-outline">{% trans "Agent 항목만 재배치" %}</button>
+      <button type="button" id="btnRequestAvailability" class="btn btn-outline">{% trans "가용 시간 요청 (Agent)" %}</button>
+      <button type="button" id="btnSave" class="btn btn-primary">{% trans "저장" %}</button>
+      <button type="button" id="btnFinalize" class="btn btn-outline">{% trans "확정 후 고객 반영" %}</button>
+      <span id="scheduleStatus" class="schedule-status"></span>
+    </div>
+
+    <div class="schedule-main">
+      <div class="admin-cal-wrap">
+        <div id="adminCalTitle" style="margin-bottom: 0.5rem; font-weight: 600;"></div>
+        <div id="adminCalGrid" class="admin-cal-grid"></div>
+      </div>
+      <div class="unscheduled-pool">
+        <h3>{% trans "미배정" %}</h3>
+        <div id="unscheduledPool"></div>
+      </div>
+    </div>
+    {% if schedule_plan %}
+    <div class="card" style="margin-top: 1rem;">
+      <h2 style="font-size: 1rem; margin: 0 0 0.5rem;">{% trans "Agent 가용 시간 (수신)" %}</h2>
+      {% if availability_by_agent %}
+      {% for row in availability_by_agent %}
+      <p style="margin: 0.5rem 0;"><strong>{{ row.agent_name }}</strong></p>
+      <ul style="margin: 0 0 1rem 1.25rem; padding: 0; font-size: 0.9rem;">
+        {% for w in row.windows %}
+        <li>{{ w.starts_at|date:"Y-m-d H:i" }} ~ {{ w.ends_at|date:"H:i" }} ({{ w.source }})</li>
+        {% endfor %}
+      </ul>
+      {% endfor %}
+      {% else %}
+      <p class="text-muted" style="font-size: 0.9rem;">{% trans "수신된 가용 시간이 없습니다. '가용 시간 요청 (Agent)'을 누르면 배정된 Agent에게 입력 링크가 전송됩니다." %}</p>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+(function() {
+  var submissionId = {{ submission.id }};
+  var apiBase = '/admin/review/' + submissionId + '/schedule/api/';
+  var agents = {{ agents_json|safe }};
+  var plan = null;
+  var allItems = [];
+  var weekStart = null;
+
+  function scheduledItems() { return allItems.filter(function(i) { return i.starts_at && i.ends_at; }); }
+  function unscheduledItems() { return allItems.filter(function(i) { return !i.starts_at || !i.ends_at; }); }
+
+  function setStatus(msg, isError) {
+    var el = document.getElementById('scheduleStatus');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.style.color = isError ? '#b91c1c' : 'var(--color-muted)';
+  }
+
+  function csrfToken() {
+    var c = document.querySelector('[name=csrfmiddlewaretoken]');
+    return c ? c.value : (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+  }
+
+  function fetchSchedule() {
+    setStatus('로딩 중...');
+    fetch(apiBase, { method: 'GET', headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        plan = data.plan;
+        allItems = (data.items || []).concat(data.unscheduled || []);
+        setStatus('');
+        render();
+      })
+      .catch(function(e) {
+        setStatus('로드 실패: ' + e.message, true);
+      });
+  }
+
+  function render() {
+    renderCalendar();
+    renderUnscheduled();
+  }
+
+  function getWeekStart(d) {
+    d = new Date(d);
+    var day = d.getDay();
+    var diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(d.setDate(diff));
+  }
+
+  function pad(n) { return n < 10 ? '0' + n : n; }
+  function dateStr(d) { return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }
+  function hourKey(d, h) { return dateStr(d) + 'T' + pad(h) + ':00:00'; }
+
+  function renderCalendar() {
+    var grid = document.getElementById('adminCalGrid');
+    var titleEl = document.getElementById('adminCalTitle');
+    if (!grid || !titleEl) return;
+    var base = weekStart || getWeekStart(new Date());
+    var weekEnd = new Date(base);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    titleEl.textContent = base.getFullYear() + '년 ' + (base.getMonth()+1) + '월 ' + base.getDate() + '일 ~ ' + weekEnd.getDate() + '일';
+
+    grid.innerHTML = '';
+    var days = [];
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(base);
+      d.setDate(d.getDate() + i);
+      days.push(d);
+    }
+    var hours = [];
+    for (var h = 8; h <= 18; h++) hours.push(h);
+
+    var headerRow = document.createElement('div');
+    headerRow.style.display = 'contents';
+    var empty = document.createElement('div');
+    empty.className = 'admin-cal-cell header';
+    headerRow.appendChild(empty);
+    days.forEach(function(d) {
+      var cell = document.createElement('div');
+      cell.className = 'admin-cal-cell header';
+      cell.textContent = (d.getMonth()+1) + '/' + d.getDate();
+      headerRow.appendChild(cell);
+    });
+    grid.appendChild(headerRow);
+
+    hours.forEach(function(h) {
+      var row = document.createElement('div');
+      row.style.display = 'contents';
+      var timeCell = document.createElement('div');
+      timeCell.className = 'admin-cal-cell header';
+      timeCell.textContent = pad(h) + ':00';
+      row.appendChild(timeCell);
+      days.forEach(function(d) {
+        var cell = document.createElement('div');
+        cell.className = 'admin-cal-cell drop-target';
+        cell.dataset.date = dateStr(d);
+        cell.dataset.hour = h;
+        cell.dataset.key = dateStr(d) + 'T' + pad(h);
+        cell.addEventListener('dragover', function(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); });
+        cell.addEventListener('dragleave', function(e) { e.currentTarget.classList.remove('drag-over'); });
+        cell.addEventListener('drop', function(e) { onDrop(e, cell); });
+        row.appendChild(cell);
+      });
+      grid.appendChild(row);
+    });
+
+    scheduledItems().forEach(function(it) {
+      if (!it.starts_at) return;
+      var start = new Date(it.starts_at);
+      var d = dateStr(start);
+      var h = start.getHours();
+      var key = d + 'T' + pad(h);
+      var cell = grid.querySelector('[data-key="' + key + '"]');
+      if (cell) {
+        var card = document.createElement('div');
+        card.className = 'admin-cal-item' + (it.status === 'CONFIRMED' ? ' finalized' : '');
+        card.draggable = true;
+        card.dataset.itemId = it.id;
+        card.innerHTML = '<strong>' + escapeHtml(it.service_label || it.service_code) + '</strong>' +
+          (it.assigned_agent_name ? '<br><small>' + escapeHtml(it.assigned_agent_name) + '</small>' : '') +
+          (it.notes ? '<br><small>' + escapeHtml(it.notes) + '</small>' : '');
+        var editRow = document.createElement('div');
+        editRow.className = 'item-edit-row';
+        var sel = document.createElement('select');
+        sel.dataset.itemId = it.id;
+        sel.innerHTML = '<option value="">—</option>';
+        agents.forEach(function(a) {
+          var opt = document.createElement('option');
+          opt.value = a.id;
+          opt.textContent = a.name;
+          if (it.assigned_agent_id && String(a.id) === String(it.assigned_agent_id)) opt.selected = true;
+          sel.appendChild(opt);
+        });
+        sel.addEventListener('change', function() { var i = allItems.find(function(x) { return String(x.id) === String(this.dataset.itemId); }.bind(this)); if (i) i.assigned_agent_id = this.value ? parseInt(this.value, 10) : null; });
+        var notesInp = document.createElement('input');
+        notesInp.type = 'text';
+        notesInp.placeholder = '메모';
+        notesInp.value = it.notes || '';
+        notesInp.style.width = '80px';
+        notesInp.dataset.itemId = it.id;
+        notesInp.addEventListener('change', function() { var i = allItems.find(function(x) { return String(x.id) === String(this.dataset.itemId); }.bind(this)); if (i) i.notes = this.value; });
+        var durInp = document.createElement('input');
+        durInp.type = 'number';
+        durInp.min = 15;
+        durInp.max = 480;
+        durInp.value = it.duration_minutes || 60;
+        durInp.style.width = '45px';
+        durInp.dataset.itemId = it.id;
+        durInp.addEventListener('change', function() { var i = allItems.find(function(x) { return String(x.id) === String(this.dataset.itemId); }.bind(this)); if (i) { i.duration_minutes = parseInt(this.value, 10) || 60; if (i.starts_at && i.ends_at) { var s = new Date(i.starts_at); i.ends_at = new Date(s.getTime() + (i.duration_minutes || 60) * 60000).toISOString(); } } });
+        var finBtn = document.createElement('button');
+        finBtn.type = 'button';
+        finBtn.className = 'btn btn-outline';
+        finBtn.style.padding = '2px 6px';
+        finBtn.textContent = it.status === 'CONFIRMED' ? '✓ 확정' : '확정';
+        finBtn.dataset.itemId = it.id;
+        finBtn.addEventListener('click', function() { var i = allItems.find(function(x) { return String(x.id) === String(this.dataset.itemId); }.bind(this)); if (i) { i.status = i.status === 'CONFIRMED' ? 'SCHEDULED' : 'CONFIRMED'; render(); } });
+        editRow.appendChild(sel);
+        editRow.appendChild(notesInp);
+        editRow.appendChild(durInp);
+        editRow.appendChild(finBtn);
+        card.appendChild(editRow);
+        card.addEventListener('dragstart', onItemDragStart);
+        cell.appendChild(card);
+      }
+    });
+  }
+
+  function escapeHtml(s) {
+    if (!s) return '';
+    var div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  var draggedItemId = null;
+  function onItemDragStart(e) {
+    draggedItemId = e.target.dataset.itemId;
+    e.dataTransfer.setData('text/plain', draggedItemId);
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function onDrop(e, cell) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    var itemId = e.dataTransfer.getData('text/plain') || draggedItemId;
+    if (!itemId) return;
+    var dateStrVal = cell.dataset.date;
+    var hour = parseInt(cell.dataset.hour, 10);
+    var start = new Date(dateStrVal + 'T' + pad(hour) + ':00:00');
+    var item = allItems.find(function(i) { return String(i.id) === String(itemId); });
+    if (!item) return;
+    var dur = item.duration_minutes || 60;
+    var end = new Date(start.getTime() + dur * 60000);
+    item.starts_at = start.toISOString();
+    item.ends_at = end.toISOString();
+    item.duration_minutes = dur;
+    render();
+  }
+
+  function renderUnscheduled() {
+    var pool = document.getElementById('unscheduledPool');
+    if (!pool) return;
+    pool.innerHTML = '';
+    unscheduledItems().forEach(function(it) {
+      var div = document.createElement('div');
+      div.className = 'unscheduled-item';
+      div.draggable = true;
+      div.dataset.itemId = it.id;
+      div.textContent = (it.service_label || it.service_code) + (it.notes ? ' — ' + it.notes : '');
+      div.addEventListener('dragstart', onItemDragStart);
+      pool.appendChild(div);
+    });
+  }
+
+  document.getElementById('btnSave').addEventListener('click', function() {
+    var payload = { items: allItems.map(function(it) {
+      return {
+        id: it.id,
+        starts_at: it.starts_at || null,
+        ends_at: it.ends_at || null,
+        duration_minutes: it.duration_minutes || 60,
+        assigned_agent_id: it.assigned_agent_id || null,
+        notes: it.notes || '',
+        status: it.status || 'SCHEDULED',
+      };
+    }) };
+    setStatus('저장 중...');
+    fetch(apiBase, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken(), 'X-Requested-With': 'XMLHttpRequest' },
+      body: JSON.stringify(payload),
+      credentials: 'same-origin',
+    })
+      .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+      .then(function(res) {
+        if (res.ok) {
+          setStatus('저장됨.');
+          fetchSchedule();
+        } else {
+          setStatus(res.data.error || '저장 실패', true);
+        }
+      })
+      .catch(function(e) { setStatus('저장 실패: ' + e.message, true); });
+  });
+
+  function postAction(url, btnId) {
+    var btn = document.getElementById(btnId);
+    if (btn) btn.disabled = true;
+    setStatus('처리 중...');
+    fetch(url, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken(), 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' },
+      body: '{}',
+      credentials: 'same-origin',
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        setStatus(data.message || (data.ok ? '완료' : data.error), !data.ok);
+        if (data.ok) fetchSchedule();
+      })
+      .catch(function(e) { setStatus('오류: ' + e.message, true); })
+      .finally(function() { if (btn) btn.disabled = false; });
+  }
+
+  document.getElementById('btnGenerateDraft').addEventListener('click', function() {
+    postAction('/admin/review/' + submissionId + '/schedule/generate-draft/', 'btnGenerateDraft');
+  });
+  document.getElementById('btnRegenerateUnscheduled').addEventListener('click', function() {
+    postAction('/admin/review/' + submissionId + '/schedule/regenerate-unscheduled/', 'btnRegenerateUnscheduled');
+  });
+  document.getElementById('btnRegenerateAgentDependent').addEventListener('click', function() {
+    postAction('/admin/review/' + submissionId + '/schedule/regenerate-agent-dependent/', 'btnRegenerateAgentDependent');
+  });
+  document.getElementById('btnRequestAvailability').addEventListener('click', function() {
+    postAction('/admin/review/' + submissionId + '/schedule/request-availability/', 'btnRequestAvailability');
+  });
+  document.getElementById('btnFinalize').addEventListener('click', function() {
+    if (!confirm('일정을 확정하고 고객 달력에 반영합니다. 계속할까요?')) return;
+    postAction('/admin/review/' + submissionId + '/schedule/finalize/', 'btnFinalize');
+  });
+
+  if (!plan && !allItems.length) {
+    setStatus('초안이 없습니다. "ML 초안 생성"을 누르세요.');
+  }
+  fetchSchedule();
+})();
+</script>
+{% endblock %}

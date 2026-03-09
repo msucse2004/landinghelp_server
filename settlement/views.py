@@ -375,12 +375,29 @@ def customer_quote(request):
     if getattr(request.user, 'role', None) == 'AGENT':
         return redirect(reverse('app_agent_appointments'))
 
-    quote = (
-        SettlementQuote.objects.filter(submission__user=request.user)
-        .order_by('-updated_at')
-        .select_related('submission')
-        .first()
-    )
+    # Optional: open specific quote from payment link (e.g. ?quote_id=123)
+    quote_id_param = request.GET.get('quote_id', '').strip()
+    quote = None
+    if quote_id_param:
+        try:
+            qid = int(quote_id_param)
+            quote = (
+                SettlementQuote.objects.filter(
+                    submission__user=request.user,
+                    id=qid,
+                )
+                .select_related('submission')
+                .first()
+            )
+        except (ValueError, TypeError):
+            pass
+    if not quote:
+        quote = (
+            SettlementQuote.objects.filter(submission__user=request.user)
+            .order_by('-updated_at')
+            .select_related('submission')
+            .first()
+        )
     checkout_error = request.GET.get('error', '').strip()
     if not quote:
         return render(request, 'services/customer_quote.html', {
@@ -394,12 +411,16 @@ def customer_quote(request):
     lang = get_request_language(request)
     can_show = can_view_price(request.user, quote)
     payload = quote_for_customer(quote)
+    # 결제 링크: 이메일/앱 메시지와 동일 헬퍼. quote_id 포함 시 해당 견적로 직행.
+    from .quote_email import get_quote_payment_link
+    payment_link = get_quote_payment_link(quote) if quote else ''
 
     return render(request, 'services/customer_quote.html', {
         'quote': quote,
         'can_view_price': can_show,
         'quote_payload': payload,
         'checkout_error': checkout_error,
+        'payment_link': payment_link,
         'i18n': _customer_quote_i18n(lang),
     })
 
@@ -425,88 +446,7 @@ def _build_plan_schedule_from_quote(quote):
     return build_initial_schedule_from_quote(quote)
 
 
-def _process_quote_checkout(user, quote_id=None):
-    """
-    견적 결제 처리: PAID 설정, UserSettlementPlan, 구독 업데이트.
-    Returns (quote, error_message). error_message가 있으면 실패.
-    """
-    if quote_id is not None:
-        quote = SettlementQuote.objects.filter(
-            id=quote_id,
-            submission__user=user,
-        ).select_related('submission').first()
-    else:
-        quote = (
-            SettlementQuote.objects.filter(
-                submission__user=user,
-                status=SettlementQuote.Status.FINAL_SENT,
-            )
-            .order_by('-updated_at')
-            .select_related('submission')
-            .first()
-        )
-    if not quote:
-        return None, '결제 가능한 견적이 없습니다.'
-    if quote.status == SettlementQuote.Status.PAID:
-        return None, '이미 결제되었습니다.'
-    if quote.status != SettlementQuote.Status.FINAL_SENT:
-        return None, '이 견적은 아직 결제할 수 없습니다.'
-
-    quote.status = SettlementQuote.Status.PAID
-    quote.save(update_fields=['status'])
-    from survey.models import SurveySubmission, SurveySubmissionEvent
-    if quote.submission_id and quote.submission.status != SurveySubmission.Status.AGENT_ASSIGNMENT:
-        sub = quote.submission
-        sub.status = SurveySubmission.Status.AGENT_ASSIGNMENT
-        sub.save(update_fields=['status'])
-        SurveySubmissionEvent.objects.create(
-            submission=sub,
-            event_type=SurveySubmissionEvent.EventType.PAID,
-            created_by=user,
-        )
-
-    from decimal import Decimal
-    schedule = _build_plan_schedule_from_quote(quote)
-    total_val = Decimal(str(quote.total or 0))
-    region = (quote.region or '').strip()
-    state = region
-    city = ''
-    if region and ',' in region:
-        parts = [p.strip() for p in region.split(',', 1)]
-        state = parts[0] or region
-        city = parts[1] if len(parts) > 1 else ''
-    plan, _ = UserSettlementPlan.objects.update_or_create(
-        user=user,
-        defaults={
-            'state': state,
-            'city': city,
-            'entry_date': None,
-            'service_schedule': schedule,
-            'checkout_total': total_val,
-        },
-    )
-    from .post_payment import ensure_plan_service_tasks
-    ensure_plan_service_tasks(plan, quote)
-
-    from billing.models import Plan, Subscription
-    active_sub = (
-        user.subscriptions.filter(status=Subscription.Status.ACTIVE)
-        .order_by('-started_at')
-        .select_related('plan')
-        .first()
-    )
-    if not active_sub or (active_sub.plan and getattr(active_sub.plan, 'code', None) == Plan.Code.C_BASIC):
-        plan_standard = Plan.objects.filter(code=Plan.Code.C_STANDARD, is_active=True).first()
-        if plan_standard:
-            if active_sub:
-                active_sub.status = Subscription.Status.CANCELED
-                active_sub.save(update_fields=['status'])
-            Subscription.objects.create(
-                user=user,
-                plan=plan_standard,
-                status=Subscription.Status.ACTIVE,
-            )
-    return quote, None
+# 결제 처리: quote_checkout.process_quote_payment 사용 (상태 전이·플랜·구독 일원화)
 
 
 @require_POST
@@ -514,8 +454,8 @@ def _process_quote_checkout(user, quote_id=None):
 def api_quote_checkout(request):
     """
     FINAL_SENT 견적 결제 처리. 결제 전에는 checkout/total 노출 안 됨(정책 유지).
-    - quote.status = PAID, 중복 결제 방지
-    - UserSettlementPlan 생성/업데이트, 구독 tier 업데이트
+    - process_quote_payment: quote PAID, submission AGENT_ASSIGNMENT, 이벤트, 플랜/태스크, 구독 업데이트
+    - send_payment_complete_notifications: 고객/Admin 앱 메시지(공유 대화) + 고객/Admin/Agent 이메일
     POST JSON: { "quote_id": optional } 또는 form POST: quote_id
     """
     if not request.user.is_authenticated:
@@ -543,7 +483,8 @@ def api_quote_checkout(request):
         except (ValueError, TypeError):
             pass
 
-    quote, err = _process_quote_checkout(request.user, quote_id)
+    from .quote_checkout import process_quote_payment
+    quote, err = process_quote_payment(request.user, quote_id=quote_id)
     if err:
         if _is_form_post(request):
             return redirect(reverse('customer_quote') + '?error=' + ('already_paid' if '이미 결제' in err else 'invalid'))
@@ -568,6 +509,113 @@ def api_quote_checkout(request):
     })
 
 
+@require_GET
+@ensure_csrf_cookie
+def mock_quote_checkout(request):
+    """
+    개발용 모의 결제 화면. FINAL_SENT 견적에 대해 금액 표시 후 [결제 완료 (모의)] 버튼으로
+    process_quote_payment 호출 → PAID 처리. 실서비스 연동 시 이 뷰 대신 실제 결제 페이지로 대체.
+    """
+    if not request.user.is_authenticated:
+        from django.contrib.auth.views import redirect_to_login
+        return redirect_to_login(request.get_full_path())
+    if getattr(request.user, 'role', None) == 'AGENT':
+        return redirect(reverse('customer_quote') + '?error=agent')
+    quote_id = request.GET.get('quote_id', '').strip()
+    quote = None
+    if quote_id:
+        try:
+            qid = int(quote_id)
+            quote = (
+                SettlementQuote.objects.filter(
+                    submission__user=request.user,
+                    id=qid,
+                    status=SettlementQuote.Status.FINAL_SENT,
+                )
+                .select_related('submission')
+                .first()
+            )
+        except (ValueError, TypeError):
+            pass
+    if not quote:
+        return redirect(reverse('customer_quote') + '?error=invalid')
+    lang = get_request_language(request)
+    total = int(quote.total or 0)
+    i18n = {
+        'title': get_display_text('모의 결제', lang),
+        'amount': get_display_text('결제 금액', lang),
+        'notice': get_display_text('개발 단계 모의 결제입니다. 실제 결제가 이루어지지 않습니다.', lang),
+        'submit': get_display_text('결제 완료 (모의)', lang),
+        'back': get_display_text('견적서로 돌아가기', lang),
+    }
+    return render(request, 'settlement/mock_checkout.html', {
+        'quote': quote,
+        'total': total,
+        'i18n': i18n,
+    })
+
+
+@require_POST
+@ensure_csrf_cookie
+def api_quote_request_revision(request):
+    """
+    고객 견적서 수정 요청. FINAL_SENT 견적에 대해 메시지 입력 시
+    quote → NEGOTIATING, 공유 대화에 고객 메시지 추가. Admin이 검토 후 수정·재송부 가능.
+    POST JSON: { "quote_id": int, "message": str } 또는 form: quote_id, message
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': '로그인이 필요합니다.'}, status=403)
+    if getattr(request.user, 'role', None) == 'AGENT':
+        return JsonResponse({'ok': False, 'error': '고객만 요청할 수 있습니다.'}, status=403)
+    import json
+    quote_id = None
+    message = ''
+    if request.content_type and 'application/json' in (request.content_type or ''):
+        try:
+            data = json.loads(request.body or '{}')
+            quote_id = data.get('quote_id')
+            message = (data.get('message') or '').strip()
+        except (ValueError, TypeError):
+            pass
+    else:
+        quote_id = request.POST.get('quote_id')
+        message = (request.POST.get('message') or '').strip()
+    if not quote_id:
+        return JsonResponse({'ok': False, 'error': 'quote_id가 필요합니다.'}, status=400)
+    try:
+        qid = int(quote_id)
+    except (ValueError, TypeError):
+        return JsonResponse({'ok': False, 'error': '유효하지 않은 quote_id입니다.'}, status=400)
+    quote = (
+        SettlementQuote.objects.filter(
+            id=qid,
+            submission__user=request.user,
+            status=SettlementQuote.Status.FINAL_SENT,
+        )
+        .select_related('submission')
+        .first()
+    )
+    if not quote:
+        return JsonResponse({'ok': False, 'error': '결제 대기 중인 견적만 수정 요청할 수 있습니다.'}, status=404)
+    if not message:
+        return JsonResponse({'ok': False, 'error': '수정 요청 내용을 입력해 주세요.'}, status=400)
+    quote.status = SettlementQuote.Status.NEGOTIATING
+    quote.save(update_fields=['status'])
+    from .notifications import _get_or_create_shared_conversation
+    from messaging.models import Message
+    from translations.utils import get_display_text
+    lang = get_request_language(request)
+    prefix = get_display_text('견적서 수정 요청', lang) or '견적서 수정 요청'
+    body = prefix + '\n\n' + message
+    conv = _get_or_create_shared_conversation(quote.submission, subject_fallback=prefix)
+    msg = Message(conversation=conv, sender=request.user, body=body)
+    msg.save()
+    return JsonResponse({
+        'ok': True,
+        'message': get_display_text('수정 요청이 전달되었습니다. Admin 검토 후 수정된 견적을 보내드리겠습니다.', lang) or '수정 요청이 전달되었습니다.',
+    })
+
+
 def _is_form_post(request):
     """Content-Type이 form인지 (HTML form 제출)."""
     ct = (request.content_type or '').lower()
@@ -589,6 +637,10 @@ def _customer_quote_i18n(lang):
         'go_dashboard': get_display_text('대시보드로', lang),
         'go_calendar': get_display_text('정착 플랜/달력', lang),
         'region': get_display_text('지역', lang),
+        'request_revision': get_display_text('견적서 수정 요청', lang),
+        'request_revision_help': get_display_text('금액·항목 등 수정이 필요하면 내용을 적어 보내주세요. Admin이 검토 후 수정된 견적을 보내드립니다.', lang),
+        'request_revision_placeholder': get_display_text('예: OO 서비스 금액 조정 요청, 일정 변경 등', lang),
+        'send_revision_request': get_display_text('수정 요청 보내기', lang),
     }
 
 
@@ -821,7 +873,8 @@ def api_available_agents_for_plan(request):
         plan = UserSettlementPlan.objects.get(user=request.user)
     except UserSettlementPlan.DoesNotExist:
         return JsonResponse({'agents': [], 'error': '정착 플랜이 없습니다.'}, status=404)
-    schedule = plan.service_schedule or {}
+    from .schedule_utils import get_schedule_for_display
+    schedule = get_schedule_for_display(plan) or {}
     service_codes = set()
     for items in schedule.values():
         if not isinstance(items, list):
@@ -1091,6 +1144,107 @@ def api_appointment_accept(request, pk):
     return JsonResponse({'ok': True, 'message': '약속을 수락했습니다.'})
 
 
+@require_GET
+def api_rateable_appointments(request):
+    """
+    고객이 평가 가능한 약속 목록: CONFIRMED, customer=request.user, 아직 별점 없음.
+    설문/결제 후 Agent 선택 UI 및 대시보드 "후기 작성"용.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': '로그인이 필요합니다.'}, status=403)
+    from accounts.models import AgentRating
+    from .constants import get_service_label
+    qs = (
+        AgentAppointmentRequest.objects.filter(
+            customer=request.user,
+            status='CONFIRMED',
+        )
+        .exclude(id__in=AgentRating.objects.filter(appointment__isnull=False).values_list('appointment_id', flat=True))
+        .select_related('agent')
+        .order_by('-service_date', '-confirmed_at')
+    )
+    lang = get_request_language(request)
+    items = []
+    for req in qs[:20]:
+        items.append({
+            'id': req.id,
+            'agent_id': req.agent_id,
+            'agent_name': (req.agent.get_full_name() or req.agent.username) if req.agent else '',
+            'service_code': req.service_code or '',
+            'service_label': get_display_text(get_service_label(req.service_code or ''), lang) or get_service_label(req.service_code or ''),
+            'service_date': req.service_date.isoformat() if hasattr(req.service_date, 'isoformat') else str(req.service_date),
+            'confirmed_time_slot': req.confirmed_time_slot or '',
+        })
+    return JsonResponse({'ok': True, 'items': items})
+
+
+def _validate_review_comment(comment: str, max_length: int = 500) -> tuple:
+    """
+    Moderation-safe: strip, length, reject empty or spammy (only whitespace/repeated chars).
+    Returns (cleaned_comment, error_message). error_message is None if valid.
+    """
+    if comment is None:
+        return '', None
+    s = (comment or '').strip()[:max_length]
+    if not s:
+        return s, None  # empty is allowed (comment optional)
+    if len(s) < 2 and s:
+        return s, None  # 1 char is ok
+    # Reject if all same character or mostly non-word
+    import re
+    if re.match(r'^(\s|.)\1*$', s):
+        return s, 'invalid_comment'
+    non_word = len(re.findall(r'[^\w\s\u3130-\u318f\uac00-\ud7af]', s))  # allow letters, digits, CJK
+    if len(s) > 10 and non_word > len(s) * 0.8:
+        return s, 'invalid_comment'
+    return s, None
+
+
+@require_POST
+@ensure_csrf_cookie
+def api_appointment_rate(request, pk):
+    """
+    고객이 확정된 약속에 대해 별점+한줄평 제출. 약속당 1건만 허용(AgentRating.appointment unique).
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': '로그인이 필요합니다.'}, status=403)
+    try:
+        req = AgentAppointmentRequest.objects.get(pk=pk, customer=request.user, status='CONFIRMED')
+    except AgentAppointmentRequest.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': '해당 약속을 찾을 수 없거나 평가할 수 없습니다.'}, status=404)
+    from accounts.models import AgentRating
+    if AgentRating.objects.filter(appointment=req).exists():
+        return JsonResponse({'ok': False, 'error': '이미 평가하셨습니다.'}, status=400)
+    score_val = request.POST.get('score')
+    if request.content_type and 'application/json' in (request.content_type or ''):
+        try:
+            import json
+            body = json.loads(request.body or '{}')
+            score_val = score_val or body.get('score')
+            comment = (body.get('comment') or request.POST.get('comment') or '').strip()
+        except (ValueError, TypeError):
+            comment = (request.POST.get('comment') or '').strip()
+    else:
+        comment = (request.POST.get('comment') or '').strip()
+    try:
+        score = int(score_val)
+    except (TypeError, ValueError):
+        score = None
+    if score is None or score < 1 or score > 5:
+        return JsonResponse({'ok': False, 'error': '별점은 1~5 사이로 입력해 주세요.'}, status=400)
+    comment_clean, comment_err = _validate_review_comment(comment, max_length=500)
+    if comment_err:
+        return JsonResponse({'ok': False, 'error': '한줄평이 올바르지 않습니다.'}, status=400)
+    AgentRating.objects.create(
+        rater=request.user,
+        agent=req.agent,
+        appointment=req,
+        score=score,
+        comment=comment_clean[:500],
+    )
+    return JsonResponse({'ok': True, 'message': '평가가 등록되었습니다.'})
+
+
 @require_POST
 @ensure_csrf_cookie
 def api_appointment_confirm(request, pk):
@@ -1174,7 +1328,8 @@ def api_checkout(request):
 
     try:
         plan = UserSettlementPlan.objects.get(user=request.user)
-        current_schedule = plan.service_schedule or {}
+        from .schedule_utils import get_schedule_for_display
+        current_schedule = get_schedule_for_display(plan) or {}
     except UserSettlementPlan.DoesNotExist:
         plan = None
         current_schedule = {}

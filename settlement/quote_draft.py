@@ -53,17 +53,25 @@ def generate_quote_draft_from_submission(submission, actor=None):
     state_code = _normalize_state_code(data.get('settlement_state') or region or '')
     special_requirements = (data.get('special_requirements') or '').strip()
 
-    # 기존 DRAFT 조회 (갱신 대상). 이미 송부/결제된 견적은 유지하고 새 DRAFT 생성 가능하게 할지 여부: 동일 제출에 DRAFT 1개만 유지.
-    existing = (
+    # 기존 DRAFT 조회 (갱신 대상). 이미 송부/결제된 견적이 있으면 새 DRAFT를 만들지 않음(기존 견적서 유지).
+    existing_draft = (
         SettlementQuote.objects.filter(submission=submission, status=SettlementQuote.Status.DRAFT)
         .order_by('-updated_at')
         .first()
     )
-    if existing:
-        quote = existing
+    if existing_draft:
+        quote = existing_draft
         created = False
         next_version = (quote.version or 1) + 1
     else:
+        # DRAFT가 없을 때: 이미 송부됨(FINAL_SENT) 또는 결제됨(PAID) 견적이 있으면 새 초안 생성하지 않음
+        has_sent_or_paid = SettlementQuote.objects.filter(
+            submission=submission,
+            status__in=(SettlementQuote.Status.FINAL_SENT, SettlementQuote.Status.PAID),
+        ).exists()
+        if has_sent_or_paid:
+            logger.info("Quote draft skip: submission_id=%s already has FINAL_SENT/PAID quote.", submission.id)
+            return None, False
         quote = SettlementQuote(
             submission=submission,
             status=SettlementQuote.Status.DRAFT,
@@ -135,13 +143,13 @@ def generate_quote_draft_from_submission(submission, actor=None):
 
     if created:
         try:
-            from .notifications import send_quote_arrived_admin_notification, send_quote_arrived_admin_message
+            from .notifications import send_quote_arrived_admin_notification
             lang = 'ko'
             if getattr(submission, 'user_id', None) and submission.user_id:
                 u = submission.user
                 lang = (getattr(u, 'preferred_language', None) or '').strip() or lang
             send_quote_arrived_admin_notification(quote, language_code=lang)
-            send_quote_arrived_admin_message(quote, language_code=lang)
+            # 고객 가독성: 공유 대화에는 견적 도착 메시지 추가하지 않음(고객은 '설문 제출·Admin 검토중' 안내만 보게 함)
         except Exception as e:
             logger.warning("Quote arrived admin notification failed: %s", e, exc_info=True)
 

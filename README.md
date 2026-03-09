@@ -313,3 +313,8 @@ Ollama가 꺼져 있으면 DeepL 결과만 반환되고, 서버 로그에 Ollama
 | `/customer/dashboard/` | 고객 대시보드 |
 | `/content/` | 컨텐츠 목록 |
 | `/content/<slug>/` | 컨텐츠 상세 |
+
+## Developer documentation
+
+- **[Workflow & integration](docs/WORKFLOW_AND_INTEGRATION.md)** — 설문·견적·결제·스케줄·AI 어시스턴트·후기 플로우, 상태 전이, 스케줄링 엔진, PDF/이메일 송부, 향후 연동 포인트(결제·ML·웹검색).
+- **Critical workflow tests:** `python manage.py test settlement.tests.test_workflow_critical` — 가격 노출 정책(FINAL_SENT 이전 비노출) 검증.

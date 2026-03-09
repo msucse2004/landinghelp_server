@@ -37,6 +37,33 @@
     opacity: 0.9;
     margin-top: 0.1rem;
   }
+  .calendar-card-agent {
+    display: block;
+    font-size: 0.6rem;
+    opacity: 0.95;
+    margin-top: 0.15rem;
+  }
+  .calendar-card.calendar-card--self-search { background: #64748b; }
+  .calendar-card.calendar-card--ai-agent { background: var(--color-primary); }
+  .calendar-card.calendar-card--in-person-agent { background: #059669; }
+  .calendar-day-today { background: #fef3c7; border-color: #f59e0b; }
+  .calendar-card-clickable { cursor: pointer; transition: opacity 0.15s; }
+  .calendar-card-clickable:hover { opacity: 0.9; }
+  .calendar-card-clickable:active { opacity: 0.85; }
+  .calendar-card--today { box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.6); }
+  .todays-services-list { margin-bottom: 0.75rem; padding: 0.5rem 0.75rem; background: #fffbeb; border: 1px solid #fcd34d; border-radius: var(--radius); font-size: 0.9rem; }
+  .todays-services-list h3 { margin: 0 0 0.35rem; font-size: 0.95rem; }
+  .todays-services-list ul { margin: 0; padding: 0; list-style: none; }
+  .todays-services-list li { margin: 0.25rem 0; }
+  .todays-services-list .service-link { display: block; padding: 0.35rem 0.5rem; border-radius: 4px; color: var(--color-primary); text-decoration: none; cursor: pointer; }
+  .todays-services-list .service-link:hover { background: rgba(0,0,0,0.05); text-decoration: underline; }
+  #serviceDetailModal .modal-box { max-width: 96%; width: 360px; max-height: 90vh; overflow-y: auto; }
+  #serviceDetailModal .detail-row { margin: 0.75rem 0; }
+  #serviceDetailModal .detail-label { font-size: 0.8rem; color: var(--color-muted); margin-bottom: 0.2rem; }
+  #serviceDetailModal .detail-value { font-size: 0.95rem; }
+  #serviceDetailModal .detail-message-link { display: inline-block; margin-top: 0.5rem; padding: 0.4rem 0.75rem; background: var(--color-primary); color: #fff; border-radius: var(--radius); text-decoration: none; font-size: 0.9rem; }
+  #serviceDetailModal .detail-message-link:hover { opacity: 0.9; color: #fff; }
+  @media (max-width: 480px) { #serviceDetailModal .modal-box { width: 100%; margin: 0.5rem; } }
   .pending-appointments { margin-bottom: 1.5rem; }
   .pending-appointments h3 { font-size: 1rem; margin: 0 0 0.5rem; }
   .pending-appointments ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--color-border); border-radius: var(--radius); background: #fff; }
@@ -86,9 +113,46 @@
   </div>
   {% endif %}
 
+  <div id="rateableAppointmentsWrap" class="pending-appointments" style="display: none;">
+    <h3>{{ dashboard_i18n.rateable_title|default:"완료된 서비스 평가" }}</h3>
+    <p class="text-muted" style="font-size: 0.9rem; margin: 0 0 0.5rem;">{{ dashboard_i18n.rateable_desc|default:"서비스가 완료된 Agent에 대해 별점과 한줄평을 남겨 주세요." }}</p>
+    <ul id="rateableAppointmentsList"></ul>
+  </div>
+  <div class="modal-overlay" id="rateAppointmentModal" aria-hidden="true">
+    <div class="modal-box" role="dialog" aria-labelledby="rateModalTitle">
+      <h4 id="rateModalTitle">{{ dashboard_i18n.rate_modal_title|default:"서비스 평가" }}</h4>
+      <p id="rateModalService" class="text-muted" style="font-size: 0.9rem;"></p>
+      <form id="rateAppointmentForm">
+        <input type="hidden" name="appointment_id" id="rateAppointmentId">
+        <label>
+          <span>{{ dashboard_i18n.rate_stars|default:"별점" }}</span>
+          <select name="score" id="rateScore" required style="display: block; margin-top: 0.25rem; padding: 0.35rem;">
+            <option value="">--</option>
+            <option value="5">5</option>
+            <option value="4">4</option>
+            <option value="3">3</option>
+            <option value="2">2</option>
+            <option value="1">1</option>
+          </select>
+        </label>
+        <label style="margin-top: 0.75rem;">
+          <span>{{ dashboard_i18n.rate_comment|default:"한줄평 (선택)" }}</span>
+          <textarea name="comment" id="rateComment" rows="3" maxlength="500" placeholder="{{ dashboard_i18n.rate_comment_placeholder|default:'서비스에 대한 짧은 후기를 남겨 주세요.' }}" style="width: 100%; padding: 0.4rem; margin-top: 0.25rem; box-sizing: border-box;"></textarea>
+        </label>
+        <div class="modal-actions" style="margin-top: 1rem;">
+          <button type="button" class="btn btn-outline" id="rateModalClose">{{ dashboard_i18n.cancel|default:"취소" }}</button>
+          <button type="submit" class="btn btn-primary">{{ dashboard_i18n.rate_submit|default:"제출" }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   {% if user_plan %}
   <div class="dashboard-calendar">
     <h2 style="font-size:1.1rem; margin:1rem 0 0.5rem;">{{ dashboard_i18n.my_schedule|default:"내 정착 일정" }}</h2>
+    {% if not schedule_has_items %}
+    <p class="text-muted" style="font-size:0.95rem; margin:0.5rem 0 1rem;">{{ dashboard_i18n.schedule_empty|default:"아직 확정된 일정이 없습니다." }}</p>
+    {% endif %}
     {% if user_plan.has_agent_assignment %}
     <p style="font-size:0.95rem; font-weight:600; margin-bottom:0.5rem;"><span>{{ dashboard_i18n.estimated_checkout|default:"예상 Checkout" }}</span>: {% if can_show_plan_prices and user_plan.checkout_total and user_plan.checkout_total > 0 %}{{ user_plan.checkout_total|floatformat:0 }}{{ dashboard_i18n.won|default:"원" }}{% else %}<span class="text-muted">{{ dashboard_i18n.price_masked|default:"견적 후 공개" }}</span>{% endif %}</p>
     {% endif %}
@@ -97,6 +161,7 @@
       {% if user_plan.city %} {{ user_plan.city }}{% endif %}
       {% if user_plan.entry_date %}({{ dashboard_i18n.entry_planned|default:"입국 예정" }}: {{ user_plan.entry_date|date:"Y-m-d" }}){% endif %}
     </p>
+    <div id="todaysServicesWrap" class="todays-services-list" style="display: none;"></div>
     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
       <button type="button" class="dashboard-cal-prev btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.85rem;">◀ {{ dashboard_i18n.prev|default:"이전" }}</button>
       <strong id="dashboardCalTitle" style="font-size: 0.95rem;" data-year-suffix="{{ calendar_year_suffix|default:'' }}" data-month-suffix="{{ calendar_month_suffix|default:'' }}"></strong>
@@ -105,9 +170,19 @@
     <div id="dashboardCalendarGrid" class="calendar-grid">
       {% for w in calendar_weekdays %}<span class="calendar-weekday">{{ w }}</span>{% endfor %}
     </div>
+    <div class="modal-overlay" id="serviceDetailModal" aria-hidden="true">
+      <div class="modal-box" role="dialog" aria-labelledby="serviceDetailTitle">
+        <h4 id="serviceDetailTitle">{{ dashboard_i18n.detail_title|default:"서비스 상세" }}</h4>
+        <div id="serviceDetailContent"></div>
+        <div class="modal-actions" style="margin-top: 1rem;">
+          <button type="button" class="btn btn-outline" id="serviceDetailClose">{{ dashboard_i18n.close|default:"닫기" }}</button>
+        </div>
+      </div>
+    </div>
     <p style="margin-top:1rem;">
       <a href="{% url 'survey:survey_start' %}" class="btn btn-primary">{{ dashboard_i18n.survey_link|default:"설문 작성" }}</a>
       <a href="{% url 'customer_quote' %}" class="btn btn-outline" style="margin-left:0.5rem;">{{ dashboard_i18n.my_quote|default:"내 견적" }}</a>
+      <a href="{% url 'ai_agent:assistant_chat' %}" class="btn btn-outline" style="margin-left:0.5rem;">{{ dashboard_i18n.assistant_link|default:"AI 어시스턴트" }}</a>
     </p>
   </div>
   {{ dashboard_calendar_i18n|json_script:"dashboard-calendar-i18n" }}
@@ -116,6 +191,9 @@
     var schedule = {{ plan_schedule_json|safe }};
     var grid = document.getElementById('dashboardCalendarGrid');
     var titleEl = document.getElementById('dashboardCalTitle');
+    var modalEl = document.getElementById('serviceDetailModal');
+    var detailContent = document.getElementById('serviceDetailContent');
+    var todaysWrap = document.getElementById('todaysServicesWrap');
     if (!grid || !titleEl) return;
     var i18nEl = document.getElementById('dashboard-calendar-i18n');
     var calI18n = i18nEl ? (function(){ try { return JSON.parse(i18nEl.textContent); } catch(e){ return {}; } })() : {};
@@ -129,7 +207,80 @@
       d = d.toString();
       return y + '-' + (m.length === 1 ? '0' + m : m) + '-' + (d.length === 1 ? '0' + d : d);
     }
+    var todayStr = padDate(today.getFullYear(), today.getMonth(), today.getDate());
     function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function formatTime(startsAt, endsAt) {
+      if (!startsAt) return t('no_time') || '—';
+      try {
+        var s = typeof startsAt === 'string' ? new Date(startsAt) : startsAt;
+        var startStr = s.getHours() + ':' + (s.getMinutes() < 10 ? '0' : '') + s.getMinutes();
+        if (endsAt) {
+          var e = typeof endsAt === 'string' ? new Date(endsAt) : endsAt;
+          var endStr = e.getHours() + ':' + (e.getMinutes() < 10 ? '0' : '') + e.getMinutes();
+          return startStr + ' – ' + endStr;
+        }
+        return startStr;
+      } catch (err) { return t('no_time') || '—'; }
+    }
+    function typeLabel(st) {
+      if (st === 'SELF_SEARCH') return t('type_self_search') || '직접 진행';
+      if (st === 'IN_PERSON_AGENT') return t('type_in_person') || 'Agent 대면';
+      return t('type_ai') || 'AI 지원';
+    }
+    function openModal(item, dateStr) {
+      if (!detailContent || !modalEl) return;
+      var label = (item && item.label) ? item.label : (item && item.code) ? item.code : '';
+      var st = (item && item.service_type) ? String(item.service_type) : 'AI_AGENT';
+      var timeStr = formatTime(item.starts_at, item.ends_at);
+      var agentName = (item && item.agent_name) ? item.agent_name : '';
+      var location = (item && item.location_text) ? item.location_text : '';
+      var notes = (item && item.notes) ? item.notes : '';
+      var showMessageLink = !!(item && (item.agent_id || item.conversation_id));
+      var msgUrl = (item && item.conversation_id) ? ('/messages/?c=' + item.conversation_id) : '/messages/';
+      var html = '<div class="detail-row"><span class="detail-label">' + esc(t('detail_service_name')) + '</span><div class="detail-value">' + esc(label) + '</div></div>';
+      html += '<div class="detail-row"><span class="detail-label">' + esc(t('detail_time')) + '</span><div class="detail-value">' + esc(timeStr) + '</div></div>';
+      html += '<div class="detail-row"><span class="detail-label">' + esc(t('detail_type')) + '</span><div class="detail-value">' + esc(typeLabel(st)) + '</div></div>';
+      if (agentName) html += '<div class="detail-row"><span class="detail-label">' + esc(t('detail_agent')) + '</span><div class="detail-value">' + esc(agentName) + '</div></div>';
+      html += '<div class="detail-row"><span class="detail-label">' + esc(t('detail_location')) + '</span><div class="detail-value">' + (location ? esc(location) : (t('no_location') || '—')) + '</div></div>';
+      html += '<div class="detail-row"><span class="detail-label">' + esc(t('detail_notes')) + '</span><div class="detail-value">' + (notes ? esc(notes) : (t('no_notes') || '—')) + '</div></div>';
+      if (showMessageLink) html += '<a href="' + esc(msgUrl) + '" class="detail-message-link">' + esc(t('detail_message_shortcut')) + '</a>';
+      detailContent.innerHTML = html;
+      modalEl.classList.add('visible');
+      modalEl.setAttribute('aria-hidden', 'false');
+    }
+    function closeModal() {
+      if (modalEl) { modalEl.classList.remove('visible'); modalEl.setAttribute('aria-hidden', 'true'); }
+    }
+    function renderTodaysList() {
+      if (!todaysWrap) return;
+      if (calYear !== today.getFullYear() || calMonth !== today.getMonth()) {
+        todaysWrap.style.display = 'none';
+        return;
+      }
+      var items = schedule[todayStr];
+      if (!Array.isArray(items) || items.length === 0) {
+        todaysWrap.style.display = 'none';
+        return;
+      }
+      todaysWrap.innerHTML = '<h3>' + esc(t('todays_services')) + '</h3><ul id="todaysServicesList"></ul>';
+      var ul = document.getElementById('todaysServicesList');
+      if (ul) {
+        items.forEach(function(item, idx) {
+          var label = (item && item.label) ? item.label : (item && item.code) ? item.code : '';
+          if (label) {
+            var li = document.createElement('li');
+            var a = document.createElement('a');
+            a.href = '#';
+            a.className = 'service-link';
+            a.textContent = label;
+            a.addEventListener('click', function(e) { e.preventDefault(); openModal(item, todayStr); });
+            li.appendChild(a);
+            ul.appendChild(li);
+          }
+        });
+      }
+      todaysWrap.style.display = 'block';
+    }
     function render() {
       var first = new Date(calYear, calMonth, 1);
       var last = new Date(calYear, calMonth + 1, 0);
@@ -153,21 +304,39 @@
         var dateStr = padDate(calYear, calMonth, d);
         var items = schedule[dateStr] || [];
         var cell = document.createElement('div');
-        cell.className = 'calendar-day';
+        cell.className = 'calendar-day' + (dateStr === todayStr ? ' calendar-day-today' : '');
         cell.innerHTML = '<span class="calendar-day-num">' + d + '</span>';
         if (Array.isArray(items)) {
-          items.forEach(function(item) {
+          items.forEach(function(item, idx) {
             var label = (item && item.label) ? item.label : (item && item.code) ? item.code : '';
             if (label) {
+              var st = (item && item.service_type) ? String(item.service_type) : 'AI_AGENT';
+              var typeClass = 'calendar-card--' + st.toLowerCase().replace('_', '-');
+              var todayClass = (dateStr === todayStr) ? ' calendar-card--today' : '';
               var statusLabel = (item && item.appointment_status_label) ? item.appointment_status_label : '';
-              cell.innerHTML += '<div class="calendar-card">' + esc(label) + (statusLabel ? '<span class="calendar-card-status">' + esc(statusLabel) + '</span>' : '') + '</div>';
+              var agentName = (item && item.agent_name) ? item.agent_name : '';
+              var agentHtml = (st === 'IN_PERSON_AGENT' && agentName) ? '<span class="calendar-card-agent">' + esc(agentName) + '</span>' : '';
+              cell.innerHTML += '<div class="calendar-card calendar-card-clickable ' + typeClass + todayClass + '" data-date="' + esc(dateStr) + '" data-index="' + idx + '">' + esc(label) + (statusLabel ? '<span class="calendar-card-status">' + esc(statusLabel) + '</span>' : '') + agentHtml + '</div>';
             }
           });
         }
         grid.appendChild(cell);
       }
+      renderTodaysList();
     }
     render();
+    grid.addEventListener('click', function(e) {
+      var card = e.target && e.target.closest ? e.target.closest('.calendar-card-clickable') : null;
+      if (!card) return;
+      var dateStr = card.getAttribute('data-date');
+      var idx = parseInt(card.getAttribute('data-index'), 10);
+      if (isNaN(idx)) return;
+      var items = schedule[dateStr];
+      var item = items && items[idx];
+      if (item) openModal(item, dateStr);
+    });
+    if (document.getElementById('serviceDetailClose')) document.getElementById('serviceDetailClose').addEventListener('click', closeModal);
+    if (modalEl) modalEl.addEventListener('click', function(e) { if (e.target === modalEl) closeModal(); });
     window.addEventListener('i18n-applied', render);
     document.querySelector('.dashboard-cal-prev').addEventListener('click', function() {
       calMonth--;
@@ -199,6 +368,90 @@
   {% endif %}
 </div>
 
+<script>
+(function() {
+  var wrap = document.getElementById('rateableAppointmentsWrap');
+  var listEl = document.getElementById('rateableAppointmentsList');
+  var modal = document.getElementById('rateModalClose');
+  if (!wrap || !listEl) return;
+  var modalOverlay = document.getElementById('rateAppointmentModal');
+  var modalService = document.getElementById('rateModalService');
+  var form = document.getElementById('rateAppointmentForm');
+  var idInput = document.getElementById('rateAppointmentId');
+  var csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+  var csrfToken = csrf ? csrf.value : '';
+
+  function loadRateable() {
+    fetch('/api/settlement/rateable-appointments/', { credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.ok || !data.items || data.items.length === 0) {
+          wrap.style.display = 'none';
+          return;
+        }
+        wrap.style.display = 'block';
+        listEl.innerHTML = '';
+        data.items.forEach(function(it) {
+          var li = document.createElement('li');
+          li.innerHTML = '<span class="appointment-name">' + (it.service_label || it.service_code || '') + '</span>' +
+            '<span class="appointment-meta">' + (it.service_date || '') + (it.agent_name ? ' · ' + it.agent_name : '') + '</span>' +
+            '<span class="appointment-actions"><button type="button" class="btn btn-outline btn-rate-appointment" data-id="' + it.id + '" data-label="' + (it.service_label || '').replace(/"/g, '&quot;') + '" data-agent="' + (it.agent_name || '').replace(/"/g, '&quot;') + '">' + (document.documentElement.lang === 'en' ? 'Rate' : '평가하기') + '</button></span>';
+          listEl.appendChild(li);
+        });
+        listEl.querySelectorAll('.btn-rate-appointment').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            idInput.value = btn.getAttribute('data-id');
+            modalService.textContent = (btn.getAttribute('data-label') || '') + (btn.getAttribute('data-agent') ? ' · ' + btn.getAttribute('data-agent') : '');
+            if (form) form.reset();
+            idInput.value = btn.getAttribute('data-id');
+            if (modalOverlay) { modalOverlay.classList.add('visible'); modalOverlay.setAttribute('aria-hidden', 'false'); }
+          });
+        });
+      })
+      .catch(function() { wrap.style.display = 'none'; });
+  }
+  loadRateable();
+
+  if (document.getElementById('rateModalClose')) {
+    document.getElementById('rateModalClose').addEventListener('click', function() {
+      if (modalOverlay) { modalOverlay.classList.remove('visible'); modalOverlay.setAttribute('aria-hidden', 'true'); }
+    });
+  }
+  if (modalOverlay) {
+    modalOverlay.addEventListener('click', function(e) { if (e.target === modalOverlay) { modalOverlay.classList.remove('visible'); modalOverlay.setAttribute('aria-hidden', 'true'); } });
+  }
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      var id = idInput.value;
+      var score = document.getElementById('rateScore') && document.getElementById('rateScore').value;
+      var comment = document.getElementById('rateComment') && document.getElementById('rateComment').value;
+      if (!id || !score) return;
+      var fd = new FormData();
+      fd.append('csrfmiddlewaretoken', csrfToken);
+      fd.append('score', score);
+      fd.append('comment', (comment || '').trim());
+      fetch('/api/settlement/appointment/' + id + '/rate/', {
+        method: 'POST',
+        body: fd,
+        headers: { 'X-CSRFToken': csrfToken },
+        credentials: 'same-origin',
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.ok) {
+            if (modalOverlay) { modalOverlay.classList.remove('visible'); modalOverlay.setAttribute('aria-hidden', 'true'); }
+            loadRateable();
+            alert(data.message || (document.documentElement.lang === 'en' ? 'Thank you for your review.' : '평가가 등록되었습니다.'));
+          } else {
+            alert(data.error || (document.documentElement.lang === 'en' ? 'Failed to submit.' : '제출에 실패했습니다.'));
+          }
+        })
+        .catch(function() { alert(document.documentElement.lang === 'en' ? 'Request failed.' : '요청에 실패했습니다.'); });
+    });
+  }
+})();
+</script>
 {% if pending_appointments %}
 <div class="modal-overlay" id="editAppointmentModal">
   <div class="modal-box">

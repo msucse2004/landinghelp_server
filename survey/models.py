@@ -259,6 +259,7 @@ class SurveySubmissionEvent(models.Model):
         RESUBMITTED = 'resubmitted', '재제출'
         QUOTE_SENT = 'quote_sent', '견적 송부'
         PAID = 'paid', '결제 완료'
+        SCHEDULE_SENT = 'schedule_sent', '일정 송부'
 
     submission = models.ForeignKey(
         SurveySubmission,

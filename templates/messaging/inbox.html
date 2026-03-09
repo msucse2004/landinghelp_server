@@ -70,6 +70,13 @@
         <div class="inbox-survey-actions" id="inboxSurveyActions" style="display:none;">
           <a href="#" id="inboxSurveyReviewLink" class="btn btn-primary">{{ inbox_i18n.view_survey|default:"고객 설문 확인" }}</a>
         </div>
+        <div class="inbox-survey-actions inbox-survey-edit-actions" id="inboxSurveyEditActions" style="display:none;">
+          <a href="#" id="inboxSurveyEditLink" class="btn btn-primary">{{ inbox_i18n.edit_survey|default:"설문 수정하기" }}</a>
+        </div>
+        <div class="inbox-survey-actions inbox-quote-actions" id="inboxQuoteActions" style="display:none;">
+          <a href="#" id="inboxQuoteViewLink" class="btn btn-outline">{{ inbox_i18n.view_quote|default:"견적서 보기" }}</a>
+          <a href="#" id="inboxQuotePayLink" class="btn btn-primary">{{ inbox_i18n.pay|default:"결제하기" }}</a>
+        </div>
         <div class="inbox-messages" id="inboxMessages"></div>
         <div class="inbox-send">
           <div class="inbox-send-attach-wrap">
@@ -194,6 +201,9 @@
     else titleEl.textContent = displayTitlePref || ('대화 #' + convId);
     document.getElementById('inboxAppointmentActions').style.display = 'none';
     document.getElementById('inboxSurveyActions').style.display = 'none';
+    document.getElementById('inboxSurveyEditActions').style.display = 'none';
+    var quoteActionsEl = document.getElementById('inboxQuoteActions');
+    if (quoteActionsEl) quoteActionsEl.style.display = 'none';
     document.getElementById('inboxMessages').innerHTML = '<div class="inbox-loading">' + t('loading') + '</div>';
     Promise.all([
       fetch(API_BASE + '/conversations/' + convId + '/', { method: 'GET', headers: getHeaders('GET'), credentials: 'same-origin' }).then(function(r) { return r.json(); }),
@@ -220,6 +230,19 @@
           surveyLink.href = detail.survey_review_url;
           surveyLink.textContent = t('view_survey') || '고객 설문 확인';
           document.getElementById('inboxSurveyActions').style.display = 'flex';
+        }
+        if (!window.VIEWER_IS_STAFF && detail.show_survey_edit_button && detail.survey_edit_url) {
+          var editLink = document.getElementById('inboxSurveyEditLink');
+          editLink.href = detail.survey_edit_url;
+          editLink.textContent = t('edit_survey') || '설문 수정하기';
+          document.getElementById('inboxSurveyEditActions').style.display = 'flex';
+        }
+        if (!window.VIEWER_IS_STAFF && detail.show_quote_actions && detail.quote_view_url) {
+          var qView = document.getElementById('inboxQuoteViewLink');
+          var qPay = document.getElementById('inboxQuotePayLink');
+          if (qView) { qView.href = detail.quote_view_url; qView.textContent = t('view_quote') || '견적서 보기'; }
+          if (qPay && detail.quote_payment_url) { qPay.href = detail.quote_payment_url; qPay.textContent = t('pay') || '결제하기'; }
+          if (quoteActionsEl) quoteActionsEl.style.display = 'flex';
         }
         var msgs = data.messages || [];
         var box = document.getElementById('inboxMessages');

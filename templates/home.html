@@ -308,6 +308,9 @@
     border-radius: 4px;
     margin-bottom: 0.2rem;
   }
+  .plan-card .calendar-card.calendar-card--self-search { background: #64748b; }
+  .plan-card .calendar-card.calendar-card--ai-agent { background: var(--color-primary); }
+  .plan-card .calendar-card.calendar-card--in-person-agent { background: #059669; }
   .plan-card .calendar-card-status {
     display: block;
     font-size: 0.6rem;
@@ -393,8 +396,12 @@
           items.forEach(function(item) {
             var label = (item && item.label) ? item.label : (item && item.code) ? item.code : '';
             if (label) {
+              var st = (item && item.service_type) ? String(item.service_type) : 'AI_AGENT';
+              var typeClass = 'calendar-card--' + st.toLowerCase().replace('_', '-');
               var statusLabel = (item && item.appointment_status_label) ? item.appointment_status_label : '';
-              var cardHtml = '<div class="calendar-card">' + esc(label) + (statusLabel ? '<span class="calendar-card-status">' + esc(statusLabel) + '</span>' : '') + '</div>';
+              var agentName = (item && item.agent_name) ? item.agent_name : '';
+              var agentHtml = (st === 'IN_PERSON_AGENT' && agentName) ? '<span class="calendar-card-status">' + esc(agentName) + '</span>' : '';
+              var cardHtml = '<div class="calendar-card ' + typeClass + '">' + esc(label) + (statusLabel ? '<span class="calendar-card-status">' + esc(statusLabel) + '</span>' : '') + agentHtml + '</div>';
               cell.innerHTML += cardHtml;
             }
           });

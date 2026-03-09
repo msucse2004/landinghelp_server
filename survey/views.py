@@ -568,7 +568,12 @@ def survey_submit(request):
 
     draft.status = SurveySubmission.Status.SUBMITTED
     draft.submitted_at = timezone.now()
-    draft.save(update_fields=['status', 'submitted_at'])
+    # 제출 시점에 로그인한 사용자가 있으면 submission에 연결 (고객 메시지함 알림용)
+    update_fields = ['status', 'submitted_at']
+    if request.user.is_authenticated and draft.user_id is None:
+        draft.user = request.user
+        update_fields.append('user')
+    draft.save(update_fields=update_fields)
     request.session.pop('survey_submission_id', None)
 
     event_type = 'resubmitted' if was_revision else 'submitted'
@@ -591,6 +596,7 @@ def survey_submit(request):
     except Exception:
         pass
 
+    # Notify customer (inbox + email) and admin (email + inbox). Same flow for first submit and resubmit.
     try:
         from settlement.notifications import (
             send_survey_submitted_admin_notification,
@@ -599,13 +605,20 @@ def survey_submit(request):
             send_survey_submitted_admin_message,
         )
         from translations.utils import get_request_language
+        import logging
+        logger = logging.getLogger(__name__)
         lang = get_request_language(request)
         send_survey_submitted_admin_notification(draft, language_code=lang)
-        send_survey_submitted_customer_email(draft, language_code=lang)
-        send_survey_submitted_customer_message(draft, language_code=lang)
+        send_survey_submitted_customer_email(draft, language_code=lang, is_revision_resubmit=was_revision)
+        if not send_survey_submitted_customer_message(draft, language_code=lang, is_revision_resubmit=was_revision):
+            logger.warning(
+                "Survey submitted customer message skipped: submission_id=%s user_id=%s (login and link user for inbox message).",
+                getattr(draft, 'id', None), getattr(draft, 'user_id', None),
+            )
         send_survey_submitted_admin_message(draft, language_code=lang)
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Survey submit notifications failed: %s", e, exc_info=True)
 
     return redirect(reverse('survey:survey_thankyou'))
 

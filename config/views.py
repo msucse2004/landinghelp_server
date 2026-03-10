@@ -143,7 +143,6 @@ def home(request):
         home_plan_i18n = {
             'my_plan_title': get_display_text('내 정착 플랜', lang),
             'estimated_checkout': get_display_text('예상 Checkout', lang),
-            'won': get_display_text('원', lang),
             'entry_planned': get_display_text('입국 예정', lang),
             'saved_schedule': get_display_text('저장된 일정이 있습니다', lang),
             'edit_plan': get_display_text('정착 플랜 수정', lang),
@@ -471,7 +470,6 @@ def customer_dashboard(request):
         'cancel': get_display_text('취소', lang),
         'my_schedule': get_display_text('내 정착 일정', lang),
         'estimated_checkout': get_display_text('예상 Checkout', lang),
-        'won': get_display_text('원', lang),
         'entry_planned': get_display_text('입국 예정', lang),
         'prev': get_display_text('이전', lang),
         'next': get_display_text('다음', lang),
@@ -506,8 +504,11 @@ def customer_dashboard(request):
     dashboard_i18n['price_masked'] = get_display_text('견적 후 공개', lang)
 
     submission_status_label = ''
+    show_reopen_survey = False
+    pending_reopen_offer = None
     try:
         from survey.models import SurveySubmission
+        from settlement.models import CustomerActionOffer
         sub = SurveySubmission.objects.filter(user=request.user).exclude(
             status=SurveySubmission.Status.DRAFT
         ).order_by('-submitted_at').first()
@@ -517,6 +518,17 @@ def customer_dashboard(request):
                 completed, total = sub.get_service_progress()
                 if total:
                     submission_status_label += f' ({completed}/{total} ' + (get_display_text('완료', lang) or '완료') + ')'
+            show_reopen_survey = sub.status == SurveySubmission.Status.REVISION_REQUESTED
+            if not show_reopen_survey:
+                offer = CustomerActionOffer.objects.filter(
+                    submission=sub,
+                    button_action_key='reopen_survey',
+                    status=CustomerActionOffer.Status.PENDING,
+                    can_execute=True,
+                ).order_by('-created_at').first()
+                if offer:
+                    pending_reopen_offer = {'id': offer.id, 'button_label': offer.button_label or get_display_text('설문 수정 시작', lang) or '설문 수정 시작'}
+                    show_reopen_survey = True
     except Exception:
         pass
 
@@ -533,6 +545,18 @@ def customer_dashboard(request):
     dashboard_i18n['task_self_search'] = get_display_text('직접 진행', lang)
     dashboard_i18n['task_ai'] = get_display_text('AI 지원', lang)
     dashboard_i18n['meeting_agent'] = get_display_text('Agent 대면', lang)
+    dashboard_i18n['survey_reopen_label'] = get_display_text('설문 다시 수정하기', lang) or '설문 다시 수정하기'
+
+    # 설문 수정 재개 링크 (메시지함 링크와 동일; resume=1로 진입 시 비로그인 사용자 로그인 유도)
+    from django.urls import reverse
+    survey_resume_url = reverse('survey:survey_start') + '?resume=1'
+
+    customer_ui_payload = {}
+    try:
+        from customer_request_service import build_customer_ui_payload
+        customer_ui_payload = build_customer_ui_payload(request.user)
+    except Exception:
+        pass
 
     return render(request, 'app/customer_dashboard.html', {
         'tier_label': get_user_grade_display(request.user, lang),
@@ -548,6 +572,10 @@ def customer_dashboard(request):
         'dashboard_i18n': dashboard_i18n,
         'can_show_plan_prices': can_show_plan_prices,
         'submission_status_label': submission_status_label,
+        'show_reopen_survey': show_reopen_survey,
+        'survey_resume_url': survey_resume_url,
+        'pending_reopen_offer': pending_reopen_offer,
+        'customer_ui_payload': customer_ui_payload,
     })
 
 
@@ -576,6 +604,47 @@ def submission_review_list(request):
         'submissions': submissions,
         'page_obj': submissions,
     })
+
+
+@require_POST
+@login_required
+@user_passes_test(_staff_required, login_url='/login/')
+def reset_survey_and_messaging_for_test(request):
+    """
+    Staff 전용: 견적서/설문 테스트를 위해 대화 DB와 설문 제출 DB를 전부 삭제.
+    - messaging: MessageRead, MessageTranslation, Message, ConversationParticipant, Conversation
+    - survey: SurveySubmission (CASCADE로 견적·변경요청·이벤트·카드별요청 등 함께 삭제)
+    """
+    from messaging.models import MessageRead, MessageTranslation, Message, ConversationParticipant, Conversation
+    from survey.models import SurveySubmission
+    from django.contrib import messages
+
+    # 삭제 순서: 메시지 읽음/번역 → 메시지 → 참여자 → 대화 → 설문 제출(CASCADE로 견적·변경요청 등 제거)
+    deleted = {}
+    try:
+        r = MessageRead.objects.all().delete()
+        deleted['message_read'] = r[0]
+        t = MessageTranslation.objects.all().delete()
+        deleted['message_translation'] = t[0]
+        m = Message.objects.all().delete()
+        deleted['message'] = m[0]
+        p = ConversationParticipant.objects.all().delete()
+        deleted['conversation_participant'] = p[0]
+        c = Conversation.objects.all().delete()
+        deleted['conversation'] = c[0]
+        s = SurveySubmission.objects.all().delete()
+        deleted['survey_submission'] = s[0]
+    except Exception as e:
+        messages.error(request, f'리셋 중 오류: {e}')
+        return redirect('app_submission_review_list')
+
+    total = sum(deleted.values())
+    messages.success(
+        request,
+        f'테스트 리셋 완료: 대화 {deleted.get("conversation", 0)}건, 설문 제출 {deleted.get("survey_submission", 0)}건 등 총 {total}건 삭제됨. '
+        '새로 설문을 작성하고 견적서 플로우를 테스트할 수 있습니다.'
+    )
+    return redirect('app_submission_review_list')
 
 
 def _format_answer_value(raw, question_dict):
@@ -792,6 +861,7 @@ def submission_review(request, submission_id):
             'status_label': payment_quote.get_status_display(),
             'total': int(payment_quote.total or 0),
             'sent_at': payment_quote.sent_at,
+            'superseded': bool(getattr(payment_quote, 'revision_superseded_at', None)),
         }
 
     # DRAFT 없고 송부/결제된 견적만 있을 때: 해당 견적을 읽기 전용으로 견적서 카드에 표시(기존 견적서 유지)
@@ -939,6 +1009,77 @@ def submission_review(request, submission_id):
 
     customer_answers_by_section = _build_customer_answers_by_section(submission)
 
+    # 고객 수정 요청(자유 텍스트) + LLM 해석 결과
+    from settlement.models import QuoteChangeRequest
+    latest_change_request = (
+        QuoteChangeRequest.objects.filter(submission=submission)
+        .order_by('-created_at')
+        .select_related('quote')
+        .first()
+    )
+    latest_change_analysis = None
+    suggested_actions = []
+    if latest_change_request:
+        latest_change_analysis = latest_change_request.latest_analysis()
+        if latest_change_analysis and getattr(latest_change_analysis, 'extracted_actions', None):
+            for a in latest_change_analysis.extracted_actions:
+                if isinstance(a, dict):
+                    sc = a.get('service_code') or ''
+                    suggested_actions.append({
+                        'action_type': a.get('action_type', ''),
+                        'service_code': sc,
+                        'service_label': get_service_label(sc) if sc else '',
+                        'reason': (a.get('reason') or '')[:300],
+                    })
+    can_reopen_survey = bool(
+        latest_change_request and getattr(latest_change_request, 'can_be_reopened_for_survey_edit', lambda: False)()
+    )
+    from customer_request_service import get_submission_reopen_status
+    reopen_status = get_submission_reopen_status(submission)
+    can_start_quote_revision = bool(
+        (quote_draft or payment_quote)
+        and submission.status in (SurveySubmission.Status.SUBMITTED, SurveySubmission.Status.AWAITING_PAYMENT)
+    )
+    # 설문 재제출 후: change request가 IN_REVIEW이면 Admin에게 새 견적 작성·송부 안내
+    if (
+        submission.status == SurveySubmission.Status.SUBMITTED
+        and latest_change_request
+        and latest_change_request.status == QuoteChangeRequest.Status.IN_REVIEW
+    ):
+        needs_admin_decision.append('고객이 수정을 재제출했습니다. 변경된 설문을 반영해 새 견적 초안을 검토한 뒤 송부하세요.')
+
+    # 재견적 흐름 추적: 이 submission의 견적 이력 + 각 견적이 반영한 변경 요청
+    from settlement.models import QuoteChangeActionLog
+    quotes_for_submission = list(
+        SettlementQuote.objects.filter(submission=submission).order_by('-created_at').values(
+            'id', 'status', 'sent_at', 'revision_superseded_at', 'supersedes_id', 'version', 'created_at'
+        )
+    )
+    quote_trail = []
+    for q in quotes_for_submission:
+        applied_cr_ids = list(
+            QuoteChangeActionLog.objects.filter(
+                action_type=QuoteChangeActionLog.ActionType.ADMIN_APPROVED_QUOTE_REVISION,
+                detail__sent_quote_id=q['id'],
+            ).values_list('change_request_id', flat=True).distinct()
+        )
+        superseded_quote_id = q.get('supersedes_id')
+        quote_trail.append({
+            'id': q['id'],
+            'status': q['status'],
+            'status_display': dict(SettlementQuote.Status.choices).get(q['status'], q['status']),
+            'sent_at': q['sent_at'],
+            'revision_superseded_at': q['revision_superseded_at'],
+            'supersedes_id': superseded_quote_id,
+            'version': q.get('version'),
+            'created_at': q['created_at'],
+            'applied_change_request_ids': applied_cr_ids,
+        })
+    submission_revision_info = {
+        'revision_count': getattr(submission, 'revision_count', None) or 0,
+        'reopened_at': getattr(submission, 'reopened_at', None),
+    }
+
     return render(request, 'app/submission_review.html', {
         'submission': submission,
         'customer_summary': customer_summary,
@@ -957,6 +1098,14 @@ def submission_review(request, submission_id):
         'submission_readiness': submission_readiness,
         'quotation_context': quotation_context,
         'quotation_read_only': quotation_read_only,
+        'latest_change_request': latest_change_request,
+        'latest_change_analysis': latest_change_analysis,
+        'suggested_actions': suggested_actions,
+        'can_reopen_survey': can_reopen_survey,
+        'can_start_quote_revision': can_start_quote_revision,
+        'reopen_status': reopen_status,
+        'quote_trail': quote_trail,
+        'submission_revision_info': submission_revision_info,
     })
 
 
@@ -1268,4 +1417,121 @@ def submission_review_resend_quote(request, submission_id):
         messages.success(request, '동일 견적을 고객에게 다시 보냈습니다(이메일·메시지).')
     else:
         messages.error(request, err or '재송부 처리 중 오류가 발생했습니다.')
+    return redirect('app_submission_review', submission_id=submission_id)
+
+
+@require_POST
+@login_required
+@user_passes_test(_staff_required, login_url='/login/')
+def submission_review_approve_reopen_survey(request, submission_id, change_request_id):
+    """Staff: 고객 수정 요청에 대해 설문 재개 승인. submission → REVISION_REQUESTED, 기존 견적 결제 제외."""
+    from django.shortcuts import get_object_or_404
+    from survey.models import SurveySubmission
+    from settlement.services_quote_change import approve_reopen_survey_by_ids
+    from django.contrib import messages
+
+    get_object_or_404(SurveySubmission, id=submission_id)
+    success, err = approve_reopen_survey_by_ids(
+        submission_id=int(submission_id),
+        change_request_id=int(change_request_id),
+        actor=request.user,
+        request=request,
+    )
+    if success:
+        messages.success(request, '설문 재개를 승인했습니다. 고객이 이전 내용을 바탕으로 설문을 수정할 수 있습니다.')
+    else:
+        messages.error(request, err or '설문 재개 처리에 실패했습니다.')
+    return redirect('app_submission_review', submission_id=submission_id)
+
+
+@require_POST
+@login_required
+@user_passes_test(_staff_required, login_url='/login/')
+def submission_review_reopen_survey(request, submission_id):
+    """
+    Staff: 고객 요청 없이 설문 수정 허용(CTA) 발송. Action offer 생성 + 고객에게 메시지 발송.
+    고객이 '설문 수정 시작' 버튼을 눌러야 실제 상태 전이. Idempotent.
+    """
+    from django.shortcuts import get_object_or_404
+    from survey.models import SurveySubmission
+    from settlement.models import QuoteChangeRequest
+    from customer_request_service import admin_initiated_reopen_submission
+    from django.contrib import messages
+
+    get_object_or_404(SurveySubmission, id=submission_id)
+    change_request_id = request.POST.get('change_request_id')
+    change_request = None
+    if change_request_id and str(change_request_id).isdigit():
+        change_request = QuoteChangeRequest.objects.filter(
+            id=int(change_request_id), submission_id=submission_id
+        ).first()
+    success, offer, err = admin_initiated_reopen_submission(
+        int(submission_id), request.user,
+        change_request=change_request, request=request,
+    )
+    if success:
+        if offer:
+            messages.success(
+                request,
+                '고객에게 설문 수정 허용 메시지를 보냈습니다. 고객이 "설문 수정 시작" 버튼을 누르면 수정 가능 상태로 전환됩니다.',
+            )
+        else:
+            messages.info(request, '이미 고객 수정 가능 상태이거나 CTA가 대기 중입니다.')
+    else:
+        messages.error(request, err or '설문 수정 허용 처리에 실패했습니다.')
+    return redirect('app_submission_review', submission_id=submission_id)
+
+
+@require_POST
+@login_required
+@user_passes_test(_staff_required, login_url='/login/')
+def submission_review_approve_quote_revision(request, submission_id, change_request_id):
+    """Staff: LLM 추천 견적 수정 승인 → sent quote 기반 draft 생성, change_request IN_REVIEW. 서비스 레이어 approve_quote_revision 사용."""
+    from django.shortcuts import get_object_or_404
+    from survey.models import SurveySubmission
+    from settlement.models import QuoteChangeRequest
+    from settlement.services_quote_change import approve_quote_revision
+    from django.contrib import messages
+
+    get_object_or_404(SurveySubmission, id=submission_id)
+    cr = get_object_or_404(QuoteChangeRequest, id=change_request_id, submission_id=submission_id)
+    success, draft, err = approve_quote_revision(cr, request.user)
+    if success:
+        if draft:
+            messages.success(request, '수정용 견적 초안을 생성했습니다. 아래 견적서에서 금액을 수정한 뒤 "승인 후 고객에게 송부"를 눌러 보내세요.')
+        else:
+            messages.success(request, '이미 수정 프로세스가 진행 중입니다. 아래 견적서를 확인하세요.')
+        from django.urls import reverse
+        return redirect(reverse('app_submission_review', kwargs={'submission_id': submission_id}) + '#quotation-card')
+    messages.error(request, err or '견적 수정 프로세스 시작에 실패했습니다.')
+    return redirect('app_submission_review', submission_id=submission_id)
+
+
+@require_POST
+@login_required
+@user_passes_test(_staff_required, login_url='/login/')
+def submission_review_reject_change_request(request, submission_id):
+    """Staff: 고객 수정 요청(QuoteChangeRequest)을 반려. 서비스 레이어 reject_change_request 사용."""
+    from survey.models import SurveySubmission
+    from settlement.models import QuoteChangeRequest
+    from settlement.services_quote_change import reject_change_request
+    from django.shortcuts import get_object_or_404
+    from django.contrib import messages
+
+    submission = get_object_or_404(SurveySubmission, id=submission_id)
+    cr_id = request.POST.get('change_request_id')
+    if not cr_id:
+        messages.error(request, 'change_request_id가 필요합니다.')
+        return redirect('app_submission_review', submission_id=submission_id)
+    try:
+        cr = QuoteChangeRequest.objects.get(id=int(cr_id), submission=submission)
+    except (ValueError, QuoteChangeRequest.DoesNotExist):
+        messages.error(request, '해당 변경 요청을 찾을 수 없습니다.')
+        return redirect('app_submission_review', submission_id=submission_id)
+    note = (request.POST.get('reject_note') or '').strip()
+    success, err = reject_change_request(cr, request.user, note=note)
+    if success:
+        messages.success(request, '변경 요청을 반려했습니다.')
+    else:
+        messages.error(request, err or '반려 처리에 실패했습니다.')
     return redirect('app_submission_review', submission_id=submission_id)

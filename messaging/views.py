@@ -1,4 +1,8 @@
 # messaging API: 대화 목록, 메시지 조회/전송, 읽음 처리, 공지 생성
+#
+# 고객 메시지 처리: 직접 상태 변경 없음. 모든 고객 요청은 통합 서비스 계층을 통해 처리한다.
+# - 메시지 POST 시 customer_request_service.handle_customer_request_flow('messaging_inbox', ...) 호출.
+# - 정책 분류 → action offer 생성 / human review 라우팅 / 자동 응답. 실제 상태 전이는 고객 버튼 클릭 시에만.
 import json
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
@@ -8,6 +12,26 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils import timezone
 
 from .models import Conversation, ConversationParticipant, Message, MessageRead, MessageTranslation
+
+
+def _pick_staff_sender_for_conversation(conv: Conversation):
+    """자동 응답/안내 메시지 발신자로 쓸 staff 사용자를 선택."""
+    if not conv:
+        return None
+    staff_participant = (
+        ConversationParticipant.objects.filter(conversation=conv, user__is_staff=True)
+        .select_related('user')
+        .order_by('id')
+        .first()
+    )
+    if staff_participant:
+        return staff_participant.user
+    try:
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        return User.objects.filter(is_staff=True).order_by('-is_superuser', 'id').first()
+    except Exception:
+        return None
 
 
 def _get_message_body_for_viewer(msg, viewer_user):
@@ -154,9 +178,20 @@ def inbox(request):
         'edit_survey': get_display_text('설문 수정하기', lang),
         'view_quote': get_display_text('견적서 보기', lang),
         'pay': get_display_text('결제하기', lang),
+        'request_in_review': get_display_text('요청이 검토 중입니다. 완료 시 안내드리겠습니다.', lang),
+        'completed': get_display_text('처리 완료', lang),
+        'pending': get_display_text('대기', lang),
+        'expired': get_display_text('만료', lang),
+        'action_offer': get_display_text('안내', lang),
+        'confirm': get_display_text('확인', lang),
+        'cancel': get_display_text('취소', lang),
+        'execute_failed': get_display_text('처리에 실패했습니다.', lang),
     }
+    # 메시지함 페이지에서는 팝업 절대 표시하지 않음 (context processor에서 체크)
+    request._suppress_message_popup = True
     request.session.pop('show_new_message_popup', None)
-    request.session.pop('popup_dismissed', None)  # 메시지함 진입 시 초기화 → 다음 미읽음 시 팝업 다시 표시
+    request.session['popup_dismissed'] = True
+    request.session.modified = True
     viewer_preferred = (getattr(request.user, 'preferred_language', None) or '').strip() or 'en'
     return render(request, 'messaging/inbox.html', {
         'inbox_i18n': i18n,
@@ -403,6 +438,22 @@ def api_conversation_messages(request, conversation_id):
         MessageRead.objects.get_or_create(message=msg, user=user)
         conv.updated_at = timezone.now()
         conv.save(update_fields=['updated_at'])
+        try:
+            if not getattr(user, 'is_staff', False):
+                from customer_request_service import handle_customer_request_flow
+                handle_customer_request_flow(
+                    'messaging_inbox',
+                    user,
+                    msg.body or '',
+                    conversation=conv,
+                    message=msg,
+                )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                "handle_customer_request_flow failed for conv=%s msg=%s: %s",
+                conv.id, msg.id, e, exc_info=True,
+            )
         # 수신자 선호어로 번역 캐시 미리 생성 (열람 시 바로 표시)
         other_participants = list(
             ConversationParticipant.objects.filter(conversation=conv)
@@ -638,9 +689,9 @@ def api_conversation_detail(request, conversation_id):
     ):
         payload['show_survey_edit_button'] = True
         try:
-            payload['survey_edit_url'] = reverse('survey:survey_start')
+            payload['survey_edit_url'] = reverse('survey:survey_start') + '?resume=1'
         except Exception:
-            payload['survey_edit_url'] = '/settlement/survey/'
+            payload['survey_edit_url'] = '/settlement/survey/?resume=1'
     # 고객: 송부된 견적(FINAL_SENT)이 있을 때 메시지 창에서 견적서 보기·결제하기 버튼 노출
     if (
         not getattr(user, 'is_staff', False)
@@ -667,4 +718,26 @@ def api_conversation_detail(request, conversation_id):
                 payload['quote_payment_url'] = reverse('settlement_quote_checkout_mock') + '?quote_id=' + str(sent_quote.id)
             except Exception:
                 payload['quote_payment_url'] = '/services/settlement/quote/checkout/mock/?quote_id=' + str(sent_quote.id)
+
+    # 고객 UI 통합 payload (서버 truth 기반)
+    if not getattr(user, 'is_staff', False):
+        try:
+            from customer_request_service import build_customer_ui_payload
+            ui = build_customer_ui_payload(user, conversation=conv, submission=sub)
+            payload['pending_actions'] = ui.get('pending_actions', [])
+            payload['action_offers'] = ui.get('action_offers', [])
+            payload['review_status'] = ui.get('review_status', {})
+            payload['execution_mode'] = ui.get('execution_mode', '')
+            payload['can_reopen_survey'] = ui.get('can_reopen_survey', False)
+            payload['can_resume_survey'] = ui.get('can_resume_survey', False)
+            payload['can_resend_quote'] = ui.get('can_resend_quote', False)
+            payload['current_request_status'] = ui.get('current_request_status', '')
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                "build_customer_ui_payload failed for conv=%s user=%s: %s",
+                conversation_id, user.id, e, exc_info=True,
+            )
+            payload['action_offers'] = []
+            payload['review_status'] = {}
     return JsonResponse(payload)

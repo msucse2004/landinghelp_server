@@ -11,6 +11,12 @@ from .models import (
     ServiceSchedulePlan,
     ServiceScheduleItem,
     AgentAvailabilityWindow,
+    QuoteChangeRequest,
+    QuoteChangeRequestItem,
+    QuoteChangeAnalysis,
+    QuoteChangeActionLog,
+    CustomerActionOffer,
+    HumanReviewRequest,
 )
 
 
@@ -197,3 +203,128 @@ class AgentAvailabilityWindowAdmin(admin.ModelAdmin):
     raw_id_fields = ('agent', 'submission', 'schedule_plan')
     readonly_fields = ('created_at',)
     ordering = ('agent', 'starts_at')
+
+
+# --- 견적 변경 요청: LLM 해석 + 실행 로그 ---
+
+
+class QuoteChangeRequestItemInline(admin.TabularInline):
+    model = QuoteChangeRequestItem
+    extra = 0
+    ordering = ('display_order', 'id')
+    fields = ('action_type', 'service_code', 'service_label', 'payload', 'display_order')
+    verbose_name = '요청 항목'
+    verbose_name_plural = '요청 항목'
+
+
+class QuoteChangeAnalysisInline(admin.TabularInline):
+    model = QuoteChangeAnalysis
+    extra = 0
+    max_num = 10
+    readonly_fields = (
+        'model_name', 'raw_customer_message', 'normalized_summary', 'detected_intent',
+        'confidence', 'extracted_actions', 'extracted_service_codes', 'requires_admin_confirmation',
+        'recommended_next_step', 'raw_llm_output', 'created_at',
+    )
+    ordering = ('-created_at',)
+    verbose_name = 'LLM 분석'
+    verbose_name_plural = 'LLM 분석'
+    can_delete = True
+    show_change_link = True
+
+
+class QuoteChangeActionLogInline(admin.TabularInline):
+    model = QuoteChangeActionLog
+    extra = 0
+    max_num = 20
+    readonly_fields = ('actor', 'action_type', 'detail', 'created_at')
+    ordering = ('-created_at',)
+    verbose_name = '액션 로그'
+    verbose_name_plural = '액션 로그'
+    can_delete = False
+    show_change_link = True
+
+
+@admin.register(QuoteChangeRequest)
+class QuoteChangeRequestAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'quote', 'submission', 'requested_by', 'source_type', 'status',
+        'created_at', 'reviewed_at', 'resolved_at',
+    )
+    list_display_links = ('id', 'quote')
+    list_filter = ('source_type', 'status', 'created_at')
+    search_fields = ('customer_message', 'admin_note', 'quote__submission__email', 'requested_by__username')
+    raw_id_fields = ('submission', 'quote', 'requested_by')
+    readonly_fields = ('created_at', 'updated_at', 'reviewed_at', 'resolved_at')
+    inlines = (QuoteChangeRequestItemInline, QuoteChangeAnalysisInline, QuoteChangeActionLogInline)
+    fieldsets = (
+        (None, {
+            'fields': ('submission', 'quote', 'requested_by', 'source_type', 'status'),
+        }),
+        ('메시지', {
+            'fields': ('customer_message', 'admin_note'),
+        }),
+        ('시각', {
+            'fields': ('created_at', 'updated_at', 'reviewed_at', 'resolved_at'),
+        }),
+    )
+    ordering = ('-created_at',)
+
+
+@admin.register(QuoteChangeAnalysis)
+class QuoteChangeAnalysisAdmin(admin.ModelAdmin):
+    list_display = ('id', 'change_request', 'detected_intent', 'confidence', 'requires_admin_confirmation', 'created_at')
+    list_display_links = ('id',)
+    list_filter = ('detected_intent', 'requires_admin_confirmation', 'created_at')
+    search_fields = ('raw_customer_message', 'normalized_summary', 'recommended_next_step')
+    raw_id_fields = ('change_request',)
+    readonly_fields = ('created_at',)
+    ordering = ('-created_at',)
+
+
+@admin.register(QuoteChangeActionLog)
+class QuoteChangeActionLogAdmin(admin.ModelAdmin):
+    list_display = ('id', 'change_request', 'actor', 'action_type', 'created_at')
+    list_display_links = ('id',)
+    list_filter = ('action_type', 'created_at')
+    raw_id_fields = ('change_request', 'actor')
+    readonly_fields = ('created_at',)
+    ordering = ('-created_at',)
+
+
+@admin.register(CustomerActionOffer)
+class CustomerActionOfferAdmin(admin.ModelAdmin):
+    list_display = ('id', 'button_action_key', 'status', 'submission', 'quote', 'change_request', 'can_execute', 'executed_at', 'created_at')
+    list_display_links = ('id',)
+    list_filter = ('status', 'button_action_key', 'created_at')
+    raw_id_fields = ('submission', 'quote', 'change_request', 'conversation', 'trigger_message', 'executed_by')
+    readonly_fields = ('created_at', 'updated_at', 'executed_at')
+    ordering = ('-created_at',)
+
+
+@admin.register(HumanReviewRequest)
+class HumanReviewRequestAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'review_target', 'status', 'detected_intent', 'requested_by',
+        'submission', 'quote', 'change_request', 'assigned_to', 'created_at',
+    )
+    list_display_links = ('id',)
+    list_filter = ('review_target', 'status', 'created_at')
+    search_fields = ('original_message', 'detected_intent', 'requested_by__username', 'requested_by__email')
+    raw_id_fields = ('conversation', 'trigger_message', 'submission', 'quote', 'change_request', 'requested_by', 'assigned_to', 'appointment')
+    readonly_fields = ('created_at', 'updated_at', 'completed_at')
+    fieldsets = (
+        (None, {
+            'fields': ('conversation', 'trigger_message', 'submission', 'quote', 'change_request', 'requested_by', 'review_target', 'status', 'assigned_to', 'appointment'),
+        }),
+        ('정책/분석', {
+            'fields': ('original_message', 'detected_intent', 'recommended_action', 'execution_mode', 'confidence', 'suggested_internal_next_step', 'suggested_customer_reply'),
+        }),
+        ('처리', {
+            'fields': ('completed_at', 'completed_note'),
+        }),
+        ('시각', {
+            'fields': ('created_at', 'updated_at'),
+        }),
+    )
+    ordering = ('-created_at',)

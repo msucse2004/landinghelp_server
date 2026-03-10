@@ -215,6 +215,17 @@ class SurveySubmission(models.Model):
         verbose_name='수정 요청 메시지',
         help_text='고객에게 전달할 수정 요청 안내(선택).',
     )
+    revision_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name='수정 재개 횟수',
+        help_text='Admin이 설문 재개를 승인한 횟수. 재제출 시 리셋하지 않음.',
+    )
+    reopened_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='최근 재개 시각',
+        help_text='Admin이 설문 수정을 승인한 시각.',
+    )
 
     class Meta:
         ordering = ['-updated_at']
@@ -255,6 +266,7 @@ class SurveySubmissionEvent(models.Model):
     class EventType(models.TextChoices):
         SUBMITTED = 'submitted', '제출'
         REVISION_REQUESTED = 'revision_requested', '수정 요청'
+        REOPENED = 'reopened', '재개 승인'
         SECTIONS_UPDATE_REQUESTED = 'sections_update_requested', '카드별 수정 요청'
         RESUBMITTED = 'resubmitted', '재제출'
         QUOTE_SENT = 'quote_sent', '견적 송부'

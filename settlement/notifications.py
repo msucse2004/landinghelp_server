@@ -243,6 +243,47 @@ def send_revision_requested_customer_email(submission, language_code='ko', secti
         return False
 
 
+def send_survey_reopened_customer_message(submission, language_code='ko', request=None):
+    """
+    Admin이 설문 재개를 승인한 뒤 고객 메시지함에 안내.
+    메시지 예시: 관리자 승인 안내 + 아래 링크로 이전 설문 수정 + 재제출 후 새 견적 안내 + resume 링크.
+    """
+    from survey.models import SurveySubmission
+    if not submission or submission.status != SurveySubmission.Status.REVISION_REQUESTED:
+        return False
+    customer = getattr(submission, 'user', None)
+    if not customer or not getattr(customer, 'is_authenticated', True):
+        logger.debug("Survey reopened customer message skipped: no linked user.")
+        return False
+    sender = _get_system_sender()
+    if not sender:
+        logger.warning("Survey reopened customer message skipped: no system sender.")
+        return False
+    try:
+        from django.urls import reverse
+        from messaging.models import Message
+        # resume=1: 설문 수정 재개 진입점; 로그인 필요 시 로그인 페이지로 보낸 뒤 이 URL로 복귀
+        survey_resume_path = reverse('survey:survey_start') + '?resume=1'
+        if request:
+            survey_url = request.build_absolute_uri(survey_resume_path)
+        else:
+            site = (getattr(settings, 'SITE_URL', None) or '').rstrip('/')
+            survey_url = (site + survey_resume_path) if site else survey_resume_path
+        subject = _get_display_text('설문 수정 승인', language_code)
+        line1 = _get_display_text('관리자가 수정 요청을 승인했습니다.', language_code)
+        line2 = _get_display_text('아래 링크를 통해 이전에 제출한 설문을 수정해 주세요.', language_code)
+        line3 = _get_display_text('설문 재제출 후 새 견적을 보내드리겠습니다.', language_code)
+        link_label = _get_display_text('설문 수정하기', language_code)
+        body = line1 + '\n\n' + line2 + '\n\n' + line3 + '\n\n' + link_label + '\n' + survey_url
+        conv = _get_or_create_shared_conversation(submission, subject_fallback=subject)
+        msg = Message(conversation=conv, sender=sender, body=body)
+        msg.save()
+        return True
+    except Exception as e:
+        logger.warning("Survey reopened customer message failed: submission_id=%s error=%s", getattr(submission, 'id'), e, exc_info=True)
+        return False
+
+
 def send_revision_requested_customer_message(submission, language_code='ko', section_titles=None, revision_message=None):
     """
     수정 요청(REVISION_REQUESTED) 시 고객 메시지함에 안내. 로그인한 고객만 대상.

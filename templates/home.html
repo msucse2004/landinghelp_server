@@ -322,7 +322,7 @@
   <div class="plan-card" style="border: 1px solid var(--color-border); border-radius: var(--radius); padding: 1.5rem; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);">
     <h2 style="margin: 0 0 0.5rem; font-size: 1.15rem;">{{ home_plan_i18n.my_plan_title|default:"내 정착 플랜" }}</h2>
     {% if user_plan.has_agent_assignment %}
-    <p style="font-weight: 600; margin-bottom: 0.5rem;"><span>{{ home_plan_i18n.estimated_checkout|default:"예상 Checkout" }}</span>: {% if can_show_plan_prices and user_plan.checkout_total and user_plan.checkout_total > 0 %}{{ user_plan.checkout_total|floatformat:0 }}{{ home_plan_i18n.won|default:"원" }}{% else %}<span class="text-muted">{{ home_plan_i18n.price_masked|default:"견적 후 공개" }}</span>{% endif %}</p>
+    <p style="font-weight: 600; margin-bottom: 0.5rem;"><span>{{ home_plan_i18n.estimated_checkout|default:"예상 Checkout" }}</span>: {% if can_show_plan_prices and user_plan.checkout_total and user_plan.checkout_total > 0 %}${{ user_plan.checkout_total|floatformat:2 }}{% else %}<span class="text-muted">{{ home_plan_i18n.price_masked|default:"견적 후 공개" }}</span>{% endif %}</p>
     {% endif %}
     <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1rem;">
       {% if user_plan.state %}{{ user_plan.state }}{% endif %}

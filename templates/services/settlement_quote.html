@@ -399,7 +399,7 @@
 
   {% if saved_checkout_total and saved_checkout_total > 0 and can_show_plan_prices %}
   <div class="quote-section" style="background: #f0fdf4; border: 1px solid #86efac; border-radius: var(--radius); padding: 1rem;">
-    <strong><span>{{ settlement_i18n.checkout_total }}</span>:</strong> {{ saved_checkout_total|floatformat:0 }}{{ settlement_i18n.won }}
+    <strong><span>{{ settlement_i18n.checkout_total }}</span>:</strong> ${{ saved_checkout_total|floatformat:2 }}
     <span class="text-muted" style="font-size:0.9rem;">(<span>{{ settlement_i18n.customer_pricing_note }}</span>)</span>
   </div>
   {% elif not can_show_plan_prices %}
@@ -721,31 +721,31 @@
     floatEl.classList.remove('empty');
     if (emptyEl) emptyEl.style.display = 'none';
     listEl.style.display = '';
-    var won = t('won');
+    function fmtUSD(n) { return '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
     var free = t('free');
     var agentRequired = t('agent_required');
     var totalLabel = t('total');
     listEl.innerHTML = items.map(function(it) {
       var priceStr;
       if (it._masked) priceStr = priceMaskedLabel;
-      else if (it.price > 0) priceStr = (it.price).toLocaleString() + won;
+      else if (it.price > 0) priceStr = fmtUSD(it.price);
       else priceStr = free;
       if (!it.hasAgent) priceStr += ' <span class="text-muted" style="font-size:0.8em;">(' + agentRequired + ')</span>';
       return '<div class="summary-row"><span class="name">' + (it.name || '').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span><span class="price">' + priceStr + '</span></div>';
     }).join('');
     if (totalEl) {
       totalEl.style.display = 'flex';
-      totalEl.innerHTML = '<span>' + totalLabel + '</span><span class="price">' + (canShowPrices ? (total).toLocaleString() + won : priceMaskedLabel) + '</span>';
+      totalEl.innerHTML = '<span>' + totalLabel + '</span><span class="price">' + (canShowPrices ? fmtUSD(total) : priceMaskedLabel) + '</span>';
     }
     var payWrap = document.getElementById('scheduleSummaryPayment');
     if (payWrap) {
       if (total >= 1 && canShowPrices) {
         payWrap.style.display = 'block';
-        payWrap.innerHTML = '<button type="button" class="btn btn-primary" id="scheduleSummaryPayBtn">' + t('pay') + ' (' + (total).toLocaleString() + won + ')</button>';
+        payWrap.innerHTML = '<button type="button" class="btn btn-primary" id="scheduleSummaryPayBtn">' + t('pay') + ' (' + fmtUSD(total) + ')</button>';
         var payBtn = document.getElementById('scheduleSummaryPayBtn');
         if (payBtn) {
           payBtn.onclick = function() {
-            if (!confirm((total).toLocaleString() + won + ' ' + t('confirm_pay'))) return;
+            if (!confirm(fmtUSD(total) + ' ' + t('confirm_pay'))) return;
             saveSchedule();
             var csrf = document.querySelector('input[name="csrfmiddlewaretoken"]');
             var token = csrf ? csrf.value : '';

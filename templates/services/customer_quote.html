@@ -3,6 +3,22 @@
 {% block title %}{{ i18n.title|default:"내 견적" }} – LifeAI US{% endblock %}
 
 {% block content %}
+<style>
+  .quote-status-badge { display: inline-block; padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.9rem; font-weight: 600; margin-bottom: 1rem; }
+  .quote-status-ok { background: #dcfce7; color: #166534; }
+  .quote-status-paused { background: #fef3c7; color: #92400e; }
+  .quote-revision-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem; margin-top: 1.5rem; }
+  .quote-revision-card h3 { font-size: 1rem; margin: 0 0 0.75rem; font-weight: 600; color: #334155; }
+  .quote-revision-examples { font-size: 0.9rem; color: #64748b; margin: 0.5rem 0 0.75rem; padding-left: 1.25rem; }
+  .quote-revision-examples li { margin-bottom: 0.35rem; }
+  .quote-status-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem; margin-top: 1rem; border-left: 4px solid #3b82f6; }
+  .quote-status-card .status-badge { display: inline-block; padding: 0.25rem 0.6rem; border-radius: 4px; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; }
+  .quote-status-card .status-admin { background: #dbeafe; color: #1e40af; }
+  .quote-status-card .status-customer { background: #fef3c7; color: #92400e; }
+  .quote-status-card .status-done { background: #dcfce7; color: #166534; }
+  .quote-status-card .status-rejected { background: #fee2e2; color: #b91c1c; }
+  .quote-cta-primary { display: block; margin-top: 1.25rem; padding: 0.85rem 1.25rem; font-size: 1.05rem; font-weight: 600; text-align: center; border-radius: 8px; }
+</style>
 <div class="container">
   <div class="card" style="max-width: 640px; margin: 0 auto;">
     <h1>{{ i18n.title|default:"내 견적" }}</h1>
@@ -15,6 +31,8 @@
     <p class="text-warning">이미 결제되었습니다.</p>
     {% elif checkout_error == 'invalid' %}
     <p class="text-danger">결제할 수 있는 견적이 없거나 유효하지 않습니다.</p>
+    {% elif checkout_error == 'superseded' %}
+    <p class="text-warning">수정 요청으로 인해 기존 견적은 더 이상 결제할 수 없습니다. 수정된 설문 검토 후 새 견적이 발송됩니다.</p>
     {% endif %}
 
     {% if not quote %}
@@ -22,8 +40,19 @@
       <a href="{% url 'survey:survey_start' %}" class="btn btn-outline">{% trans "설문으로 이동" %}</a>
       <a href="{% url 'settlement_quote' %}" class="btn btn-primary" style="margin-left: 0.5rem;">{% trans "정착 플랜" %}</a>
     {% else %}
+    {% if quote and current_request_status %}
+    <div class="quote-status-card" style="margin-bottom: 1rem;">
+      <p style="margin: 0 0 0.35rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">{% trans "수정 요청 상태" %}</p>
+      <span class="status-badge status-{% if '고객 확인' in current_request_status %}customer{% elif '검토' in current_request_status or '접수' in current_request_status %}admin{% elif '완료' in current_request_status or '반려' in current_request_status %}done{% else %}admin{% endif %}">{{ current_request_status }}</span>
+    </div>
+    {% endif %}
     {% if quote.status == 'DRAFT' or quote.status == 'NEGOTIATING' %}
+    {% if quote.status == 'NEGOTIATING' %}
+    <span class="quote-status-badge quote-status-paused">{% trans "수정 요청 진행 중" %}</span>
+    <p class="text-muted" style="margin-bottom: 0.5rem;">{% trans "수정 요청이 접수되었습니다. 현재 견적은 수정 요청으로 인해 결제가 잠시 비활성화되었습니다. 관리자 검토 후 안내드리겠습니다." %}</p>
+    {% else %}
     <p class="text-muted" style="margin-bottom: 1rem;">{{ i18n.quote_preparing|default:"견적을 작성 중입니다. 송부 후 가격이 공개됩니다." }}</p>
+    {% endif %}
     <p class="text-muted" style="font-size: 0.9rem;">{{ quote.region|default:"" }}</p>
     <ul style="list-style: none; padding: 0;">
       {% for item in quote.items %}
@@ -36,39 +65,122 @@
       {% endfor %}
     </ul>
     <p style="margin-top: 1rem;"><strong>{{ i18n.total|default:"합계" }}</strong>: <span class="text-muted">{{ i18n.price_masked|default:"견적 후 공개" }}</span></p>
+    {% if change_request %}
+    <div class="quote-status-card" style="margin-top: 1.25rem;">
+      <p style="margin: 0 0 0.35rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">{% trans "요청 상태" %}</p>
+      <span class="status-badge status-{% if change_request.status == 'CUSTOMER_ACTION_REQUIRED' %}customer{% elif change_request.status == 'APPLIED' or change_request.status == 'REJECTED' %}done{% else %}admin{% endif %}">{{ change_request_status_label }}</span>
+      <p style="margin: 0.75rem 0 0; font-size: 0.95rem;">{% if change_request_summary %}{% trans "요청 요약" %}: {{ change_request_summary }}{% endif %}</p>
+      {% if change_request_next_step %}<p style="margin: 0.5rem 0 0; font-size: 0.9rem; color: #64748b;">{% trans "다음 단계" %}: {{ change_request_next_step }}</p>{% endif %}
+      {% if pending_reopen_offer %}
+      <form class="form-execute-reopen-quote" action="{% url 'api_settlement_action_offer_execute' offer_id=pending_reopen_offer.id %}" method="post" style="margin-top: 1rem;" data-redirect-url="{{ survey_resume_url }}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary quote-cta-primary">{{ pending_reopen_offer.button_label }}</button>
+      </form>
+      {% elif show_customer_action_cta %}<a href="{{ survey_resume_url }}" class="btn btn-primary quote-cta-primary" style="margin-top: 1rem;">{% trans "설문 다시 수정하기" %}</a>{% endif %}
+    </div>
+    {% endif %}
     {% endif %}
 
     {% if quote.status == 'FINAL_SENT' %}
+    {% if quote_superseded %}
+    <span class="quote-status-badge quote-status-paused">{% trans "수정 요청으로 결제 일시 중단" %}</span>
+    <p class="text-warning" style="margin-bottom: 0.5rem; padding: 0.75rem 1rem; background: #fef3c7; border-radius: var(--radius);">{% trans "수정 요청으로 인해 기존 견적은 더 이상 결제할 수 없습니다." %}</p>
+    <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1rem;">{% trans "수정된 설문 검토 후 새 견적이 발송됩니다. 설문을 수정하여 재제출해 주세요." %}</p>
+    {% if pending_reopen_offer %}
+    <form class="form-execute-reopen-quote" action="{% url 'api_settlement_action_offer_execute' offer_id=pending_reopen_offer.id %}" method="post" data-redirect-url="{{ survey_resume_url }}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary quote-cta-primary">{{ pending_reopen_offer.button_label }}</button>
+    </form>
+    {% else %}
+    <a href="{{ survey_resume_url }}" class="btn btn-primary quote-cta-primary">{% trans "설문 다시 수정하기" %}</a>
+    {% endif %}
+    {% if change_request %}
+    <div class="quote-status-card" style="margin-top: 1.25rem;">
+      <span class="status-badge status-{% if change_request.status == 'CUSTOMER_ACTION_REQUIRED' %}customer{% elif change_request.status == 'APPLIED' or change_request.status == 'REJECTED' %}done{% else %}admin{% endif %}">{{ change_request_status_label }}</span>
+      <p style="margin: 0.5rem 0 0; font-size: 0.95rem;">{% if change_request_summary %}{% trans "요청 요약" %}: {{ change_request_summary }}{% endif %}</p>
+      {% if change_request_next_step %}<p style="margin: 0.5rem 0 0; font-size: 0.9rem; color: #64748b;">{% trans "다음 단계" %}: {{ change_request_next_step }}</p>{% endif %}
+    </div>
+    {% endif %}
+    {% else %}
+    <span class="quote-status-badge quote-status-ok">{% trans "견적 도착" %}</span>
     <p class="text-muted" style="margin-bottom: 1rem;">{{ i18n.quote_sent|default:"견적이 도착했습니다. 아래 내용을 확인해 주세요." }}</p>
     {% if quote.region %}<p style="font-size: 0.95rem;">{{ i18n.region|default:"지역" }}: {{ quote.region }}</p>{% endif %}
     <ul style="list-style: none; padding: 0;">
       {% for item in quote.items %}
       <li style="padding: 0.35rem 0; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between;">
         <span>{{ item.label|default:item.code|default:"-" }}</span>
-        <span>{{ item.price|default:0|mask_price:can_view_price }}{% if can_view_price %} {{ i18n.won|default:"원" }}{% endif %}</span>
+        <span>{{ item.price|default:0|mask_price:can_view_price }}</span>
       </li>
       {% endfor %}
     </ul>
-    <p style="margin-top: 1rem;"><strong>{{ i18n.total|default:"합계" }}</strong>: {{ quote.total|mask_price:can_view_price }}{% if can_view_price %} {{ i18n.won|default:"원" }}{% endif %}</p>
+    <p style="margin-top: 1rem;"><strong>{{ i18n.total|default:"합계" }}</strong>: {{ quote.total|mask_price:can_view_price }}</p>
+
+    {% if show_customer_action_cta %}
+    <div class="quote-revision-card" style="background: #fef3c7; border-color: #fcd34d;">
+      <p style="margin: 0 0 0.5rem; font-weight: 600;">{% trans "다음 단계" %}</p>
+      <p style="margin: 0 0 1rem; font-size: 0.95rem;">{% trans "관리자가 수정 요청을 승인했습니다. 설문을 수정한 뒤 다시 제출해 주세요." %}</p>
+      <a href="{{ survey_resume_url }}" class="btn btn-primary quote-cta-primary">{% trans "설문 다시 수정하기" %}</a>
+    </div>
+    {% endif %}
+
     <p style="margin-top: 1rem;">
       <a href="{% url 'settlement_quote_checkout_mock' %}?quote_id={{ quote.id }}" class="btn btn-primary" id="btn-quote-pay">{{ i18n.pay|default:"결제하기" }}</a>
     </p>
-    <div class="card" style="margin-top: 1.5rem; padding: 1rem; background: #f8fafc; border-radius: var(--radius);">
-      <p style="margin: 0 0 0.5rem; font-weight: 600;">{{ i18n.request_revision|default:"견적서 수정 요청" }}</p>
-      <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 0.75rem;">{{ i18n.request_revision_help|default:"금액·항목 등 수정이 필요하면 내용을 적어 보내주세요. Admin이 검토 후 수정된 견적을 보내드립니다." }}</p>
-      <textarea id="quote-revision-message" rows="3" style="width: 100%; padding: 0.5rem; border: 1px solid var(--color-border); border-radius: var(--radius); margin-bottom: 0.5rem;" placeholder="{{ i18n.request_revision_placeholder|default:'예: OO 서비스 금액 조정 요청, 일정 변경 등' }}" maxlength="2000"></textarea>
+
+    <div class="quote-revision-card">
+      <h3>{{ i18n.request_revision|default:"견적서 수정 요청" }}</h3>
+      <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 0.5rem;">{{ i18n.request_revision_help|default:"금액·항목 등 수정이 필요하면 내용을 적어 보내주세요. Admin이 검토 후 수정된 견적을 보내드립니다." }}</p>
+      <p style="font-size: 0.85rem; color: #475569; margin-bottom: 0.5rem;">{% trans "서비스 변경 요청" %}과 {% trans "설문 다시 수정 요청" %} 둘 다 가능합니다.</p>
+      <ul class="quote-revision-examples">
+        <li>{% trans "공항 픽업은 빼고 싶어요" %}</li>
+        <li>{% trans "은행 계좌 개설 서비스를 추가하고 싶어요" %}</li>
+        <li>{% trans "이사 일정이 바뀌어서 설문을 다시 수정하고 싶어요" %}</li>
+        <li>{% trans "지역이 변경되어 설문 내용을 다시 입력해야 해요" %}</li>
+      </ul>
+      <textarea id="quote-revision-message" rows="3" style="width: 100%; padding: 0.5rem; border: 1px solid var(--color-border); border-radius: var(--radius); margin-bottom: 0.5rem; box-sizing: border-box;" placeholder="{{ i18n.request_revision_placeholder|default:'예: OO 서비스 금액 조정 요청, 일정 변경 등' }}" maxlength="2000"></textarea>
       <button type="button" class="btn btn-outline" id="btn-quote-request-revision">{{ i18n.send_revision_request|default:"수정 요청 보내기" }}</button>
-      <p id="quote-revision-result" class="text-muted" style="font-size: 0.9rem; margin-top: 0.5rem; display: none;"></p>
     </div>
+
+    <div id="quote-revision-status-card" class="quote-status-card" style="display: none;">
+      <p style="margin: 0 0 0.35rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">{% trans "요청 상태" %}</p>
+      <span id="quote-revision-status-badge" class="status-badge status-admin">{% trans "접수됨" %}</span>
+      <p id="quote-revision-status-summary" style="margin: 0.75rem 0 0; font-size: 0.95rem;"></p>
+      <p id="quote-revision-status-next" style="margin: 0.5rem 0 0; font-size: 0.9rem; color: #64748b;"></p>
+    </div>
+    {% if change_request %}
+    <div id="quote-revision-status-card-server" class="quote-status-card">
+      <p style="margin: 0 0 0.35rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">{% trans "요청 상태" %}</p>
+      <span class="status-badge status-{% if change_request.status == 'CUSTOMER_ACTION_REQUIRED' %}customer{% elif change_request.status == 'APPLIED' or change_request.status == 'REJECTED' %}done{% else %}admin{% endif %}">{{ change_request_status_label }}</span>
+      <p style="margin: 0.75rem 0 0; font-size: 0.95rem;">{% if change_request_summary %}{% trans "요청 요약" %}: {{ change_request_summary }}{% else %}{% trans "요청이 접수되었습니다." %}{% endif %}</p>
+      {% if change_request_next_step %}<p style="margin: 0.5rem 0 0; font-size: 0.9rem; color: #64748b;">{% trans "다음 단계" %}: {{ change_request_next_step }}</p>{% endif %}
+    </div>
+    {% endif %}
+
+    <p id="quote-revision-result" class="text-muted" style="font-size: 0.9rem; margin-top: 0.5rem; display: none; white-space: pre-wrap;"></p>
     <script>
     (function(){
       var btn = document.getElementById('btn-quote-request-revision');
       var textarea = document.getElementById('quote-revision-message');
       var resultEl = document.getElementById('quote-revision-result');
+      var statusCard = document.getElementById('quote-revision-status-card');
+      var statusCardServer = document.getElementById('quote-revision-status-card-server');
+      var statusBadge = document.getElementById('quote-revision-status-badge');
+      var statusSummary = document.getElementById('quote-revision-status-summary');
+      var statusNext = document.getElementById('quote-revision-status-next');
+      var statusLabels = { 'OPEN': '{% trans "접수됨" %}', 'ANALYZED': '{% trans "관리자 검토 중" %}', 'IN_REVIEW': '{% trans "관리자 검토 중" %}', 'CUSTOMER_ACTION_REQUIRED': '{% trans "고객 수정 필요" %}', 'APPROVED': '{% trans "새 견적 준비 중" %}', 'APPLIED': '{% trans "완료" %}', 'REJECTED': '{% trans "반려됨" %}' };
+      function showStatusCard(data) {
+        if (statusCard) {
+          statusCard.style.display = 'block';
+          if (statusCardServer) statusCardServer.style.display = 'none';
+          if (statusBadge) { statusBadge.textContent = statusLabels[data.status] || data.status; statusBadge.className = 'status-badge status-admin'; if (data.status === 'CUSTOMER_ACTION_REQUIRED') statusBadge.className += ' status-customer'; else if (data.status === 'APPLIED' || data.status === 'REJECTED') statusBadge.className += ' status-done'; }
+          if (statusSummary) statusSummary.textContent = (data.summary ? '{% trans "요청 요약" %}: ' + data.summary : '{% trans "요청이 접수되었습니다." %}');
+          if (statusNext) { statusNext.textContent = data.next_step ? '{% trans "다음 단계" %}: ' + data.next_step : ''; statusNext.style.display = data.next_step ? 'block' : 'none'; }
+        }
+      }
       if (btn && textarea) {
         btn.addEventListener('click', function(){
           var msg = (textarea.value || '').trim();
-          if (!msg) { resultEl.style.display = 'block'; resultEl.textContent = '{% trans "수정 요청 내용을 입력해 주세요." %}'; resultEl.style.color = '#b91c1c'; return; }
+          if (!msg) { if (resultEl) { resultEl.style.display = 'block'; resultEl.textContent = '{% trans "수정 요청 내용을 입력해 주세요." %}'; resultEl.style.color = '#b91c1c'; } return; }
           btn.disabled = true;
           var csrf = document.querySelector('[name=csrfmiddlewaretoken]');
           var payload = JSON.stringify({ quote_id: {{ quote.id }}, message: msg });
@@ -78,14 +190,19 @@
             body: payload,
             credentials: 'same-origin',
           }).then(function(r){ return r.json(); }).then(function(res){
-            resultEl.style.display = 'block';
-            if (res.ok) { resultEl.textContent = res.message || '{% trans "전달되었습니다." %}'; resultEl.style.color = '#047857'; textarea.value = ''; }
-            else { resultEl.textContent = res.error || '{% trans "전송에 실패했습니다." %}'; resultEl.style.color = '#b91c1c'; }
-          }).catch(function(){ resultEl.style.display = 'block'; resultEl.textContent = '{% trans "전송에 실패했습니다." %}'; resultEl.style.color = '#b91c1c'; }).finally(function(){ btn.disabled = false; });
+            if (res.ok) {
+              if (resultEl) { resultEl.style.display = 'none'; }
+              showStatusCard({ status: (res.change_request && res.change_request.status) || 'ANALYZED', summary: (res.analysis && res.analysis.summary) || '', next_step: (res.analysis && res.analysis.recommended_next_step) || '' });
+              textarea.value = '';
+            } else {
+              if (resultEl) { resultEl.style.display = 'block'; resultEl.textContent = res.error || '{% trans "전송에 실패했습니다." %}'; resultEl.style.color = '#b91c1c'; }
+            }
+          }).catch(function(){ if (resultEl) { resultEl.style.display = 'block'; resultEl.textContent = '{% trans "전송에 실패했습니다." %}'; resultEl.style.color = '#b91c1c'; } }).finally(function(){ btn.disabled = false; });
         });
       }
     })();
     </script>
+    {% endif %}
     {% endif %}
 
     {% if quote.status == 'PAID' %}
@@ -95,11 +212,11 @@
       {% for item in quote.items %}
       <li style="padding: 0.35rem 0; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between;">
         <span>{{ item.label|default:item.code|default:"-" }}</span>
-        <span>{{ item.price|default:0|mask_price:can_view_price }} {{ i18n.won|default:"원" }}</span>
+        <span>{{ item.price|default:0|mask_price:can_view_price }}</span>
       </li>
       {% endfor %}
     </ul>
-    <p style="margin-top: 1rem;"><strong>{{ i18n.total|default:"합계" }}</strong>: {{ quote.total|mask_price:can_view_price }} {{ i18n.won|default:"원" }}</p>
+    <p style="margin-top: 1rem;"><strong>{{ i18n.total|default:"합계" }}</strong>: {{ quote.total|mask_price:can_view_price }}</p>
     <p style="margin-top: 1.5rem;">
       <a href="{% url 'app_customer_dashboard' %}" class="btn btn-primary">{{ i18n.go_dashboard|default:"대시보드로" }}</a>
       <a href="{% url 'settlement_quote' %}" class="btn btn-outline" style="margin-left: 0.5rem;">{{ i18n.go_calendar|default:"정착 플랜/달력" }}</a>
@@ -109,4 +226,28 @@
 
   </div>
 </div>
+<script>
+(function() {
+  var forms = document.querySelectorAll('.form-execute-reopen-quote');
+  var csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+  var csrfToken = csrf ? csrf.value : '';
+  forms.forEach(function(form) {
+    if (!form) return;
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      var url = form.action;
+      var redirectUrl = form.getAttribute('data-redirect-url') || '';
+      var fd = new FormData(form);
+      fetch(url, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.ok && redirectUrl) window.location.href = redirectUrl;
+          else if (data.ok) window.location.reload();
+          else alert(data.error || '처리에 실패했습니다.');
+        })
+        .catch(function() { alert('요청에 실패했습니다.'); });
+    });
+  });
+})();
+</script>
 {% endblock %}

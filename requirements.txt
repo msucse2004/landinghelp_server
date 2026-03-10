@@ -5,6 +5,7 @@ psycopg[binary]>=3.1
 gunicorn>=21.0
 python-dotenv>=1.0
 openai>=1.0
+google-generativeai>=0.8.0
 deepl>=1.20.0   # 번역 파이프라인(translation_pipeline) 1차 번역; Ollama는 stdlib urllib 사용
 langdetect>=1.0.9
 polib>=1.2.0

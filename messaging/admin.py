@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import Conversation, ConversationParticipant, Message, MessageRead
+from .models import (
+    Conversation, ConversationParticipant, Message, MessageRead,
+    CustomerRequestIntentAnalysis, CustomerActionProposal, CustomerActionFeedbackLog,
+)
 
 
 class ConversationParticipantInline(admin.TabularInline):
@@ -33,3 +36,59 @@ class ConversationAdmin(admin.ModelAdmin):
 # class MessageAdmin(admin.ModelAdmin): ...
 # @admin.register(MessageRead)
 # class MessageReadAdmin(admin.ModelAdmin): ...
+
+
+# ---------------------------------------------------------------------------
+# 고객 요청 분류·제안·피드백 Admin
+# ---------------------------------------------------------------------------
+
+class CustomerActionProposalInline(admin.TabularInline):
+    model = CustomerActionProposal
+    extra = 0
+    fields = (
+        'proposal_type', 'action_code', 'status',
+        'created_at', 'confirmed_at', 'executed_at',
+    )
+    readonly_fields = ('created_at', 'confirmed_at', 'executed_at')
+    show_change_link = True
+
+
+class CustomerActionFeedbackLogInline(admin.TabularInline):
+    model = CustomerActionFeedbackLog
+    extra = 0
+    fields = ('event_type', 'actor', 'event_payload', 'created_at')
+    readonly_fields = ('created_at',)
+
+
+@admin.register(CustomerRequestIntentAnalysis)
+class CustomerRequestIntentAnalysisAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'customer', 'predicted_intent', 'predicted_action',
+        'execution_mode', 'source', 'confidence', 'created_at',
+    )
+    list_filter = ('predicted_intent', 'execution_mode', 'source')
+    search_fields = ('original_text', 'customer__username', 'customer__email')
+    raw_id_fields = ('customer', 'conversation', 'message')
+    readonly_fields = ('created_at',)
+    inlines = (CustomerActionProposalInline,)
+
+
+@admin.register(CustomerActionProposal)
+class CustomerActionProposalAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'proposal_type', 'action_code', 'status',
+        'created_at', 'confirmed_at', 'executed_at',
+    )
+    list_filter = ('proposal_type', 'status')
+    search_fields = ('title', 'action_code')
+    raw_id_fields = ('analysis', 'submission', 'quote', 'conversation', 'confirmed_by')
+    readonly_fields = ('created_at', 'updated_at')
+    inlines = (CustomerActionFeedbackLogInline,)
+
+
+@admin.register(CustomerActionFeedbackLog)
+class CustomerActionFeedbackLogAdmin(admin.ModelAdmin):
+    list_display = ('id', 'proposal', 'event_type', 'actor', 'created_at')
+    list_filter = ('event_type',)
+    raw_id_fields = ('proposal', 'actor')
+    readonly_fields = ('created_at',)

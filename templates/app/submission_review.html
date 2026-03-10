@@ -60,6 +60,9 @@
   .quotation-totals .total-row { font-size: 1.1rem; font-weight: 700; padding: 0.5rem 0; border-top: 2px solid #1e293b; }
   .quotation-terms { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--color-border); font-size: 0.8rem; color: #64748b; line-height: 1.5; }
   .quotation-footer { margin-top: 1rem; font-size: 0.8rem; color: #94a3b8; text-align: center; }
+  .change-request-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem 1.5rem; align-items: start; }
+  @media (max-width: 768px) { .change-request-grid { grid-template-columns: 1fr; } }
+  .confidence-low { color: #b91c1c; font-weight: 600; }
 </style>
 
 {% if messages %}
@@ -99,6 +102,26 @@
   </ul>
 </div>
 {% endif %}
+
+<!-- 설문 수정 허용 상태 (Admin initiated reopen) -->
+<div class="card review-card">
+  <h2>{% trans "설문 수정 허용 상태" %}</h2>
+  <div class="row"><span class="label">{% trans "제출 상태" %}</span><span class="value">{{ reopen_status.submission_status_display|default:reopen_status.submission_status|default:"—" }}</span></div>
+  <div class="row"><span class="label">{% trans "최신 견적 상태" %}</span><span class="value">{{ reopen_status.latest_quote_status|default:"—" }}</span></div>
+  <div class="row"><span class="label">{% trans "최신 변경 요청 상태" %}</span><span class="value">{{ reopen_status.latest_request_status|default:"—" }}</span></div>
+  <div class="row"><span class="label">{% trans "Reopen 가능" %}</span><span class="value">{% if reopen_status.can_admin_initiate_reopen %}{% trans "예" %}{% else %}{% trans "아니오" %}{% endif %}</span></div>
+  <div class="row"><span class="label">{% trans "마지막 reopen 시각" %}</span><span class="value">{% if reopen_status.last_reopen_at %}{{ reopen_status.last_reopen_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}</span></div>
+  {% if reopen_status.pending_reopen_offer_id %}
+  <div class="row"><span class="label">{% trans "고객 확인" %}</span><span class="value"><span class="badge badge-info">{% trans "설문 수정 시작 버튼 대기 중" %}</span></span></div>
+  {% endif %}
+  <div class="review-actions" style="margin-top:0.75rem;">
+    <form action="{% url 'app_submission_review_reopen_survey' submission_id=submission.id %}" method="post" style="display:inline;">
+      {% csrf_token %}
+      {% if latest_change_request %}<input type="hidden" name="change_request_id" value="{{ latest_change_request.id }}">{% endif %}
+      <button type="submit" class="btn btn-primary" {% if not reopen_status.can_admin_initiate_reopen %}disabled{% endif %}>{% trans "고객 설문 수정 허용 (CTA 발송)" %}</button>
+    </form>
+  </div>
+</div>
 
 <!-- 1. 고객이 입력한 내용 (최상단, 전부 노출) -->
 <section class="customer-input-section" aria-labelledby="customer-input-heading">
@@ -166,8 +189,104 @@
   {% endif %}
 </div>
 
+<!-- 고객 수정 요청 분석 (LLM 해석 결과 + 추천 액션) -->
+{% if latest_change_request %}
+<section class="card review-card change-request-analysis-card" aria-labelledby="change-request-analysis-heading">
+  <h2 id="change-request-analysis-heading">{% trans "고객 수정 요청 분석" %}</h2>
+  <p class="change-request-notice" style="font-size:0.85rem; color:#64748b; margin-bottom:1rem; padding:0.5rem 0.75rem; background:#f1f5f9; border-radius:6px;">
+    <strong>{% trans "참고 정보입니다. 자동 확정되지 않습니다." %}</strong> {% trans "Admin이 확인 후 조치를 선택하세요." %}
+  </p>
+  <div class="change-request-grid">
+    <div class="change-request-original">
+      <h3 style="font-size:0.95rem; margin:0 0 0.5rem; color:#475569;">{% trans "고객 원문 메시지" %}</h3>
+      <div class="change-request-message" style="padding:0.75rem; background:#fff; border:1px solid var(--color-border); border-radius:6px; white-space:pre-wrap; font-size:0.9rem; line-height:1.5;">{{ latest_change_request.customer_message|default:"—" }}</div>
+      <p class="text-muted" style="font-size:0.8rem; margin-top:0.35rem;">{% trans "요청 시각" %}: {{ latest_change_request.created_at|date:"Y-m-d H:i" }} · {% trans "상태" %}: {{ latest_change_request.get_status_display }}</p>
+    </div>
+    <div class="change-request-analysis">
+      <h3 style="font-size:0.95rem; margin:0 0 0.5rem; color:#475569;">{% trans "LLM 해석 결과" %}</h3>
+      {% if latest_change_analysis %}
+      <div style="padding:0.75rem; background:#f8fafc; border:1px solid var(--color-border); border-radius:6px; font-size:0.9rem;">
+        <div class="row" style="margin-bottom:0.5rem;"><span class="label" style="min-width:7rem;">{% trans "요약" %}</span><span class="value">{{ latest_change_analysis.normalized_summary|default:"—" }}</span></div>
+        <div class="row" style="margin-bottom:0.5rem;"><span class="label" style="min-width:7rem;">{% trans "감지된 의도" %}</span><span class="value">{{ latest_change_analysis.get_detected_intent_display|default:latest_change_analysis.detected_intent }}</span></div>
+        <div class="row" style="margin-bottom:0.5rem;">
+          <span class="label" style="min-width:7rem;">{% trans "신뢰도" %}</span>
+          <span class="value">
+            <span class="{% if latest_change_analysis.confidence < 0.6 %}confidence-low{% endif %}">{{ latest_change_analysis.confidence|floatformat:2 }} (0~1)</span>
+            {% if latest_change_analysis.confidence < 0.6 %}<span class="badge badge-warning" style="margin-left:0.35rem;">{% trans "낮음 — 수동 확인 권장" %}</span>{% endif %}
+          </span>
+        </div>
+        <div class="row" style="margin-bottom:0.5rem;"><span class="label" style="min-width:7rem;">{% trans "추천 다음 단계" %}</span><span class="value">{{ latest_change_analysis.recommended_next_step|default:"—" }}</span></div>
+        <div class="row"><span class="label" style="min-width:7rem;">{% trans "Admin 확인 필요" %}</span><span class="value">{% if latest_change_analysis.requires_admin_confirmation %}{% trans "예" %}{% else %}{% trans "아니오" %}{% endif %}</span></div>
+      </div>
+      {% if suggested_actions %}
+      <h4 style="font-size:0.9rem; margin:1rem 0 0.5rem; color:#475569;">{% trans "추출된 서비스 변경 제안" %}</h4>
+      <ul style="margin:0; padding-left:1.25rem; font-size:0.9rem;">
+        {% for a in suggested_actions %}
+        <li><strong>{{ a.action_type }}</strong> {% if a.service_code %}({{ a.service_label|default:a.service_code }}){% endif %}{% if a.reason %} — {{ a.reason }}{% endif %}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      {% if latest_change_analysis.extracted_service_codes %}
+      <p style="font-size:0.85rem; margin-top:0.5rem; color:#64748b;">{% trans "서비스 코드 후보" %}: {{ latest_change_analysis.extracted_service_codes|join:", " }}</p>
+      {% endif %}
+      {% else %}
+      <p class="text-muted">{% trans "분석 결과 없음" %}</p>
+      {% endif %}
+    </div>
+  </div>
+  <div class="review-actions" style="margin-top:1.25rem; padding-top:1rem; border-top:1px solid var(--color-border);">
+    <form action="{% url 'app_submission_review_approve_reopen_survey' submission_id=submission.id change_request_id=latest_change_request.id %}" method="post" style="display:inline;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary" {% if not can_reopen_survey %}disabled{% endif %}>{% trans "설문 다시 열기 승인" %}</button>
+    </form>
+    <form action="{% url 'app_submission_review_approve_quote_revision' submission_id=submission.id change_request_id=latest_change_request.id %}" method="post" style="display:inline;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-outline" {% if not can_start_quote_revision %}disabled{% endif %}>{% trans "견적 수정 프로세스 시작" %}</button>
+    </form>
+    <span class="btn btn-outline" style="cursor:default;">{% trans "수동 검토로 유지" %}</span>
+    <form action="{% url 'app_submission_review_reject_change_request' submission_id=submission.id %}" method="post" style="display:inline;">
+      {% csrf_token %}
+      <input type="hidden" name="change_request_id" value="{{ latest_change_request.id }}">
+      <button type="submit" class="btn btn-outline" style="color:#b91c1c;">{% trans "반려" %}</button>
+    </form>
+    <a href="{% url 'messaging_inbox' %}" class="btn btn-outline" target="_blank">{% trans "고객에게 메시지만 답변" %} ({% trans "메시지함" %})</a>
+  </div>
+</section>
+{% endif %}
+
+<!-- 재견적 흐름 추적: 설문 수정 이력 + 견적 이력 + 반영된 변경 요청 -->
+{% if quote_trail or submission_revision_info.revision_count %}
+<div class="card review-card">
+  <h2>{% trans "재견적 흐름" %}</h2>
+  {% if submission_revision_info.revision_count or submission_revision_info.reopened_at %}
+  <div class="row"><span class="label">{% trans "설문 수정 횟수" %}</span><span class="value">{{ submission_revision_info.revision_count|default:0 }}</span></div>
+  <div class="row"><span class="label">{% trans "마지막 reopen 시각" %}</span><span class="value">{% if submission_revision_info.reopened_at %}{{ submission_revision_info.reopened_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}</span></div>
+  {% endif %}
+  {% if quote_trail %}
+  <h3 style="font-size:0.95rem; margin:0.75rem 0 0.5rem; color:#475569;">{% trans "견적 이력" %}</h3>
+  <table class="review-card table" style="width:100%; font-size:0.9rem;">
+    <thead>
+      <tr><th>{% trans "견적 #" %}</th><th>{% trans "상태" %}</th><th>{% trans "송부 시각" %}</th><th>{% trans "무효화" %}</th><th>{% trans "대체한 견적" %}</th><th>{% trans "반영된 변경 요청" %}</th></tr>
+    </thead>
+    <tbody>
+      {% for q in quote_trail %}
+      <tr>
+        <td><a href="/admin/settlement/settlementquote/{{ q.id }}/change/" target="_blank">#{{ q.id }}</a></td>
+        <td>{{ q.status_display|default:q.status }}</td>
+        <td>{% if q.sent_at %}{{ q.sent_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}</td>
+        <td>{% if q.revision_superseded_at %}{% trans "예" %} ({{ q.revision_superseded_at|date:"Y-m-d H:i" }}){% else %}—{% endif %}</td>
+        <td>{% if q.supersedes_id %}<a href="/admin/settlement/settlementquote/{{ q.supersedes_id }}/change/" target="_blank">#{{ q.supersedes_id }}</a>{% else %}—{% endif %}</td>
+        <td>{% if q.applied_change_request_ids %}{% for cr_id in q.applied_change_request_ids %}<a href="/admin/settlement/quotechangerequest/{{ cr_id }}/change/" target="_blank">#{{ cr_id }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endif %}
+
 <!-- 견적서 (공식 형식, USD, 가격 수정 가능) -->
-<div class="card review-card quotation-card">
+<div class="card review-card quotation-card" id="quotation-card">
   <h2>{% trans "견적서" %} (Quotation)</h2>
   {% if quote_draft_display %}
   <div class="quotation-doc">
@@ -287,6 +406,9 @@
   <div class="row"><span class="label">{% trans "합계" %}</span><span class="value">{{ payment_summary.total|usd_format }} USD</span></div>
   {% if payment_summary.sent_at %}
   <div class="row"><span class="label">{% trans "송부 시각" %}</span><span class="value">{{ payment_summary.sent_at|date:"Y-m-d H:i" }}</span></div>
+  {% endif %}
+  {% if payment_summary.superseded %}
+  <p class="badge badge-warning" style="margin-top:0.5rem;">{% trans "수정 요청으로 인해 이전 견적은 더 이상 유효하지 않습니다. 새 견적을 작성·송부하세요." %}</p>
   {% endif %}
   {% else %}
   <p class="text-muted">{% trans "송부/결제된 견적 없음" %}</p>

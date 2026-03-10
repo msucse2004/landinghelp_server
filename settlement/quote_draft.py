@@ -64,13 +64,15 @@ def generate_quote_draft_from_submission(submission, actor=None):
         created = False
         next_version = (quote.version or 1) + 1
     else:
-        # DRAFT가 없을 때: 이미 송부됨(FINAL_SENT) 또는 결제됨(PAID) 견적이 있으면 새 초안 생성하지 않음
-        has_sent_or_paid = SettlementQuote.objects.filter(
+        # DRAFT가 없을 때: 결제 가능한 송부/결제 견적이 있으면 새 초안 생성하지 않음.
+        # 무효화(revision_superseded_at)된 견적만 있으면 재제출 후 새 DRAFT 생성 허용.
+        has_payable_sent_or_paid = SettlementQuote.objects.filter(
             submission=submission,
             status__in=(SettlementQuote.Status.FINAL_SENT, SettlementQuote.Status.PAID),
+            revision_superseded_at__isnull=True,
         ).exists()
-        if has_sent_or_paid:
-            logger.info("Quote draft skip: submission_id=%s already has FINAL_SENT/PAID quote.", submission.id)
+        if has_payable_sent_or_paid:
+            logger.info("Quote draft skip: submission_id=%s already has payable FINAL_SENT/PAID quote.", submission.id)
             return None, False
         quote = SettlementQuote(
             submission=submission,
@@ -154,6 +156,54 @@ def generate_quote_draft_from_submission(submission, actor=None):
             logger.warning("Quote arrived admin notification failed: %s", e, exc_info=True)
 
     return quote, created
+
+
+def create_draft_from_sent_quote(submission):
+    """
+    송부된 견적(FINAL_SENT/PAID)을 복사해 수정용 DRAFT를 생성.
+    기존 DRAFT가 있으면 (기존 DRAFT, False) 반환(중복 생성 방지).
+    Returns: (draft_quote, created: bool). 송부된 견적이 없으면 (None, False).
+    """
+    from decimal import Decimal
+    from .models import SettlementQuote
+
+    if not submission:
+        return None, False
+    sent_quote = (
+        SettlementQuote.objects.filter(
+            submission=submission,
+            status__in=(SettlementQuote.Status.FINAL_SENT, SettlementQuote.Status.PAID),
+        ).order_by('-sent_at', '-updated_at').first()
+    )
+    if not sent_quote:
+        return None, False
+    existing_draft = (
+        SettlementQuote.objects.filter(
+            submission=submission,
+            status=SettlementQuote.Status.DRAFT,
+        ).order_by('-updated_at').first()
+    )
+    if existing_draft:
+        return existing_draft, False
+    items = []
+    for it in (sent_quote.items or []):
+        if not isinstance(it, dict):
+            continue
+        item = {k: v for k, v in it.items() if k not in (ITEM_KEY_AUTO, ITEM_KEY_NEEDS_REVIEW)}
+        items.append(item)
+    next_version = (sent_quote.version or 1) + 1
+    new_draft = SettlementQuote(
+        submission=submission,
+        status=SettlementQuote.Status.DRAFT,
+        version=next_version,
+        region=sent_quote.region or '',
+        items=items,
+        total=sent_quote.total or Decimal('0'),
+        draft_source='admin',
+    )
+    new_draft.save()
+    logger.info("Quote draft created from sent quote: submission_id=%s draft_id=%s", submission.id, new_draft.id)
+    return new_draft, True
 
 
 def get_items_for_display(quote, strip_meta=True):

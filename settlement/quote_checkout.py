@@ -35,10 +35,12 @@ def process_quote_payment(user, quote_id=None):
             .first()
         )
     else:
+        # 무효화 정책: revision_superseded_at 이 있는 견적은 결제 대상에서 제외( hard delete 하지 않음)
         quote = (
             SettlementQuote.objects.filter(
                 submission__user=user,
                 status=SettlementQuote.Status.FINAL_SENT,
+                revision_superseded_at__isnull=True,
             )
             .order_by('-updated_at')
             .select_related('submission')
@@ -51,6 +53,9 @@ def process_quote_payment(user, quote_id=None):
         return None, '이미 결제되었습니다.'
     if quote.status != SettlementQuote.Status.FINAL_SENT:
         return None, '이 견적은 아직 결제할 수 없습니다.'
+    # 수정 요청으로 무효화된 견적은 결제 차단(레코드는 삭제하지 않음)
+    if not quote.is_payable():
+        return None, '수정 요청으로 인해 기존 견적은 더 이상 결제할 수 없습니다. 수정된 설문 검토 후 새 견적이 발송됩니다.'
 
     # --- 상태 전이: quote PAID, submission AGENT_ASSIGNMENT (스케줄 준비 단계) ---
     quote.status = SettlementQuote.Status.PAID

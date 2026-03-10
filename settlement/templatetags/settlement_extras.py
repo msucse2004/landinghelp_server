@@ -24,14 +24,14 @@ def usd_format(value):
 def mask_price(value, can_show):
     """
     can_show가 False이면 가격 비노출 정책에 따라 '견적 후 공개' 반환.
-    can_show가 True이면 value를 그대로 포맷(숫자면 천단위 콤마 등)해 반환.
+    can_show가 True이면 USD 포맷($1,234.00)으로 반환.
     """
     if can_show:
         if value is None:
             return ''
         try:
-            n = int(float(value))
-            return mark_safe(f'{n:,}')
+            n = float(value)
+            return mark_safe(f'${n:,.2f}')
         except (TypeError, ValueError):
             return str(value) if value is not None else ''
     return mark_safe(PRICE_MASKED_LABEL)

@@ -187,6 +187,13 @@ if AI_AGENT_BOT_USER_ID is not None:
     except (TypeError, ValueError):
         AI_AGENT_BOT_USER_ID = None
 AI_AGENT_LLM_ADAPTER = os.environ.get('AI_AGENT_LLM_ADAPTER', 'stub')  # 'stub' or e.g. 'ai_agent.llm_ollama.Adapter'
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+
+# 견적 변경 요청 LLM 해석 (settlement.services_quote_change_llm)
+# QUOTE_CHANGE_LLM_ADAPTER: (system_prompt, user_prompt) -> (raw_text, model_name) callable or dotted path. None/'stub'면 stub 사용.
+QUOTE_CHANGE_LLM_ADAPTER = os.environ.get('QUOTE_CHANGE_LLM_ADAPTER', 'stub')
+# confidence가 이 값 미만이면 intent를 URGENT_ADMIN_REVIEW로 다운그레이드, needs_admin_confirmation=True
+QUOTE_CHANGE_LLM_CONFIDENCE_THRESHOLD = float(os.environ.get('QUOTE_CHANGE_LLM_CONFIDENCE_THRESHOLD', '0.75'))
 
 # 견적서 공식 포맷 (Admin 검토 화면·이메일)
 # QUOTATION_COMPANY_NAME = 'LifeAI US'

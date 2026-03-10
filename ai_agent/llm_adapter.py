@@ -1,6 +1,5 @@
 """
-LLM adapter interface. Production can swap in a real LLM (OpenAI, Ollama, etc.).
-Web search can be added later as a separate tool adapter, not here.
+LLM adapter interface with fallback chain: Gemini (1순위) → Ollama (2순위) → Stub.
 """
 import logging
 from typing import Optional, Tuple
@@ -17,11 +16,10 @@ def generate(
 ) -> Tuple[str, bool]:
     """
     Generate assistant response. Returns (response_text, uncertainty_flagged).
-    Implementations should set uncertainty_flagged=True when the model expresses uncertainty
-    or when a fallback/stub is used.
+    Tries Gemini first, then Ollama, then falls back to Stub.
     """
-    impl = get_adapter()
-    return impl.generate(
+    adapter = get_adapter()
+    return adapter.generate(
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         language=language,
@@ -30,24 +28,103 @@ def generate(
 
 
 def get_adapter():
-    """Return the configured adapter. Default: stub when no production LLM is configured."""
+    """Return a ChainAdapter that tries Gemini → Ollama → Stub in order."""
     from django.conf import settings
-    adapter = getattr(settings, 'AI_AGENT_LLM_ADAPTER', None)
-    if adapter and adapter != 'stub':
+    explicit = getattr(settings, 'AI_AGENT_LLM_ADAPTER', None)
+    if explicit and explicit != 'stub' and explicit != 'chain':
         try:
-            # Optional: load from dotted path, e.g. 'ai_agent.llm_ollama.Adapter'
-            if isinstance(adapter, str) and '.' in adapter:
+            if isinstance(explicit, str) and '.' in explicit:
                 from django.utils.module_loading import import_string
-                return import_string(adapter)()
-            return adapter
+                return import_string(explicit)()
+            return explicit
         except Exception as e:
             logger.warning("AI_AGENT_LLM_ADAPTER failed to load: %s", e, exc_info=True)
-    return StubAdapter()
+    return ChainAdapter()
+
+
+class ChainAdapter:
+    """Gemini(1순위) → Ollama(2순위) → Stub 순서로 시도."""
+
+    def __init__(self):
+        self._gemini: Optional[object] = None
+        self._ollama: Optional[object] = None
+
+    def _get_gemini(self):
+        if self._gemini is not None:
+            return self._gemini
+        try:
+            from django.conf import settings
+            if getattr(settings, 'GEMINI_API_KEY', ''):
+                from ai_agent.llm_gemini import GeminiAdapter
+                self._gemini = GeminiAdapter()
+                return self._gemini
+        except Exception as e:
+            logger.warning("Failed to init Gemini adapter: %s", e)
+        return None
+
+    def _get_ollama(self):
+        if self._ollama is not None:
+            return self._ollama
+        try:
+            from ai_agent.llm_ollama import OllamaAdapter
+            self._ollama = OllamaAdapter()
+            return self._ollama
+        except Exception as e:
+            logger.warning("Failed to init Ollama adapter: %s", e)
+        return None
+
+    def generate(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        language: str = 'ko',
+        max_tokens: int = 800,
+    ) -> Tuple[str, bool]:
+        gemini = self._get_gemini()
+        if gemini:
+            try:
+                text, uncertainty = gemini.generate(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    language=language,
+                    max_tokens=max_tokens,
+                )
+                if text and text.strip():
+                    logger.info("LLM response from Gemini (len=%d)", len(text))
+                    return text, uncertainty
+                logger.warning("Gemini returned empty, falling back to Ollama")
+            except Exception as e:
+                logger.warning("Gemini failed (%s), falling back to Ollama", e)
+
+        ollama = self._get_ollama()
+        if ollama:
+            try:
+                text, uncertainty = ollama.generate(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    language=language,
+                    max_tokens=max_tokens,
+                )
+                if text and text.strip():
+                    logger.info("LLM response from Ollama (len=%d)", len(text))
+                    return text, uncertainty
+                logger.warning("Ollama returned empty, falling back to Stub")
+            except Exception as e:
+                logger.warning("Ollama failed (%s), falling back to Stub", e)
+
+        logger.info("All LLM adapters failed, using Stub")
+        return StubAdapter().generate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            language=language,
+            max_tokens=max_tokens,
+        )
 
 
 class StubAdapter:
     """
-    Stub implementation when no production LLM is configured.
+    Stub implementation when no production LLM is available.
     Returns a safe, non-committal message and flags uncertainty.
     """
 
@@ -59,10 +136,9 @@ class StubAdapter:
         language: str = 'ko',
         max_tokens: int = 800,
     ) -> Tuple[str, bool]:
-        del system_prompt, max_tokens  # unused in stub
+        del system_prompt, max_tokens
         if not (user_prompt or '').strip():
             return _stub_message(language, empty=True), True
-        # Stub: never promise anything; always suggest messaging support.
         return _stub_message(language, empty=False), True
 
 

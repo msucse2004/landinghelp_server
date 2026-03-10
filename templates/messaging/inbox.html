@@ -48,6 +48,26 @@
   .inbox-appointment-actions .btn { padding: 0.4rem 0.8rem; font-size: 0.9rem; }
   .inbox-survey-actions { padding: 0.5rem 1rem; border-bottom: 1px solid var(--color-border); background: #f0fdf4; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
   .inbox-survey-actions .btn { padding: 0.4rem 0.8rem; font-size: 0.9rem; text-decoration: none; }
+  .inbox-bottom-actions { border-top: 1px solid var(--color-border); }
+  .inbox-bottom-actions .inbox-survey-actions { border-bottom: none; border-top: none; }
+  .inbox-bottom-actions .inbox-quote-actions { background: #eff6ff; }
+  .inbox-action-cards { padding: 0.75rem 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+  .inbox-action-card { background: #f8fafc; border: 1px solid var(--color-border); border-radius: var(--radius); padding: 0.85rem 1rem; }
+  .inbox-action-card .action-card-badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem; }
+  .inbox-action-card .action-card-badge.pending { background: #fef3c7; color: #92400e; }
+  .inbox-action-card .action-card-badge.executed { background: #dcfce7; color: #166534; }
+  .inbox-action-card .action-card-badge.expired { background: #e5e7eb; color: #374151; }
+  .inbox-action-card .action-card-badge.review { background: #dbeafe; color: #1e40af; }
+  .inbox-action-card .action-card-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.25rem; }
+  .inbox-action-card .action-card-body { font-size: 0.9rem; color: var(--color-text); margin-bottom: 0.5rem; }
+  .inbox-action-card .action-card-btn { margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .inbox-action-card .action-card-badge.confirmed { background: #dbeafe; color: #1e40af; }
+  .inbox-action-card .action-card-badge.declined { background: #fee2e2; color: #991b1b; }
+  .inbox-action-card .action-card-badge.failed { background: #fee2e2; color: #991b1b; }
+  .inbox-action-card .btn-decline-proposal { background: #fff; color: var(--color-text); border: 1px solid var(--color-border); padding: 0.4rem 0.8rem; border-radius: var(--radius); cursor: pointer; font-size: 0.9rem; }
+  .inbox-action-card .btn-decline-proposal:hover { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+  .inbox-action-card .btn-decline-proposal:disabled,
+  .inbox-action-card .btn-confirm-proposal:disabled { opacity: 0.5; pointer-events: none; }
 </style>
 <div class="card">
   <h1>{{ inbox_i18n.page_title|default:"메시지 함" }}</h1>
@@ -67,17 +87,20 @@
           <button type="button" class="btn btn-primary" id="inboxAppointmentAcceptBtn">{{ inbox_i18n.accept|default:"수락" }}</button>
           <button type="button" class="btn btn-secondary" id="inboxAppointmentRequestChangeBtn">{{ inbox_i18n.request_change|default:"수정요청" }}</button>
         </div>
-        <div class="inbox-survey-actions" id="inboxSurveyActions" style="display:none;">
-          <a href="#" id="inboxSurveyReviewLink" class="btn btn-primary">{{ inbox_i18n.view_survey|default:"고객 설문 확인" }}</a>
-        </div>
-        <div class="inbox-survey-actions inbox-survey-edit-actions" id="inboxSurveyEditActions" style="display:none;">
-          <a href="#" id="inboxSurveyEditLink" class="btn btn-primary">{{ inbox_i18n.edit_survey|default:"설문 수정하기" }}</a>
-        </div>
-        <div class="inbox-survey-actions inbox-quote-actions" id="inboxQuoteActions" style="display:none;">
-          <a href="#" id="inboxQuoteViewLink" class="btn btn-outline">{{ inbox_i18n.view_quote|default:"견적서 보기" }}</a>
-          <a href="#" id="inboxQuotePayLink" class="btn btn-primary">{{ inbox_i18n.pay|default:"결제하기" }}</a>
-        </div>
+        <div class="inbox-action-cards" id="inboxActionCards" style="display:none;"></div>
         <div class="inbox-messages" id="inboxMessages"></div>
+        <div class="inbox-bottom-actions" id="inboxBottomActions" style="display:none;">
+          <div class="inbox-survey-actions inbox-survey-review-actions" id="inboxSurveyReviewActions" style="display:none;">
+            <a href="#" id="inboxSurveyReviewLink" class="btn btn-primary">{{ inbox_i18n.view_survey|default:"고객 설문 확인" }}</a>
+          </div>
+          <div class="inbox-survey-actions inbox-survey-edit-actions" id="inboxSurveyEditActions" style="display:none;">
+            <a href="#" id="inboxSurveyEditLink" class="btn btn-primary">{{ inbox_i18n.edit_survey|default:"설문 수정하기" }}</a>
+          </div>
+          <div class="inbox-survey-actions inbox-quote-actions" id="inboxQuoteActions" style="display:none;">
+            <a href="#" id="inboxQuoteViewLink" class="btn btn-outline">{{ inbox_i18n.view_quote|default:"견적서 보기" }}</a>
+            <a href="#" id="inboxQuotePayLink" class="btn btn-primary">{{ inbox_i18n.pay|default:"결제하기" }}</a>
+          </div>
+        </div>
         <div class="inbox-send">
           <div class="inbox-send-attach-wrap">
             <button type="button" class="inbox-attach-btn" id="inboxAttachBtn" title="{{ inbox_i18n.attach_photo|default:'사진 첨부' }}" aria-label="{{ inbox_i18n.attach_photo|default:'사진 첨부' }}">+</button>
@@ -125,6 +148,110 @@
   }
 
   function escapeHtml(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function renderActionCards(detail) {
+    var el = document.getElementById('inboxActionCards');
+    if (!el || window.VIEWER_IS_STAFF) return;
+    var offers = (detail && detail.action_offers) || [];
+    var reviewStatus = (detail && detail.review_status) || {};
+    var html = [];
+    if (reviewStatus.has_review && reviewStatus.message) {
+      html.push('<div class="inbox-action-card"><span class="action-card-badge review">' + escapeHtml(reviewStatus.message) + '</span><div class="action-card-body">' + escapeHtml(t('request_in_review') || '요청이 검토 중입니다. 완료 시 안내드리겠습니다.') + '</div></div>');
+    }
+    offers.forEach(function(o) {
+      var isProposal = !!o.proposal_id;
+      var bc = o.status === 'EXECUTED' ? 'executed' : (o.status === 'EXPIRED' ? 'expired' : 'pending');
+      var bt = o.status === 'EXECUTED' ? (t('completed') || '처리 완료') : (o.status === 'EXPIRED' ? (t('expired') || '만료') : (t('pending') || '대기'));
+      var ti = (o.title || '').trim() || (t('action_offer') || '안내');
+      var bd = (o.body || '').trim();
+      var showBtn = o.status === 'PENDING' && o.can_execute && (o.button_label || o.button_action_key);
+      var btnHtml = '';
+      if (showBtn && isProposal) {
+        btnHtml = '<div class="action-card-btn">' +
+          '<button type="button" class="btn btn-primary btn-confirm-proposal" data-proposal-id="' + o.proposal_id + '" data-redirect-url="' + escapeHtml(detail.survey_edit_url || '') + '">' + escapeHtml(o.button_label || t('confirm') || '확인') + '</button>' +
+          '<button type="button" class="btn btn-decline-proposal" data-proposal-id="' + o.proposal_id + '">' + escapeHtml(o.decline_label || t('cancel') || '취소') + '</button>' +
+          '</div>';
+      } else if (showBtn) {
+        btnHtml = '<div class="action-card-btn"><button type="button" class="btn btn-primary btn-execute-offer" data-offer-id="' + o.id + '" data-redirect-url="' + escapeHtml(detail.survey_edit_url || '') + '">' + escapeHtml(o.button_label || t('confirm') || '확인') + '</button></div>';
+      }
+      html.push('<div class="inbox-action-card" data-offer-id="' + (o.id || '') + '">' +
+        '<span class="action-card-badge ' + bc + '">' + escapeHtml(bt) + '</span>' +
+        (ti ? '<div class="action-card-title">' + escapeHtml(ti) + '</div>' : '') +
+        (bd ? '<div class="action-card-body">' + escapeHtml(bd).replace(/\n/g, '<br>') + '</div>' : '') +
+        btnHtml +
+        '</div>');
+    });
+    if (html.length) {
+      el.innerHTML = html.join('');
+      el.style.display = 'flex';
+      el.querySelectorAll('.btn-confirm-proposal').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var pid = btn.getAttribute('data-proposal-id');
+          var redirectUrl = btn.getAttribute('data-redirect-url') || '';
+          if (!pid || btn.disabled) return;
+          var card = btn.closest('.inbox-action-card');
+          var declineBtn = card ? card.querySelector('.btn-decline-proposal') : null;
+          btn.disabled = true;
+          if (declineBtn) declineBtn.disabled = true;
+          fetch('/api/settlement/proposal/' + pid + '/confirm/', { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' }, body: '{}' })
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+              if (res.ok) { if (redirectUrl) window.location.href = redirectUrl; else selectConversation(currentConvId); }
+              else { alert(res.error || (t('execute_failed') || '처리에 실패했습니다.')); btn.disabled = false; if (declineBtn) declineBtn.disabled = false; }
+            })
+            .catch(function() { alert(t('execute_failed') || '처리에 실패했습니다.'); btn.disabled = false; if (declineBtn) declineBtn.disabled = false; });
+        });
+      });
+      el.querySelectorAll('.btn-decline-proposal').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var pid = btn.getAttribute('data-proposal-id');
+          if (!pid || btn.disabled) return;
+          var card = btn.closest('.inbox-action-card');
+          var confirmBtn = card ? card.querySelector('.btn-confirm-proposal') : null;
+          btn.disabled = true;
+          if (confirmBtn) confirmBtn.disabled = true;
+          fetch('/api/settlement/proposal/' + pid + '/decline/', { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' }, body: '{}' })
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+              if (res.ok) { selectConversation(currentConvId); }
+              else { alert(res.error || (t('execute_failed') || '처리에 실패했습니다.')); btn.disabled = false; if (confirmBtn) confirmBtn.disabled = false; }
+            })
+            .catch(function() { alert(t('execute_failed') || '처리에 실패했습니다.'); btn.disabled = false; if (confirmBtn) confirmBtn.disabled = false; });
+        });
+      });
+      el.querySelectorAll('.btn-confirm-proposal[data-proposal-id]').forEach(function(btn) {
+        var pid = btn.getAttribute('data-proposal-id');
+        if (pid) fetch('/api/settlement/proposal/' + pid + '/shown/', { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' }, body: '{}' }).catch(function(){});
+      });
+      el.querySelectorAll('.btn-execute-offer').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var offerId = btn.getAttribute('data-offer-id');
+          var redirectUrl = btn.getAttribute('data-redirect-url') || '';
+          if (!offerId || btn.disabled) return;
+          btn.disabled = true;
+          fetch('/api/settlement/action-offer/' + offerId + '/execute/', { method: 'POST', body: new FormData(), credentials: 'same-origin', headers: { 'X-CSRFToken': csrf } })
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+              if (res.ok) { if (redirectUrl) window.location.href = redirectUrl; else selectConversation(currentConvId); }
+              else alert(res.error || (t('execute_failed') || '처리에 실패했습니다.'));
+            })
+            .catch(function() { alert(t('execute_failed') || '처리에 실패했습니다.'); })
+            .finally(function() { btn.disabled = false; });
+        });
+      });
+    } else {
+      el.innerHTML = '';
+      el.style.display = 'none';
+    }
+  }
+
+  function refreshActionCards(convId) {
+    if (window.VIEWER_IS_STAFF || !convId) return;
+    fetch(API_BASE + '/conversations/' + convId + '/', { method: 'GET', headers: getHeaders('GET'), credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(detail) { renderActionCards(detail); })
+      .catch(function() {});
+  }
   function messageBodyHtml(m) {
     var pref = (m.viewer_preferred_language || window.VIEWER_PREFERRED_LANGUAGE || 'en');
     var line1 = (m.body_preferred != null ? m.body_preferred : m.body) || '';
@@ -181,8 +308,12 @@
   }
 
   var currentAppointmentId = null;
+  var _lastMsgId = 0;
+  var _pollTimer = null;
 
   function selectConversation(convId) {
+    if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+    _lastMsgId = 0;
     currentConvId = convId;
     currentAppointmentId = null;
     document.querySelectorAll('#inboxConversations li[data-id]').forEach(function(li) {
@@ -200,10 +331,14 @@
     if (showDetailTitleEn) titleEl.innerHTML = escapeHtml(displayTitlePref) + '<span class="conv-title-en" style="display:block;font-size:0.85rem;color:var(--color-muted);margin-top:0.2rem;">' + escapeHtml(displayTitleEn) + '</span>';
     else titleEl.textContent = displayTitlePref || ('대화 #' + convId);
     document.getElementById('inboxAppointmentActions').style.display = 'none';
-    document.getElementById('inboxSurveyActions').style.display = 'none';
+    document.getElementById('inboxSurveyReviewActions').style.display = 'none';
     document.getElementById('inboxSurveyEditActions').style.display = 'none';
+    var actionCardsResetEl = document.getElementById('inboxActionCards');
+    if (actionCardsResetEl) { actionCardsResetEl.innerHTML = ''; actionCardsResetEl.style.display = 'none'; }
     var quoteActionsEl = document.getElementById('inboxQuoteActions');
     if (quoteActionsEl) quoteActionsEl.style.display = 'none';
+    var bottomActionsEl = document.getElementById('inboxBottomActions');
+    if (bottomActionsEl) bottomActionsEl.style.display = 'none';
     document.getElementById('inboxMessages').innerHTML = '<div class="inbox-loading">' + t('loading') + '</div>';
     Promise.all([
       fetch(API_BASE + '/conversations/' + convId + '/', { method: 'GET', headers: getHeaders('GET'), credentials: 'same-origin' }).then(function(r) { return r.json(); }),
@@ -212,6 +347,7 @@
       .then(function(results) {
         var detail = results[0];
         var data = results[1];
+        var showBottom = false;
         if (detail.display_title_preferred != null || detail.display_title != null) {
           var pref = detail.viewer_preferred_language || window.VIEWER_PREFERRED_LANGUAGE || 'en';
           var dp = detail.display_title_preferred != null ? detail.display_title_preferred : detail.display_title;
@@ -229,13 +365,15 @@
           var surveyLink = document.getElementById('inboxSurveyReviewLink');
           surveyLink.href = detail.survey_review_url;
           surveyLink.textContent = t('view_survey') || '고객 설문 확인';
-          document.getElementById('inboxSurveyActions').style.display = 'flex';
+          document.getElementById('inboxSurveyReviewActions').style.display = 'flex';
+          showBottom = true;
         }
         if (!window.VIEWER_IS_STAFF && detail.show_survey_edit_button && detail.survey_edit_url) {
           var editLink = document.getElementById('inboxSurveyEditLink');
           editLink.href = detail.survey_edit_url;
           editLink.textContent = t('edit_survey') || '설문 수정하기';
           document.getElementById('inboxSurveyEditActions').style.display = 'flex';
+          showBottom = true;
         }
         if (!window.VIEWER_IS_STAFF && detail.show_quote_actions && detail.quote_view_url) {
           var qView = document.getElementById('inboxQuoteViewLink');
@@ -243,7 +381,12 @@
           if (qView) { qView.href = detail.quote_view_url; qView.textContent = t('view_quote') || '견적서 보기'; }
           if (qPay && detail.quote_payment_url) { qPay.href = detail.quote_payment_url; qPay.textContent = t('pay') || '결제하기'; }
           if (quoteActionsEl) quoteActionsEl.style.display = 'flex';
+          showBottom = true;
         }
+        if (showBottom && bottomActionsEl) bottomActionsEl.style.display = 'block';
+
+        renderActionCards(detail);
+
         var msgs = data.messages || [];
         var box = document.getElementById('inboxMessages');
         if (data.viewer_preferred_language) window.VIEWER_PREFERRED_LANGUAGE = data.viewer_preferred_language;
@@ -260,8 +403,43 @@
           }).join('');
           box.scrollTop = box.scrollHeight;
         }
+        if (msgs.length) _lastMsgId = Math.max.apply(null, msgs.map(function(m) { return m.id; }));
         fetch(API_BASE + '/conversations/' + convId + '/read/', { method: 'POST', headers: getHeaders('POST'), body: '{}', credentials: 'same-origin' });
         loadConversations();
+        // 초기 로드 완료 후 폴링 시작
+        if (_pollTimer) clearInterval(_pollTimer);
+        var pollConvId = convId;
+        _pollTimer = setInterval(function() {
+          if (currentConvId !== pollConvId) { clearInterval(_pollTimer); _pollTimer = null; return; }
+          fetch(API_BASE + '/conversations/' + pollConvId + '/messages/', {
+            method: 'GET', headers: getHeaders('GET'), credentials: 'same-origin'
+          })
+            .then(function(r) { return r.json(); })
+            .then(function(pollData) {
+              if (currentConvId !== pollConvId) return;
+              var pollMsgs = pollData.messages || [];
+              if (!pollMsgs.length) return;
+              var latestId = Math.max.apply(null, pollMsgs.map(function(m) { return m.id; }));
+              if (latestId <= _lastMsgId) return;
+              _lastMsgId = latestId;
+              var pollBox = document.getElementById('inboxMessages');
+              if (pollData.viewer_preferred_language) window.VIEWER_PREFERRED_LANGUAGE = pollData.viewer_preferred_language;
+              pollBox.innerHTML = pollMsgs.map(function(m) {
+                var cls = m.sender_id === currentUserId ? 'mine' : 'theirs';
+                var meta = m.sender_username + ' · ' + (m.created_at ? m.created_at.replace('T', ' ').slice(0, 16) : '');
+                var readIcon = (m.sender_id === currentUserId && m.read_by_others !== undefined)
+                  ? readStatusIcon(m.read_by_others) : '';
+                return '<div class="inbox-msg ' + cls + '">' +
+                  '<div>' + messageBodyHtml(m) + '</div>' +
+                  '<div class="msg-meta">' + meta + readIcon + '</div></div>';
+              }).join('');
+              pollBox.scrollTop = pollBox.scrollHeight;
+              fetch(API_BASE + '/conversations/' + pollConvId + '/read/', { method: 'POST', headers: getHeaders('POST'), body: '{}', credentials: 'same-origin' });
+              loadConversations();
+              refreshActionCards(pollConvId);
+            })
+            .catch(function() {});
+        }, 5000);
       })
       .catch(function() { document.getElementById('inboxMessages').innerHTML = '<p class="text-muted">' + t('messages_load_failed') + '</p>'; });
   }
@@ -300,6 +478,7 @@
       .then(function(r) { return r.json(); })
       .then(function(msg) {
         if (msg.id) {
+          if (msg.id > _lastMsgId) _lastMsgId = msg.id;
           var box = document.getElementById('inboxMessages');
           var p = box.querySelector('p.text-muted');
           if (p) p.remove();
@@ -330,6 +509,7 @@
       .then(function(r) { return r.json(); })
       .then(function(msg) {
         if (msg.id) {
+          if (msg.id > _lastMsgId) _lastMsgId = msg.id;
           var box = document.getElementById('inboxMessages');
           var p = box.querySelector('p.text-muted');
           if (p) p.remove();
@@ -340,6 +520,7 @@
             '<div class="msg-meta">' + meta + readIcon + '</div></div>');
           box.scrollTop = box.scrollHeight;
           loadConversations();
+          refreshActionCards(currentConvId);
         } else if (msg.error) alert(msg.error);
       })
       .catch(function() { alert(t('send_failed')); });
@@ -386,6 +567,7 @@
           return;
         }
         var msg = JSON.parse(xhr.responseText);
+        if (msg.id > _lastMsgId) _lastMsgId = msg.id;
         var box = document.getElementById('inboxMessages');
         var p = box.querySelector('p.text-muted');
         if (p) p.remove();

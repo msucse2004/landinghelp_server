@@ -239,15 +239,35 @@ def _compute_agent_selection_context(answers, selected_required, current_section
 def survey_start(request):
     """
     GET /settlement/survey/
-    우선순위: (1) 로그인 user의 DRAFT가 있으면 resume (2) 없으면 제출 이력 있으면 이미 제출 페이지 (3) 새 설문 step 1.
+    우선순위: (1) 로그인 user의 DRAFT/REVISION_REQUESTED가 있으면 resume (2) 없으면 제출 이력 있으면 이미 제출 페이지 (3) 새 설문 step 1.
+    ?resume=1: 메시지/대시보드 진입점; 비로그인 시 로그인 후 이 URL로 복귀.
     """
+    # 메시지/대시보드의 "설문 다시 수정하기" 링크로 진입 시: 비로그인이면 로그인 유도
+    if request.GET.get('resume') and not request.user.is_authenticated:
+        from django.contrib.auth.views import redirect_to_login
+        return redirect_to_login(request.get_full_path(), login_url=None)
+
     draft = _get_or_create_draft(request)
     steps = _get_step_list(draft)
 
     if draft:
-        # 이어쓰기: 마지막 진행 단계로 이동
-        step = min(max(1, draft.current_step), steps[-1] if steps else 1)
-        step = step if step in steps else (steps[0] if steps else 1)
+        # 소유권 검증: 로그인 사용자인데 draft가 다른 사용자 소유면 접근 차단
+        if request.user.is_authenticated and getattr(draft, 'user_id', None) is not None and draft.user_id != request.user.pk:
+            return render(request, 'survey/survey_message.html', {
+                'message_title': '접근 제한',
+                'message_body': '해당 설문은 본인만 수정할 수 있습니다. 로그인한 계정을 확인해 주세요.',
+            })
+        # 편집 가능 상태만 허용 (DRAFT, REVISION_REQUESTED)
+        if draft.status not in (SurveySubmission.Status.DRAFT, SurveySubmission.Status.REVISION_REQUESTED):
+            return render(request, 'survey/survey_message.html', {
+                'message_title': '수정 불가',
+                'message_body': '현재 이 설문은 수정할 수 없는 상태입니다. 이미 제출되었거나 관리자 검토 중일 수 있습니다. 문의 사항은 메시지함으로 연락해 주세요.',
+            })
+        if draft.status == SurveySubmission.Status.REVISION_REQUESTED:
+            step = steps[0] if steps else 1
+        else:
+            step = min(max(1, draft.current_step), steps[-1] if steps else 1)
+            step = step if step in steps else (steps[0] if steps else 1)
         return redirect(reverse('survey:survey_step', kwargs={'step': step}))
 
     # DRAFT 없음: 로그인 사용자면 제출 이력 확인
@@ -550,7 +570,10 @@ def _log_submission_event(submission, event_type, created_by=None, meta=None):
 @require_POST
 @ensure_csrf_cookie
 def survey_submit(request):
-    """POST /settlement/survey/submit/ → 제출(SUBMITTED). DRAFT 또는 REVISION_REQUESTED에서 재제출 가능."""
+    """
+    POST /settlement/survey/submit/ → 제출(SUBMITTED). DRAFT 또는 REVISION_REQUESTED에서 재제출 가능.
+    설문 제출/재제출에 따른 상태 전이는 이 뷰에서만 수행. 고객 메시지·견적 수정 요청 분류/실행은 customer_request_service.
+    """
     draft = _get_or_create_draft(request)
     if not draft:
         return redirect(reverse('survey:survey_start'))
@@ -576,14 +599,44 @@ def survey_submit(request):
     draft.save(update_fields=update_fields)
     request.session.pop('survey_submission_id', None)
 
+    # reopen 후 재제출: 해당 submission의 CUSTOMER_ACTION_REQUIRED change request → IN_REVIEW (Admin 검토 대기)
+    change_request_ids_moved = []
+    if was_revision:
+        try:
+            from settlement.models import QuoteChangeRequest
+            crs = list(
+                QuoteChangeRequest.objects.filter(
+                    submission=draft,
+                    status=QuoteChangeRequest.Status.CUSTOMER_ACTION_REQUIRED,
+                ).values_list('id', flat=True)
+            )
+            change_request_ids_moved = crs
+            QuoteChangeRequest.objects.filter(
+                submission=draft,
+                status=QuoteChangeRequest.Status.CUSTOMER_ACTION_REQUIRED,
+            ).update(status=QuoteChangeRequest.Status.IN_REVIEW)
+        except Exception:
+            pass
+
     event_type = 'resubmitted' if was_revision else 'submitted'
     event_meta = {'resolved_section_ids': resolved_section_ids} if resolved_section_ids else {}
+    if was_revision:
+        event_meta['resubmitted_after_reopen'] = True
+        if change_request_ids_moved:
+            event_meta['change_request_ids_moved_to_in_review'] = change_request_ids_moved
     _log_submission_event(
         draft,
         event_type,
         created_by=request.user if request.user.is_authenticated else None,
         meta=event_meta,
     )
+
+    if was_revision:
+        try:
+            from customer_request_service import record_followup_success
+            record_followup_success(draft, event_meta=event_meta)
+        except Exception:
+            pass
 
     # 재제출 시 견적 초안 갱신; 최초 제출 시 DRAFT 없을 때만 생성.
     try:

@@ -1,3 +1,6 @@
+# settlement views: 견적·결제·Agent 배정·고객 수정 요청 등
+# 고객 수정 요청(견적 수정/설문 재개): 직접 상태 변경 없음. customer_request_service.handle_customer_request_flow 사용.
+# 상태 전이는 execute_confirmed_action(버튼 클릭) 또는 admin 승인 플로우에서만 수행.
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.contrib import messages
@@ -252,7 +255,6 @@ def settlement_quote(request):
         'save_failed': get_display_text('저장에 실패했습니다.', lang),
         'ok': get_display_text('확인', lang),
         'close': get_display_text('닫기', lang),
-        'won': get_display_text('원', lang),
         'free': get_display_text('무료', lang),
         'agent_required': get_display_text('Agent 선택 필요', lang),
         'total': get_display_text('합계', lang),
@@ -405,6 +407,7 @@ def customer_quote(request):
             'can_view_price': False,
             'quote_payload': None,
             'checkout_error': checkout_error,
+            'quote_superseded': False,
             'i18n': _customer_quote_i18n(get_request_language(request)),
         })
 
@@ -415,12 +418,77 @@ def customer_quote(request):
     from .quote_email import get_quote_payment_link
     payment_link = get_quote_payment_link(quote) if quote else ''
 
+    quote_superseded = bool(getattr(quote, 'revision_superseded_at', None))
+
+    # 수정 요청 워크플로우: 이 submission의 최신 change request (상태 카드·CTA용)
+    change_request = None
+    change_request_status_label = ''
+    change_request_summary = ''
+    change_request_next_step = ''
+    show_customer_action_cta = False
+    survey_resume_url = reverse('survey:survey_start') + '?resume=1'
+    pending_reopen_offer = None
+    if quote.submission_id:
+        from .models import QuoteChangeRequest, CustomerActionOffer
+        cr = (
+            QuoteChangeRequest.objects.filter(submission_id=quote.submission_id)
+            .order_by('-created_at')
+            .select_related('quote')
+            .first()
+        )
+        if cr:
+            change_request = cr
+            status_to_label = {
+                QuoteChangeRequest.Status.OPEN: '접수됨',
+                QuoteChangeRequest.Status.ANALYZED: '관리자 검토 중',
+                QuoteChangeRequest.Status.IN_REVIEW: '관리자 검토 중',
+                QuoteChangeRequest.Status.APPROVED: '새 견적 준비 중',
+                QuoteChangeRequest.Status.CUSTOMER_ACTION_REQUIRED: '고객 수정 필요',
+                QuoteChangeRequest.Status.APPLIED: '완료',
+                QuoteChangeRequest.Status.REJECTED: '반려됨',
+                QuoteChangeRequest.Status.CANCELED: '취소됨',
+            }
+            change_request_status_label = status_to_label.get(cr.status, cr.get_status_display() or cr.status)
+            analysis = cr.latest_analysis()
+            if analysis:
+                change_request_summary = (getattr(analysis, 'normalized_summary', None) or '')[:500]
+                change_request_next_step = (getattr(analysis, 'recommended_next_step', None) or '')[:300]
+            show_customer_action_cta = cr.status == QuoteChangeRequest.Status.CUSTOMER_ACTION_REQUIRED
+        offer = CustomerActionOffer.objects.filter(
+            submission_id=quote.submission_id,
+            button_action_key='reopen_survey',
+            status=CustomerActionOffer.Status.PENDING,
+            can_execute=True,
+        ).order_by('-created_at').first()
+        if offer:
+            pending_reopen_offer = {'id': offer.id, 'button_label': offer.button_label or '설문 수정 시작'}
+
+    customer_ui_payload = {}
+    try:
+        from customer_request_service import build_customer_ui_payload
+        customer_ui_payload = build_customer_ui_payload(request.user, quote=quote)
+    except Exception:
+        pass
+    current_request_status = customer_ui_payload.get('current_request_status') or change_request_status_label
+    if not current_request_status and (quote_superseded or change_request):
+        current_request_status = change_request_status_label
+
     return render(request, 'services/customer_quote.html', {
         'quote': quote,
         'can_view_price': can_show,
         'quote_payload': payload,
         'checkout_error': checkout_error,
         'payment_link': payment_link,
+        'quote_superseded': quote_superseded,
+        'change_request': change_request,
+        'change_request_status_label': change_request_status_label,
+        'change_request_summary': change_request_summary,
+        'change_request_next_step': change_request_next_step,
+        'show_customer_action_cta': show_customer_action_cta,
+        'survey_resume_url': survey_resume_url,
+        'pending_reopen_offer': pending_reopen_offer,
+        'customer_ui_payload': customer_ui_payload,
+        'current_request_status': current_request_status,
         'i18n': _customer_quote_i18n(lang),
     })
 
@@ -428,16 +496,26 @@ def customer_quote(request):
 @require_GET
 @ensure_csrf_cookie
 def api_my_quote(request):
-    """고객 본인 견적 API. quote_for_customer 적용으로 status < FINAL_SENT이면 가격/합계 필드 제거."""
+    """고객 본인 견적 API. quote_for_customer 적용으로 status < FINAL_SENT이면 가격/합계 필드 제거. customer_ui_payload 포함."""
     if not request.user.is_authenticated:
-        return JsonResponse({'ok': False, 'error': '로그인이 필요합니다.', 'quote': None}, status=403)
+        return JsonResponse({'ok': False, 'error': '로그인이 필요합니다.', 'quote': None, 'customer_ui_payload': {}}, status=403)
     quote = (
         SettlementQuote.objects.filter(submission__user=request.user)
         .order_by('-updated_at')
         .first()
     )
     payload = quote_for_customer(quote) if quote else None
-    return JsonResponse({'ok': True, 'quote': payload})
+    customer_ui_payload = {}
+    try:
+        from customer_request_service import build_customer_ui_payload
+        customer_ui_payload = build_customer_ui_payload(request.user, quote=quote)
+    except Exception:
+        pass
+    return JsonResponse({
+        'ok': True,
+        'quote': payload,
+        'customer_ui_payload': customer_ui_payload,
+    })
 
 
 def _build_plan_schedule_from_quote(quote):
@@ -539,6 +617,9 @@ def mock_quote_checkout(request):
             pass
     if not quote:
         return redirect(reverse('customer_quote') + '?error=invalid')
+    # 무효화된 견적은 결제 화면 진입 자체를 막음(결제 버튼 비활성화와 동일 정책)
+    if not quote.is_payable():
+        return redirect(reverse('customer_quote') + '?error=superseded')
     lang = get_request_language(request)
     total = int(quote.total or 0)
     i18n = {
@@ -559,8 +640,12 @@ def mock_quote_checkout(request):
 @ensure_csrf_cookie
 def api_quote_request_revision(request):
     """
-    고객 견적서 수정 요청. FINAL_SENT 견적에 대해 메시지 입력 시
-    quote → NEGOTIATING, 공유 대화에 고객 메시지 추가. Admin이 검토 후 수정·재송부 가능.
+    고객 견적서 수정 요청 (자유 텍스트) → LLM 분석 워크플로우 진입점.
+
+    - quote → NEGOTIATING, 공유 대화에 고객 메시지 추가.
+    - QuoteChangeRequest 생성 (source_type=TEXT, status=OPEN).
+    - analyze_quote_change_request() 실행 후 status=ANALYZED로 업데이트.
+    - 응답: { ok, change_request, analysis, message }. 설문 재개/quote 삭제/quote 최종 상태 직접 변경 없음.
     POST JSON: { "quote_id": int, "message": str } 또는 form: quote_id, message
     """
     if not request.user.is_authenticated:
@@ -599,21 +684,184 @@ def api_quote_request_revision(request):
         return JsonResponse({'ok': False, 'error': '결제 대기 중인 견적만 수정 요청할 수 있습니다.'}, status=404)
     if not message:
         return JsonResponse({'ok': False, 'error': '수정 요청 내용을 입력해 주세요.'}, status=400)
-    quote.status = SettlementQuote.Status.NEGOTIATING
-    quote.save(update_fields=['status'])
-    from .notifications import _get_or_create_shared_conversation
-    from messaging.models import Message
-    from translations.utils import get_display_text
-    lang = get_request_language(request)
-    prefix = get_display_text('견적서 수정 요청', lang) or '견적서 수정 요청'
-    body = prefix + '\n\n' + message
-    conv = _get_or_create_shared_conversation(quote.submission, subject_fallback=prefix)
-    msg = Message(conversation=conv, sender=request.user, body=body)
-    msg.save()
+
+    from customer_request_service import handle_customer_request_flow
+    from .services_quote_change import serialize_change_request_for_response, serialize_analysis_for_response
+
+    ctx, policy, err = handle_customer_request_flow(
+        'customer_quote_revision',
+        request.user,
+        message,
+        quote=quote,
+    )
+    if err:
+        return JsonResponse({'ok': False, 'error': err}, status=400)
+    if not ctx:
+        return JsonResponse({'ok': False, 'error': '요청을 접수할 수 없습니다.'}, status=400)
+
+    change_request = ctx.change_request
+    analysis = ctx.extra.get('analysis') if ctx.extra else None
+    base_message = (policy.customer_facing_summary or '').strip() if policy else ''
+    if not base_message:
+        lang = get_request_language(request)
+        base_message = (
+            get_display_text(
+                '요청이 접수되었습니다. 관리자 검토 후 설문 수정 또는 견적 재작성 안내를 드릴게요.',
+                lang,
+            )
+            or '요청이 접수되었습니다. 관리자 검토 후 설문 수정 또는 견적 재작성 안내를 드릴게요.'
+        )
+    if analysis and getattr(analysis, 'normalized_summary', None):
+        summary = (analysis.normalized_summary or '')[:300]
+        if summary:
+            base_message += '\n\n[요청 요약] ' + summary
+    if analysis and getattr(analysis, 'recommended_next_step', None):
+        next_step = (analysis.recommended_next_step or '')[:200]
+        if next_step:
+            base_message += '\n\n[다음 단계] ' + next_step
+
     return JsonResponse({
         'ok': True,
-        'message': get_display_text('수정 요청이 전달되었습니다. Admin 검토 후 수정된 견적을 보내드리겠습니다.', lang) or '수정 요청이 전달되었습니다.',
+        'change_request': serialize_change_request_for_response(change_request) if change_request else {},
+        'analysis': serialize_analysis_for_response(analysis) if analysis else {},
+        'policy': policy.as_dict() if policy else {},
+        'message': base_message,
     })
+
+
+@require_POST
+@ensure_csrf_cookie
+def api_action_offer_execute(request, offer_id):
+    """
+    고객 액션 제안(버튼) 실행. POST만 허용. 로그인 사용자 본인 제안만 실행 가능.
+    - AJAX(X-Requested-With: XMLHttpRequest): JSON 반환 { ok: bool }.
+    - 폼 직접 제출(스크립트 미동작 등): 성공 시 설문 편집 페이지로 리다이렉트.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': '로그인이 필요합니다.'}, status=403)
+    from django.http import HttpResponseRedirect
+    from .models import CustomerActionOffer
+    from customer_request_service import execute_confirmed_action
+
+    offer = CustomerActionOffer.objects.filter(id=offer_id).select_related('submission', 'conversation').first()
+    if not offer:
+        return JsonResponse({'ok': False, 'error': '제안을 찾을 수 없습니다.'}, status=404)
+    sub = getattr(offer, 'submission', None)
+    if sub and getattr(sub, 'user_id', None) and sub.user_id != request.user.id:
+        return JsonResponse({'ok': False, 'error': '권한이 없습니다.'}, status=403)
+    if not sub and offer.conversation_id:
+        from messaging.models import ConversationParticipant
+        if not ConversationParticipant.objects.filter(conversation_id=offer.conversation_id, user=request.user).exists():
+            return JsonResponse({'ok': False, 'error': '권한이 없습니다.'}, status=403)
+
+    success, err = execute_confirmed_action(offer_id, request.user)
+    if success:
+        if request.headers.get('X-Requested-With') != 'XMLHttpRequest':
+            survey_edit_url = reverse('survey:survey_start') + '?resume=1'
+            return HttpResponseRedirect(survey_edit_url)
+        return JsonResponse({'ok': True})
+    return JsonResponse({'ok': False, 'error': err or '실행에 실패했습니다.'}, status=400)
+
+
+@require_POST
+@ensure_csrf_cookie
+def api_proposal_confirm(request, proposal_id):
+    """
+    고객 제안 승인. POST /api/settlement/proposal/<id>/confirm/
+    PROPOSED → CONFIRMED → 실행 → EXECUTED/FAILED. 로그인 사용자 본인 제안만.
+    성공 시 customer_message(고객 안내 문구)를 포함하여 반환.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': '로그인이 필요합니다.'}, status=403)
+    from messaging.models import CustomerActionProposal
+    from customer_request_service import confirm_proposal
+
+    proposal = CustomerActionProposal.objects.filter(id=proposal_id).select_related('analysis').first()
+    if not proposal:
+        return JsonResponse({'ok': False, 'error': '제안을 찾을 수 없습니다.'}, status=404)
+    if proposal.analysis and getattr(proposal.analysis, 'customer_id', None) != request.user.id:
+        return JsonResponse({'ok': False, 'error': '권한이 없습니다.'}, status=403)
+
+    success, err, customer_msg = confirm_proposal(proposal_id, request.user)
+    if success:
+        resp = {'ok': True}
+        if customer_msg:
+            resp['message'] = customer_msg
+        return JsonResponse(resp)
+    return JsonResponse({'ok': False, 'error': err or '실행에 실패했습니다.'}, status=400)
+
+
+@require_POST
+@ensure_csrf_cookie
+def api_proposal_mark_shown(request, proposal_id):
+    """
+    프론트엔드에서 proposal 카드가 실제로 렌더링되었을 때 호출.
+    PROPOSAL_VIEWED 이벤트를 CustomerActionFeedbackLog에 기록. 중복 호출 안전.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False}, status=403)
+    from messaging.models import CustomerActionProposal
+    from customer_request_service import _log_feedback
+
+    proposal = CustomerActionProposal.objects.filter(id=proposal_id).first()
+    if not proposal:
+        return JsonResponse({'ok': False}, status=404)
+    _log_feedback(proposal, "PROPOSAL_VIEWED", actor=request.user)
+    return JsonResponse({'ok': True})
+
+
+@require_POST
+@ensure_csrf_cookie
+def api_proposal_decline(request, proposal_id):
+    """
+    고객 제안 거절. POST /api/settlement/proposal/<id>/decline/
+    PROPOSED → DECLINED.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': '로그인이 필요합니다.'}, status=403)
+    from messaging.models import CustomerActionProposal
+    from customer_request_service import decline_proposal
+
+    proposal = CustomerActionProposal.objects.filter(id=proposal_id).select_related('analysis').first()
+    if not proposal:
+        return JsonResponse({'ok': False, 'error': '제안을 찾을 수 없습니다.'}, status=404)
+    if proposal.analysis and getattr(proposal.analysis, 'customer_id', None) != request.user.id:
+        return JsonResponse({'ok': False, 'error': '권한이 없습니다.'}, status=403)
+
+    success, err = decline_proposal(proposal_id, request.user)
+    if success:
+        return JsonResponse({'ok': True})
+    return JsonResponse({'ok': False, 'error': err or '처리에 실패했습니다.'}, status=400)
+
+
+@require_POST
+@ensure_csrf_cookie
+def api_complete_human_review(request, review_id):
+    """
+    담당자가 사람 검토 요청을 완료 처리. staff 전용.
+    POST body (JSON): { "note": "...", "customer_message": "고객에게 보낼 메시지" }
+    반환: { ok: bool, error?: str }
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': '로그인이 필요합니다.'}, status=403)
+    if not getattr(request.user, 'is_staff', False):
+        return JsonResponse({'ok': False, 'error': '권한이 없습니다.'}, status=403)
+    import json
+    note = ''
+    customer_message = ''
+    if request.content_type and 'application/json' in (request.content_type or ''):
+        try:
+            data = json.loads(request.body or '{}')
+            note = (data.get('note') or '').strip()
+            customer_message = (data.get('customer_message') or '').strip()
+        except (ValueError, TypeError):
+            pass
+    from .models import HumanReviewRequest
+    from customer_request_service import complete_human_review
+    success, err = complete_human_review(int(review_id), request.user, note=note, customer_message=customer_message or None)
+    if success:
+        return JsonResponse({'ok': True})
+    return JsonResponse({'ok': False, 'error': err or '처리에 실패했습니다.'}, status=400)
 
 
 def _is_form_post(request):
@@ -632,7 +880,6 @@ def _customer_quote_i18n(lang):
         'quote_paid': get_display_text('결제가 완료되었습니다.', lang),
         'total': get_display_text('합계', lang),
         'price_masked': get_display_text('견적 후 공개', lang),
-        'won': get_display_text('원', lang),
         'pay': get_display_text('결제하기', lang),
         'go_dashboard': get_display_text('대시보드로', lang),
         'go_calendar': get_display_text('정착 플랜/달력', lang),
@@ -966,13 +1213,12 @@ def api_assign_dedicated_agent(request):
     plan.assigned_agent = agent
     plan.save(update_fields=['assigned_agent', 'updated_at'])
     from survey.models import SurveySubmission
+    from survey.submission_state import mark_submission_service_in_progress
     paid_sub = SurveySubmission.objects.filter(
         user=request.user,
         settlement_quotes__status=SettlementQuote.Status.PAID,
     ).order_by('-submitted_at').distinct().first()
-    if paid_sub and paid_sub.status != SurveySubmission.Status.SERVICE_IN_PROGRESS:
-        paid_sub.status = SurveySubmission.Status.SERVICE_IN_PROGRESS
-        paid_sub.save(update_fields=['status'])
+    mark_submission_service_in_progress(paid_sub)
     try:
         from .notifications import send_agent_assigned_notification
         from translations.utils import get_request_language

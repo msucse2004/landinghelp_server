@@ -1262,6 +1262,7 @@ def build_customer_ui_payload(
             "can_execute": p.status == CustomerActionProposal.Status.PROPOSED,
             "executed_at": p.executed_at.isoformat() if p.executed_at else None,
             "execution_mode": "AUTO_CONFIRMABLE",
+            "created_at": p.analysis.created_at.isoformat() if p.analysis and p.analysis.created_at else None,
         }
         out["action_offers"].append(item)
         if p.status == CustomerActionProposal.Status.PROPOSED:

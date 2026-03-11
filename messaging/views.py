@@ -403,7 +403,10 @@ def api_conversation_messages(request, conversation_id):
     user = request.user
     if not ConversationParticipant.objects.filter(conversation_id=conversation_id, user=user).exists():
         return JsonResponse({'error': '권한이 없습니다.'}, status=403)
-    conv = Conversation.objects.get(pk=conversation_id)
+    try:
+        conv = Conversation.objects.get(pk=conversation_id)
+    except Conversation.DoesNotExist:
+        return JsonResponse({'error': '대화를 찾을 수 없습니다.'}, status=404)
 
     if request.method == 'POST':
         body = ''
@@ -471,48 +474,56 @@ def api_conversation_messages(request, conversation_id):
     page = int(request.GET.get('page', 1))
     page_size = min(int(request.GET.get('page_size', 50)), 100)
     start = (page - 1) * page_size
-    msgs = conv.messages.select_related('sender').order_by('-created_at')[start:start + page_size + 1]
-    has_more = len(msgs) > page_size
-    if has_more:
-        msgs = msgs[:page_size]
-    msgs = list(reversed(msgs))
-    read_ids = set(
-        MessageRead.objects.filter(message__in=msgs, user=user).values_list('message_id', flat=True)
-    )
-    # 상대방이 내 메시지를 읽었는지 (카카오톡 스타일 읽음 표시용)
-    other_user_ids = set(
-        ConversationParticipant.objects.filter(conversation=conv)
-        .exclude(user=user)
-        .values_list('user_id', flat=True)
-    )
-    read_by_other = {}  # message_id -> True if all other participants have read
-    my_msg_ids = [m.id for m in msgs if m.sender_id == user.id]
-    if my_msg_ids and other_user_ids:
-        from collections import defaultdict
-        read_by_map = defaultdict(set)
-        for mid, uid in MessageRead.objects.filter(
-            message_id__in=my_msg_ids
-        ).exclude(user=user).values_list('message_id', 'user_id'):
-            read_by_map[mid].add(uid)
-        for mid in my_msg_ids:
-            read_by_other[mid] = other_user_ids <= read_by_map.get(mid, set())
+    try:
+        msgs = conv.messages.select_related('sender').order_by('-created_at')[start:start + page_size + 1]
+        has_more = len(msgs) > page_size
+        if has_more:
+            msgs = msgs[:page_size]
+        msgs = list(reversed(msgs))
+        read_ids = set(
+            MessageRead.objects.filter(message__in=msgs, user=user).values_list('message_id', flat=True)
+        )
+        # 상대방이 내 메시지를 읽었는지 (카카오톡 스타일 읽음 표시용)
+        other_user_ids = set(
+            ConversationParticipant.objects.filter(conversation=conv)
+            .exclude(user=user)
+            .values_list('user_id', flat=True)
+        )
+        read_by_other = {}  # message_id -> True if all other participants have read
+        my_msg_ids = [m.id for m in msgs if m.sender_id == user.id]
+        if my_msg_ids and other_user_ids:
+            from collections import defaultdict
+            read_by_map = defaultdict(set)
+            for mid, uid in MessageRead.objects.filter(
+                message_id__in=my_msg_ids
+            ).exclude(user=user).values_list('message_id', 'user_id'):
+                read_by_map[mid].add(uid)
+            for mid in my_msg_ids:
+                read_by_other[mid] = other_user_ids <= read_by_map.get(mid, set())
 
-    out = []
-    for m in msgs:
-        if m.sender_id == user.id:
-            read_by_others = read_by_other.get(m.id, False) if other_user_ids else True
-        else:
-            read_by_others = True  # 상대 메시지는 읽음 표시 없음
-        item = _message_to_dict(m, request, read_by_others=read_by_others)
-        item['read'] = m.id in read_ids or m.sender_id == user.id
-        out.append(item)
-    viewer_preferred_language = (getattr(user, 'preferred_language', None) or '').strip() or 'en'
-    return JsonResponse({
-        'messages': out,
-        'has_more': has_more,
-        'page': page,
-        'viewer_preferred_language': viewer_preferred_language,
-    })
+        out = []
+        for m in msgs:
+            if m.sender_id == user.id:
+                read_by_others = read_by_other.get(m.id, False) if other_user_ids else True
+            else:
+                read_by_others = True  # 상대 메시지는 읽음 표시 없음
+            item = _message_to_dict(m, request, read_by_others=read_by_others)
+            item['read'] = m.id in read_ids or m.sender_id == user.id
+            out.append(item)
+        viewer_preferred_language = (getattr(user, 'preferred_language', None) or '').strip() or 'en'
+        return JsonResponse({
+            'messages': out,
+            'has_more': has_more,
+            'page': page,
+            'viewer_preferred_language': viewer_preferred_language,
+        })
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception('api_conversation_messages GET failed: %s', e)
+        return JsonResponse(
+            {'error': getattr(e, 'message', str(e)) or '메시지를 불러올 수 없습니다.'},
+            status=500,
+        )
 
 
 @require_POST
@@ -633,111 +644,122 @@ def api_conversation_detail(request, conversation_id):
     user = request.user
     if not ConversationParticipant.objects.filter(conversation_id=conversation_id, user=user).exists():
         return JsonResponse({'error': '권한이 없습니다.'}, status=403)
-    conv = Conversation.objects.select_related(
-        'appointment', 'appointment__customer', 'appointment__agent', 'survey_submission'
-    ).prefetch_related(
-        'participants__user'
-    ).get(pk=conversation_id)
-    unread = Message.objects.filter(conversation=conv).exclude(sender=user).exclude(
-        read_by__user=user
-    ).count()
-    participants = [
-        {'id': p.user_id, 'username': p.user.username}
-        for p in conv.participants.all()
-    ]
-    viewer_preferred_language = (getattr(user, 'preferred_language', None) or '').strip() or 'en'
-    display_title_preferred, display_title_en = _conversation_display_titles(conv, viewer_preferred_language, user)
-    appointment = None
-    if conv.appointment_id:
-        a = conv.appointment
-        # 에이전트가 로그인했고 약속이 PENDING일 때만 수락/수정요청 버튼 노출
-        can_accept = (a.agent_id == user.id and a.status == 'PENDING')
-        appointment = {
-            'id': a.id,
-            'service_code': a.service_code,
-            'service_date': str(a.service_date),
-            'status': a.status,
-            'can_accept': can_accept,
+    try:
+        conv = Conversation.objects.select_related(
+            'appointment', 'appointment__customer', 'appointment__agent', 'survey_submission'
+        ).prefetch_related(
+            'participants__user'
+        ).get(pk=conversation_id)
+    except Conversation.DoesNotExist:
+        return JsonResponse({'error': '대화를 찾을 수 없습니다.'}, status=404)
+    try:
+        unread = Message.objects.filter(conversation=conv).exclude(sender=user).exclude(
+            read_by__user=user
+        ).count()
+        participants = [
+            {'id': p.user_id, 'username': p.user.username}
+            for p in conv.participants.all()
+        ]
+        viewer_preferred_language = (getattr(user, 'preferred_language', None) or '').strip() or 'en'
+        display_title_preferred, display_title_en = _conversation_display_titles(conv, viewer_preferred_language, user)
+        appointment = None
+        if conv.appointment_id:
+            a = conv.appointment
+            # 에이전트가 로그인했고 약속이 PENDING일 때만 수락/수정요청 버튼 노출
+            can_accept = (a.agent_id == user.id and a.status == 'PENDING')
+            appointment = {
+                'id': a.id,
+                'service_code': a.service_code,
+                'service_date': str(a.service_date),
+                'status': a.status,
+                'can_accept': can_accept,
+            }
+        payload = {
+            'id': conv.id,
+            'type': conv.type,
+            'subject': conv.subject or '',
+            'display_title': display_title_preferred,
+            'display_title_preferred': display_title_preferred,
+            'display_title_en': display_title_en,
+            'viewer_preferred_language': viewer_preferred_language,
+            'appointment': appointment,
+            'participants': participants,
+            'unread_count': unread,
+            'created_at': conv.created_at.isoformat(),
+            'updated_at': conv.updated_at.isoformat(),
         }
-    payload = {
-        'id': conv.id,
-        'type': conv.type,
-        'subject': conv.subject or '',
-        'display_title': display_title_preferred,
-        'display_title_preferred': display_title_preferred,
-        'display_title_en': display_title_en,
-        'viewer_preferred_language': viewer_preferred_language,
-        'appointment': appointment,
-        'participants': participants,
-        'unread_count': unread,
-        'created_at': conv.created_at.isoformat(),
-        'updated_at': conv.updated_at.isoformat(),
-    }
-    if getattr(user, 'is_staff', False) and getattr(conv, 'survey_submission_id', None):
-        payload['submission_id'] = conv.survey_submission_id
-        try:
-            payload['survey_review_url'] = reverse('app_submission_review', args=[conv.survey_submission_id])
-        except Exception:
-            payload['survey_review_url'] = '/admin/review/{}/'.format(conv.survey_submission_id)
-    # 고객: 설문 수정 요청(REVISION_REQUESTED) 상태일 때 메시지 창에서 설문 수정하기 버튼 노출
-    sub = getattr(conv, 'survey_submission', None)
-    if (
-        not getattr(user, 'is_staff', False)
-        and sub
-        and getattr(sub, 'user_id', None) == user.id
-        and getattr(sub, 'status', None) == 'REVISION_REQUESTED'
-    ):
-        payload['show_survey_edit_button'] = True
-        try:
-            payload['survey_edit_url'] = reverse('survey:survey_start') + '?resume=1'
-        except Exception:
-            payload['survey_edit_url'] = '/settlement/survey/?resume=1'
-    # 고객: 송부된 견적(FINAL_SENT)이 있을 때 메시지 창에서 견적서 보기·결제하기 버튼 노출
-    if (
-        not getattr(user, 'is_staff', False)
-        and sub
-        and getattr(sub, 'user_id', None) == user.id
-    ):
-        from settlement.models import SettlementQuote
-        sent_quote = (
-            SettlementQuote.objects.filter(
-                submission=sub,
-                status=SettlementQuote.Status.FINAL_SENT,
+        if getattr(user, 'is_staff', False) and getattr(conv, 'survey_submission_id', None):
+            payload['submission_id'] = conv.survey_submission_id
+            try:
+                payload['survey_review_url'] = reverse('app_submission_review', args=[conv.survey_submission_id])
+            except Exception:
+                payload['survey_review_url'] = '/admin/review/{}/'.format(conv.survey_submission_id)
+        # 고객: 설문 수정 요청(REVISION_REQUESTED) 상태일 때 메시지 창에서 설문 수정하기 버튼 노출
+        sub = getattr(conv, 'survey_submission', None)
+        if (
+            not getattr(user, 'is_staff', False)
+            and sub
+            and getattr(sub, 'user_id', None) == user.id
+            and getattr(sub, 'status', None) == 'REVISION_REQUESTED'
+        ):
+            payload['show_survey_edit_button'] = True
+            try:
+                payload['survey_edit_url'] = reverse('survey:survey_start') + '?resume=1'
+            except Exception:
+                payload['survey_edit_url'] = '/settlement/survey/?resume=1'
+        # 고객: 송부된 견적(FINAL_SENT)이 있을 때 메시지 창에서 견적서 보기·결제하기 버튼 노출
+        if (
+            not getattr(user, 'is_staff', False)
+            and sub
+            and getattr(sub, 'user_id', None) == user.id
+        ):
+            from settlement.models import SettlementQuote
+            sent_quote = (
+                SettlementQuote.objects.filter(
+                    submission=sub,
+                    status=SettlementQuote.Status.FINAL_SENT,
+                )
+                .order_by('-sent_at', '-updated_at')
+                .first()
             )
-            .order_by('-sent_at', '-updated_at')
-            .first()
-        )
-        if sent_quote:
-            payload['show_quote_actions'] = True
-            payload['quote_id'] = sent_quote.id
-            try:
-                payload['quote_view_url'] = reverse('customer_quote') + '?quote_id=' + str(sent_quote.id)
-            except Exception:
-                payload['quote_view_url'] = '/services/settlement/my-quote/?quote_id=' + str(sent_quote.id)
-            try:
-                payload['quote_payment_url'] = reverse('settlement_quote_checkout_mock') + '?quote_id=' + str(sent_quote.id)
-            except Exception:
-                payload['quote_payment_url'] = '/services/settlement/quote/checkout/mock/?quote_id=' + str(sent_quote.id)
+            if sent_quote:
+                payload['show_quote_actions'] = True
+                payload['quote_id'] = sent_quote.id
+                try:
+                    payload['quote_view_url'] = reverse('customer_quote') + '?quote_id=' + str(sent_quote.id)
+                except Exception:
+                    payload['quote_view_url'] = '/services/settlement/my-quote/?quote_id=' + str(sent_quote.id)
+                try:
+                    payload['quote_payment_url'] = reverse('settlement_quote_checkout_mock') + '?quote_id=' + str(sent_quote.id)
+                except Exception:
+                    payload['quote_payment_url'] = '/services/settlement/quote/checkout/mock/?quote_id=' + str(sent_quote.id)
 
-    # 고객 UI 통합 payload (서버 truth 기반)
-    if not getattr(user, 'is_staff', False):
-        try:
-            from customer_request_service import build_customer_ui_payload
-            ui = build_customer_ui_payload(user, conversation=conv, submission=sub)
-            payload['pending_actions'] = ui.get('pending_actions', [])
-            payload['action_offers'] = ui.get('action_offers', [])
-            payload['review_status'] = ui.get('review_status', {})
-            payload['execution_mode'] = ui.get('execution_mode', '')
-            payload['can_reopen_survey'] = ui.get('can_reopen_survey', False)
-            payload['can_resume_survey'] = ui.get('can_resume_survey', False)
-            payload['can_resend_quote'] = ui.get('can_resend_quote', False)
-            payload['current_request_status'] = ui.get('current_request_status', '')
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(
-                "build_customer_ui_payload failed for conv=%s user=%s: %s",
-                conversation_id, user.id, e, exc_info=True,
-            )
-            payload['action_offers'] = []
-            payload['review_status'] = {}
-    return JsonResponse(payload)
+        # 고객 UI 통합 payload (서버 truth 기반)
+        if not getattr(user, 'is_staff', False):
+            try:
+                from customer_request_service import build_customer_ui_payload
+                ui = build_customer_ui_payload(user, conversation=conv, submission=sub)
+                payload['pending_actions'] = ui.get('pending_actions', [])
+                payload['action_offers'] = ui.get('action_offers', [])
+                payload['review_status'] = ui.get('review_status', {})
+                payload['execution_mode'] = ui.get('execution_mode', '')
+                payload['can_reopen_survey'] = ui.get('can_reopen_survey', False)
+                payload['can_resume_survey'] = ui.get('can_resume_survey', False)
+                payload['can_resend_quote'] = ui.get('can_resend_quote', False)
+                payload['current_request_status'] = ui.get('current_request_status', '')
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "build_customer_ui_payload failed for conv=%s user=%s: %s",
+                    conversation_id, user.id, e, exc_info=True,
+                )
+                payload['action_offers'] = []
+                payload['review_status'] = {}
+        return JsonResponse(payload)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception('api_conversation_detail failed: %s', e)
+        return JsonResponse(
+            {'error': getattr(e, 'message', str(e)) or '대화 정보를 불러올 수 없습니다.'},
+            status=500,
+        )

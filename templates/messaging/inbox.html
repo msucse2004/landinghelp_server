@@ -340,13 +340,29 @@
     var bottomActionsEl = document.getElementById('inboxBottomActions');
     if (bottomActionsEl) bottomActionsEl.style.display = 'none';
     document.getElementById('inboxMessages').innerHTML = '<div class="inbox-loading">' + t('loading') + '</div>';
+    function fetchJson(url) {
+      return fetch(url, { method: 'GET', headers: getHeaders('GET'), credentials: 'same-origin' })
+        .then(function(r) {
+          return r.json().then(function(data) { return { ok: r.ok, data: data }; })
+            .catch(function() { return { ok: false, data: { error: null } }; });
+        });
+    }
     Promise.all([
-      fetch(API_BASE + '/conversations/' + convId + '/', { method: 'GET', headers: getHeaders('GET'), credentials: 'same-origin' }).then(function(r) { return r.json(); }),
-      fetch(API_BASE + '/conversations/' + convId + '/messages/', { method: 'GET', headers: getHeaders('GET'), credentials: 'same-origin' }).then(function(r) { return r.json(); })
+      fetchJson(API_BASE + '/conversations/' + convId + '/'),
+      fetchJson(API_BASE + '/conversations/' + convId + '/messages/')
     ])
       .then(function(results) {
-        var detail = results[0];
-        var data = results[1];
+        var detailRes = results[0], dataRes = results[1];
+        if (!detailRes.ok) {
+          box.innerHTML = '<p class="text-muted">' + escapeHtml(detailRes.data && detailRes.data.error || t('messages_load_failed')) + '</p>';
+          return;
+        }
+        if (!dataRes.ok) {
+          box.innerHTML = '<p class="text-muted">' + escapeHtml(dataRes.data && dataRes.data.error || t('messages_load_failed')) + '</p>';
+          return;
+        }
+        var detail = detailRes.data;
+        var data = dataRes.data;
         var showBottom = false;
         if (detail.display_title_preferred != null || detail.display_title != null) {
           var pref = detail.viewer_preferred_language || window.VIEWER_PREFERRED_LANGUAGE || 'en';
@@ -388,11 +404,24 @@
         renderActionCards(detail);
 
         var msgs = data.messages || [];
-        var box = document.getElementById('inboxMessages');
-        if (data.viewer_preferred_language) window.VIEWER_PREFERRED_LANGUAGE = data.viewer_preferred_language;
-        if (msgs.length === 0) box.innerHTML = '<p class="text-muted">' + t('no_messages') + '</p>';
-        else {
-          box.innerHTML = msgs.map(function(m) {
+        var offers = (detail && detail.action_offers) || [];
+        var combined = [];
+        msgs.forEach(function(m) {
+          combined.push({ type: 'message', data: m });
+        });
+        offers.forEach(function(o) {
+          combined.push({ type: 'action_offer', data: o });
+        });
+        // created_at으로 정렬
+        combined.sort(function(a, b) {
+          var aTime = a.type === 'message' ? a.data.created_at : a.data.created_at;
+          var bTime = b.type === 'message' ? b.data.created_at : b.data.created_at;
+          return aTime.localeCompare(bTime);
+        });
+        // 렌더링
+        box.innerHTML = combined.map(function(item) {
+          if (item.type === 'message') {
+            var m = item.data;
             var cls = m.sender_id === currentUserId ? 'mine' : 'theirs';
             var meta = m.sender_username + ' · ' + (m.created_at ? m.created_at.replace('T', ' ').slice(0, 16) : '');
             var readIcon = (m.sender_id === currentUserId && m.read_by_others !== undefined)
@@ -400,9 +429,31 @@
             return '<div class="inbox-msg ' + cls + '">' +
               '<div>' + messageBodyHtml(m) + '</div>' +
               '<div class="msg-meta">' + meta + readIcon + '</div></div>';
-          }).join('');
-          box.scrollTop = box.scrollHeight;
-        }
+          } else {
+            var o = item.data;
+            var bc = o.status === 'EXECUTED' ? 'executed' : (o.status === 'EXPIRED' ? 'expired' : 'pending');
+            var bt = o.status === 'EXECUTED' ? (t('completed') || '처리 완료') : (o.status === 'EXPIRED' ? (t('expired') || '만료') : (t('pending') || '대기'));
+            var ti = (o.title || '').trim() || (t('action_offer') || '안내');
+            var bd = (o.body || '').trim();
+            var showBtn = o.status === 'PENDING' && o.can_execute && (o.button_label || o.button_action_key);
+            var btnHtml = '';
+            if (showBtn && o.proposal_id) {
+              btnHtml = '<div class="action-card-btn">' +
+                '<button type="button" class="btn btn-primary btn-confirm-proposal" data-proposal-id="' + o.proposal_id + '">' + escapeHtml(o.button_label || t('confirm') || '확인') + '</button>' +
+                '<button type="button" class="btn btn-decline-proposal" data-proposal-id="' + o.proposal_id + '">' + escapeHtml(o.decline_label || t('cancel') || '취소') + '</button>' +
+                '</div>';
+            } else if (showBtn) {
+              btnHtml = '<div class="action-card-btn"><button type="button" class="btn btn-primary btn-execute-offer" data-offer-id="' + o.id + '">' + escapeHtml(o.button_label || t('confirm') || '확인') + '</button></div>';
+            }
+            return '<div class="inbox-msg theirs inbox-action-card" data-offer-id="' + (o.id || '') + '">' +
+              '<span class="action-card-badge ' + bc + '">' + escapeHtml(bt) + '</span>' +
+              (ti ? '<div class="action-card-title">' + escapeHtml(ti) + '</div>' : '') +
+              (bd ? '<div class="action-card-body">' + escapeHtml(bd).replace(/\n/g, '<br>') + '</div>' : '') +
+              btnHtml +
+              '<div class="msg-meta">' + (o.created_at ? o.created_at.replace('T', ' ').slice(0, 16) : '') + '</div>' +
+              '</div>';
+          }
+        }).join('');
         if (msgs.length) _lastMsgId = Math.max.apply(null, msgs.map(function(m) { return m.id; }));
         fetch(API_BASE + '/conversations/' + convId + '/read/', { method: 'POST', headers: getHeaders('POST'), body: '{}', credentials: 'same-origin' });
         loadConversations();

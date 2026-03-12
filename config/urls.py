@@ -80,7 +80,14 @@ from accounts.views import (
     verification_sent,
     verify_email,
 )
-from messaging.views import inbox as messaging_inbox
+from messaging.views import (
+    inbox as messaging_inbox,
+    api_learning_summary,
+    api_request_flow_detail,
+    api_label_accuracy_report,
+    debug_request_flow_page,
+    debug_label_accuracy_page,
+)
 
 urlpatterns = [
     path('', home, name='home'),
@@ -97,6 +104,11 @@ urlpatterns = [
     path('admin/dashboard/', admin_dashboard, name='app_admin_dashboard'),  # Django admin보다 먼저
     path('admin/review/', submission_review_list, name='app_submission_review_list'),
     path('admin/review/reset-test/', reset_survey_and_messaging_for_test, name='app_reset_survey_messaging_test'),
+    path('admin/debug/learning-summary/', api_learning_summary, name='app_learning_summary_debug'),
+    path('admin/debug/request-flow/', debug_request_flow_page, name='app_debug_request_flow'),
+    path('admin/debug/request-flow/api/', api_request_flow_detail, name='app_debug_request_flow_api'),
+    path('admin/debug/label-accuracy/', debug_label_accuracy_page, name='app_debug_label_accuracy'),
+    path('admin/debug/label-accuracy/api/', api_label_accuracy_report, name='app_debug_label_accuracy_api'),
     path('admin/review/<int:submission_id>/', submission_review, name='app_submission_review'),
     path('admin/review/<int:submission_id>/request-revision/', submission_review_request_revision, name='app_submission_review_request_revision'),
     path('admin/review/<int:submission_id>/request-section-updates/', submission_review_request_section_updates, name='app_submission_review_request_section_updates'),

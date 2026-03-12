@@ -1,13 +1,14 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}{{ inbox_i18n.page_title|default:"메시지 함" }} – LifeAI US{% endblock %}
 {% block content %}
 {% csrf_token %}
 {{ inbox_i18n|json_script:"inbox-i18n" }}
 <style>
-  .inbox-wrap { display: flex; gap: 1rem; margin-top: 1rem; min-height: 360px; }
-  .inbox-list { width: 280px; flex-shrink: 0; border: 1px solid var(--color-border); border-radius: var(--radius); background: #fff; overflow: hidden; }
+  .inbox-wrap { display: flex; gap: 1rem; margin-top: 1rem; min-height: 520px; height: calc(100vh - 210px); overflow: hidden; }
+  .inbox-list { width: 280px; flex-shrink: 0; border: 1px solid var(--color-border); border-radius: var(--radius); background: #fff; overflow: hidden; display: flex; flex-direction: column; }
   .inbox-list h3 { margin: 0; padding: 0.75rem 1rem; font-size: 1rem; border-bottom: 1px solid var(--color-border); background: #f8fafc; }
-  .inbox-list ul { list-style: none; margin: 0; padding: 0; max-height: 400px; overflow-y: auto; }
+  .inbox-list ul { list-style: none; margin: 0; padding: 0; flex: 1; max-height: none; overflow-y: auto; }
   .inbox-list li { padding: 0.75rem 1rem; border-bottom: 1px solid #eee; cursor: pointer; }
   .inbox-list li:hover { background: #f1f5f9; }
   .inbox-list li.active { background: #e0e7ff; }
@@ -17,10 +18,14 @@
   .inbox-list li .conv-preview .conv-preview-en { display: block; font-size: 0.78rem; margin-top: 0.1rem; opacity: 0.9; }
   .inbox-list li .conv-meta { font-size: 0.75rem; color: var(--color-muted); margin-top: 0.2rem; }
   .inbox-list li .unread-badge { display: inline-block; min-width: 1.2em; padding: 0.1em 0.4em; font-size: 0.75rem; background: #dc2626; color: #fff; border-radius: 999px; margin-left: 0.35rem; }
-  .inbox-detail { flex: 1; border: 1px solid var(--color-border); border-radius: var(--radius); background: #fff; display: flex; flex-direction: column; min-width: 0; }
+  .inbox-detail { flex: 1; border: 1px solid var(--color-border); border-radius: var(--radius); background: #fff; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   .inbox-detail-empty { padding: 2rem; text-align: center; color: var(--color-muted); }
   .inbox-detail h3 { margin: 0; padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); font-size: 1rem; }
-  .inbox-messages { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+  .inbox-messages { flex: 1; min-height: 0; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+  .inbox-detail-content-wrap { position: relative; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .inbox-new-message-indicator { position: absolute; right: 1rem; bottom: 4.2rem; z-index: 5; }
+  .inbox-new-message-indicator button { border: none; background: #2563eb; color: #fff; border-radius: 999px; padding: 0.35rem 0.8rem; font-size: 0.82rem; font-weight: 600; cursor: pointer; box-shadow: 0 6px 16px rgba(37, 99, 235, 0.25); }
+  .inbox-new-message-indicator button:hover { background: #1d4ed8; }
   .inbox-msg { max-width: 85%; padding: 0.6rem 0.9rem; border-radius: var(--radius); font-size: 0.95rem; }
   .inbox-msg.mine { align-self: flex-end; background: #dbeafe; }
   .inbox-msg.theirs { align-self: flex-start; background: #f1f5f9; }
@@ -30,7 +35,17 @@
   .inbox-msg .msg-read-status svg:first-child + svg { margin-left: -4px; }
   .inbox-msg .msg-read-status.read { color: #2563eb; }
   .inbox-msg .msg-read-status.sent { color: var(--color-muted); }
-  .inbox-send { padding: 0.75rem 1rem; border-top: 1px solid var(--color-border); display: flex; align-items: center; gap: 0.5rem; }
+  .inbox-msg .msg-inline-action { margin-top: 0.7rem; }
+  .inbox-msg .btn-inline-edit { display: inline-block; padding: 0.35rem 0.85rem; font-size: 0.88rem; font-weight: 500; background: #2563eb; color: #fff; border-radius: var(--radius); text-decoration: none; transition: background 0.15s; }
+  .inbox-msg .btn-inline-edit:hover { background: #1d4ed8; color: #fff; text-decoration: none; }
+  .inbox-msg .msg-feedback { margin-top: 0.5rem; display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap; }
+  .inbox-msg .msg-feedback button { border: 1px solid transparent; background: transparent; border-radius: 999px; width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; color: var(--color-muted); cursor: pointer; padding: 0; }
+  .inbox-msg .msg-feedback button .feedback-icon-img { width: 16px; height: 16px; display: block; opacity: 0.92; }
+  .inbox-msg .msg-feedback button:hover { border-color: var(--color-border); color: var(--color-text); }
+  .inbox-msg .msg-feedback button.active { border-color: #93c5fd; color: #1d4ed8; background: rgba(219, 234, 254, 0.45); }
+  .inbox-msg .msg-feedback button:disabled { opacity: 0.65; cursor: default; }
+  .inbox-msg .msg-feedback-status { font-size: 0.8rem; color: var(--color-muted); }
+  .inbox-send { padding: 0.75rem 1rem; border-top: 1px solid var(--color-border); display: flex; align-items: center; gap: 0.5rem; position: sticky; bottom: 0; background: #fff; z-index: 4; }
   .inbox-send-attach-wrap { position: relative; flex-shrink: 0; }
   .inbox-attach-btn { width: 40px; height: 40px; padding: 0; border: 1px solid var(--color-border); border-radius: var(--radius); background: #fff; color: var(--color-muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem; line-height: 1; }
   .inbox-attach-btn:hover { background: #f1f5f9; color: var(--color-primary); }
@@ -81,7 +96,7 @@
     </div>
     <div class="inbox-detail" id="inboxDetail">
       <div class="inbox-detail-empty" id="inboxDetailEmpty">{{ inbox_i18n.select_conversation|default:"왼쪽에서 대화를 선택하세요." }}</div>
-      <div id="inboxDetailContent" style="display:none;">
+      <div id="inboxDetailContent" style="display:none;" class="inbox-detail-content-wrap">
         <h3 id="inboxDetailTitle"></h3>
         <div class="inbox-appointment-actions" id="inboxAppointmentActions" style="display:none;">
           <button type="button" class="btn btn-primary" id="inboxAppointmentAcceptBtn">{{ inbox_i18n.accept|default:"수락" }}</button>
@@ -89,6 +104,9 @@
         </div>
         <div class="inbox-action-cards" id="inboxActionCards" style="display:none;"></div>
         <div class="inbox-messages" id="inboxMessages"></div>
+        <div class="inbox-new-message-indicator" id="inboxNewMessageIndicator" style="display:none;">
+          <button type="button" id="inboxNewMessageBtn"></button>
+        </div>
         <div class="inbox-bottom-actions" id="inboxBottomActions" style="display:none;">
           <div class="inbox-survey-actions inbox-survey-review-actions" id="inboxSurveyReviewActions" style="display:none;">
             <a href="#" id="inboxSurveyReviewLink" class="btn btn-primary">{{ inbox_i18n.view_survey|default:"고객 설문 확인" }}</a>
@@ -127,6 +145,8 @@
   function t(key) { return (window.INBOX_I18N && window.INBOX_I18N[key]) || key; }
 
   var API_BASE = '/api/messaging';
+  var FEEDBACK_ICON_UP = '{% static "img/feedback/thumb-up.svg" %}';
+  var FEEDBACK_ICON_DOWN = '{% static "img/feedback/thumb-down.svg" %}';
   var csrfEl = document.querySelector('[name=csrfmiddlewaretoken]');
   var csrf = csrfEl ? csrfEl.value : '';
   function getHeaders(method) {
@@ -136,6 +156,36 @@
   }
   var currentConvId = null;
   var currentUserId = {{ user.id|default:0 }};
+  var currentSurveyEditUrl = null;
+  var currentQuoteViewUrl = null;
+  var currentQuotePayUrl = null;
+  var _messagePage = 1;
+  var _hasMoreHistory = false;
+  var _historyLoading = false;
+  var _loadedMessages = [];
+  var _loadedOffers = [];
+  var _messagePageSize = 30;
+  var _pendingNewCount = 0;
+
+  function isNearBottom(box, threshold) {
+    if (!box) return true;
+    var t = threshold == null ? 120 : threshold;
+    return (box.scrollHeight - (box.scrollTop + box.clientHeight)) < t;
+  }
+
+  function updateNewMessageIndicator() {
+    var wrap = document.getElementById('inboxNewMessageIndicator');
+    var btn = document.getElementById('inboxNewMessageBtn');
+    var box = document.getElementById('inboxMessages');
+    if (!wrap || !btn) return;
+    if (_pendingNewCount <= 0 || isNearBottom(box, 60)) {
+      _pendingNewCount = 0;
+      wrap.style.display = 'none';
+      return;
+    }
+    btn.textContent = (t('new_messages') || '새 메시지') + ' ' + _pendingNewCount + '개';
+    wrap.style.display = 'block';
+  }
 
   function readStatusIcon(readByOthers) {
     var cls = readByOthers ? 'read' : 'sent';
@@ -147,11 +197,22 @@
     return '<span class="msg-read-status ' + cls + '" title="' + escapeHtml(title) + '" aria-label="' + escapeHtml(title) + '">' + check + '</span>';
   }
 
+  function normalizeForCompare(s) {
+    return String(s || '')
+      .replace(/\s+/g, ' ')
+      .replace(/[|｜]+/g, '|')
+      .replace(/\s*\|\s*/g, '|')
+      .trim()
+      .toLowerCase();
+  }
   function escapeHtml(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
   function renderActionCards(detail) {
     var el = document.getElementById('inboxActionCards');
     if (!el || window.VIEWER_IS_STAFF) return;
+    el.innerHTML = '';
+    el.style.display = 'none';
+    return;
     var offers = (detail && detail.action_offers) || [];
     var reviewStatus = (detail && detail.review_status) || {};
     var html = [];
@@ -256,7 +317,17 @@
     var pref = (m.viewer_preferred_language || window.VIEWER_PREFERRED_LANGUAGE || 'en');
     var line1 = (m.body_preferred != null ? m.body_preferred : m.body) || '';
     var line2 = (m.body_en != null ? m.body_en : '') || '';
-    var twoLines = (pref !== 'en' && line2 && line2 !== line1);
+    var resumeUrlPattern = /((?:https?:\/\/[^\s]+)?\/settlement\/survey\/\?resume=1[^\s]*)/i;
+    var line1Match = line1.match(resumeUrlPattern);
+    var line2Match = line2.match(resumeUrlPattern);
+    var resumeUrl = '';
+    if (line1Match && line1Match[1]) resumeUrl = line1Match[1];
+    else if (line2Match && line2Match[1]) resumeUrl = line2Match[1];
+    if (resumeUrl) {
+      line1 = line1.replace(resumeUrlPattern, '').replace(/\n{3,}/g, '\n\n').trim();
+      line2 = line2.replace(resumeUrlPattern, '').replace(/\n{3,}/g, '\n\n').trim();
+    }
+    var twoLines = (pref !== 'en' && line2 && normalizeForCompare(line2) !== normalizeForCompare(line1));
     var parts = [];
     if (m.image_url) parts.push('<img src="' + escapeHtml(m.image_url) + '" alt="' + escapeHtml(t('image_alt')) + '" class="msg-image">');
     if (line1 && line1 !== '[사진]') {
@@ -264,8 +335,293 @@
       if (twoLines) parts.push('<div class="msg-body-en" style="margin-top:0.35rem;font-size:0.9em;opacity:0.9;">' + escapeHtml(line2).replace(/\n/g, '<br>') + '</div>');
       parts.push('</div>');
     }
+    if (resumeUrl && !window.VIEWER_IS_STAFF) {
+      var href = resumeUrl;
+      if (href.indexOf('http://') !== 0 && href.indexOf('https://') !== 0) {
+        href = href.charAt(0) === '/' ? href : ('/' + href);
+      }
+      parts.push('<div class="msg-inline-action"><a href="' + escapeHtml(href) + '" class="btn-inline-edit">' + escapeHtml(t('edit_survey') || '설문 수정하기') + '</a></div>');
+    }
     return parts.length ? parts.join('') : '<div class="msg-body-text">' + escapeHtml(line1 || '') + '</div>';
   }
+
+  function quoteInlineActionsHtml(m) {
+    if (window.VIEWER_IS_STAFF) return '';
+    if (!currentQuoteViewUrl && !currentQuotePayUrl) return '';
+    var body = ((m && m.body_preferred) || m.body || '');
+    var isQuoteNotice = /견적|quotation|quote/i.test(body) && /도착|보냈|발송|안내/i.test(body);
+    if (!isQuoteNotice) return '';
+
+    var btns = [];
+    if (currentQuoteViewUrl) {
+      btns.push('<a href="' + escapeHtml(currentQuoteViewUrl) + '" class="btn-inline-edit" style="margin-right:0.4rem;">' + escapeHtml(t('view_quote') || '견적서 보기') + '</a>');
+    }
+    if (currentQuotePayUrl) {
+      btns.push('<a href="' + escapeHtml(currentQuotePayUrl) + '" class="btn-inline-edit">' + escapeHtml(t('pay') || '결제하기') + '</a>');
+    }
+    if (!btns.length) return '';
+    return '<div class="msg-inline-action">' + btns.join('') + '</div>';
+  }
+
+  function messageFeedbackHtml(m) {
+    if (!m || !m.feedback_enabled || !m.feedback_request_id || !m.feedback_message_id) return '';
+    var value = m.feedback_value || '';
+    var upActive = value === 'thumbs_up' ? ' active' : '';
+    var downActive = value === 'thumbs_down' ? ' active' : '';
+    var status = value ? '<span class="msg-feedback-status">' + escapeHtml(t('feedback_thanks') || '피드백 감사합니다.') + '</span>' : '';
+    return '<div class="msg-feedback" data-message-id="' + m.feedback_message_id + '">' +
+      '<button type="button" class="btn-model-feedback' + upActive + '" data-value="thumbs_up" data-request-id="' + escapeHtml(m.feedback_request_id) + '" data-message-id="' + m.feedback_message_id + '" title="' + escapeHtml(t('feedback_helpful') || '도움됐어요') + '" aria-label="' + escapeHtml(t('feedback_helpful') || '도움됐어요') + '"><img class="feedback-icon-img" src="' + FEEDBACK_ICON_UP + '" alt="" aria-hidden="true"></button>' +
+      '<button type="button" class="btn-model-feedback' + downActive + '" data-value="thumbs_down" data-request-id="' + escapeHtml(m.feedback_request_id) + '" data-message-id="' + m.feedback_message_id + '" title="' + escapeHtml(t('feedback_not_helpful') || '아쉬워요') + '" aria-label="' + escapeHtml(t('feedback_not_helpful') || '아쉬워요') + '"><img class="feedback-icon-img" src="' + FEEDBACK_ICON_DOWN + '" alt="" aria-hidden="true"></button>' +
+      status +
+      '</div>';
+  }
+
+  function renderMessageCard(m) {
+    var cls = m.sender_id === currentUserId ? 'mine' : 'theirs';
+    var meta = (m.sender_username || '') + ' · ' + (m.created_at ? m.created_at.replace('T', ' ').slice(0, 16) : '');
+    var readIcon = (m.sender_id === currentUserId && m.read_by_others !== undefined)
+      ? readStatusIcon(m.read_by_others) : '';
+    var inlineEditBtn = '';
+    if (m.feedback_enabled && !window.VIEWER_IS_STAFF && currentSurveyEditUrl) {
+      inlineEditBtn = '<div class="msg-inline-action"><a href="' + escapeHtml(currentSurveyEditUrl) + '" class="btn-inline-edit">' + escapeHtml(t('edit_survey') || '설문 수정하기') + '</a></div>';
+    }
+    var quoteInlineBtns = quoteInlineActionsHtml(m);
+    return '<div class="inbox-msg ' + cls + '">' +
+      '<div>' + messageBodyHtml(m) + '</div>' +
+      inlineEditBtn +
+      quoteInlineBtns +
+      '<div class="msg-meta">' + meta + readIcon + '</div>' +
+      messageFeedbackHtml(m) +
+      '</div>';
+  }
+
+  function dedupeMessagesById(list) {
+    var byId = {};
+    (list || []).forEach(function(m) {
+      if (m && m.id != null) byId[m.id] = m;
+    });
+    return Object.keys(byId).map(function(k) { return byId[k]; }).sort(function(a, b) {
+      var ai = Number(a.id || 0);
+      var bi = Number(b.id || 0);
+      return ai - bi;
+    });
+  }
+
+  function renderTimeline(box, msgs, offers) {
+    var combined = [];
+    (msgs || []).forEach(function(m) { combined.push({ type: 'message', data: m }); });
+    (offers || []).forEach(function(o) {
+      if (o && o.status === 'PENDING' && o.can_execute && (o.button_label || o.button_action_key)) {
+        combined.push({ type: 'action_offer', data: o });
+      }
+    });
+    combined.sort(function(a, b) {
+      var aTime = a.data.created_at || '';
+      var bTime = b.data.created_at || '';
+      var timeCompare = aTime.localeCompare(bTime);
+      if (timeCompare !== 0) return timeCompare;
+      if (a.type === b.type) return 0;
+      return a.type === 'message' ? -1 : 1;
+    });
+
+    box.innerHTML = combined.map(function(item) {
+      if (item.type === 'message') {
+        return renderMessageCard(item.data);
+      }
+      var o = item.data;
+      var bc = o.status === 'EXECUTED' ? 'executed' : (o.status === 'EXPIRED' ? 'expired' : 'pending');
+      var bt = o.status === 'EXECUTED' ? (t('completed') || '처리 완료') : (o.status === 'EXPIRED' ? (t('expired') || '만료') : (t('pending') || '대기'));
+      var ti = (o.title || '').trim() || (t('action_offer') || '안내');
+      var bd = (o.body || '').trim();
+      var showBtn = o.status === 'PENDING' && o.can_execute && (o.button_label || o.button_action_key);
+      var btnHtml = '';
+      if (showBtn && o.proposal_id) {
+        btnHtml = '<div class="action-card-btn">' +
+          '<button type="button" class="btn btn-primary btn-confirm-proposal" data-proposal-id="' + o.proposal_id + '">' + escapeHtml(o.button_label || t('confirm') || '확인') + '</button>' +
+          '<button type="button" class="btn btn-decline-proposal" data-proposal-id="' + o.proposal_id + '">' + escapeHtml(o.decline_label || t('cancel') || '취소') + '</button>' +
+          '</div>';
+      } else if (showBtn) {
+        btnHtml = '<div class="action-card-btn"><button type="button" class="btn btn-primary btn-execute-offer" data-offer-id="' + o.id + '">' + escapeHtml(o.button_label || t('confirm') || '확인') + '</button></div>';
+      }
+      return '<div class="inbox-msg theirs inbox-action-card" data-offer-id="' + (o.id || '') + '">' +
+        '<span class="action-card-badge ' + bc + '">' + escapeHtml(bt) + '</span>' +
+        (ti ? '<div class="action-card-title">' + escapeHtml(ti) + '</div>' : '') +
+        (bd ? '<div class="action-card-body">' + escapeHtml(bd).replace(/\n/g, '<br>') + '</div>' : '') +
+        btnHtml +
+        '<div class="msg-meta">' + (o.created_at ? o.created_at.replace('T', ' ').slice(0, 16) : '') + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function loadOlderMessages() {
+    if (!currentConvId || _historyLoading || !_hasMoreHistory) return;
+    var box = document.getElementById('inboxMessages');
+    if (!box) return;
+
+    _historyLoading = true;
+    var prevHeight = box.scrollHeight;
+    var prevTop = box.scrollTop;
+    var nextPage = _messagePage + 1;
+
+    fetch(API_BASE + '/conversations/' + currentConvId + '/messages/?page=' + nextPage + '&page_size=' + _messagePageSize, {
+      method: 'GET', headers: getHeaders('GET'), credentials: 'same-origin'
+    })
+      .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+      .then(function(res) {
+        if (!res.ok) return;
+        var older = (res.data && res.data.messages) || [];
+        if (!older.length) {
+          _hasMoreHistory = false;
+          return;
+        }
+        _loadedMessages = dedupeMessagesById(older.concat(_loadedMessages));
+        _messagePage = nextPage;
+        _hasMoreHistory = !!res.data.has_more;
+        renderTimeline(box, _loadedMessages, _loadedOffers);
+        var newHeight = box.scrollHeight;
+        box.scrollTop = newHeight - prevHeight + prevTop;
+      })
+      .catch(function() {})
+      .finally(function() { _historyLoading = false; });
+  }
+
+  function setFeedbackUiState(messageId, value) {
+    var wrap = document.querySelector('.msg-feedback[data-message-id="' + messageId + '"]');
+    if (!wrap) return;
+    wrap.querySelectorAll('.btn-model-feedback').forEach(function(btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-value') === value);
+      btn.disabled = false;
+    });
+    var status = wrap.querySelector('.msg-feedback-status');
+    if (!status) {
+      status = document.createElement('span');
+      status.className = 'msg-feedback-status';
+      wrap.appendChild(status);
+    }
+    status.textContent = t('feedback_thanks') || '피드백 감사합니다.';
+  }
+
+  document.addEventListener('click', function(e) {
+    var proposalConfirmBtn = e.target.closest('.btn-confirm-proposal');
+    if (proposalConfirmBtn) {
+      var proposalId = proposalConfirmBtn.getAttribute('data-proposal-id');
+      var proposalRedirect = proposalConfirmBtn.getAttribute('data-redirect-url') || currentSurveyEditUrl || '';
+      if (!proposalId || proposalConfirmBtn.disabled) return;
+      var proposalCard = proposalConfirmBtn.closest('.inbox-action-card');
+      var proposalDeclineBtn = proposalCard ? proposalCard.querySelector('.btn-decline-proposal') : null;
+      proposalConfirmBtn.disabled = true;
+      if (proposalDeclineBtn) proposalDeclineBtn.disabled = true;
+      fetch('/api/settlement/proposal/' + proposalId + '/confirm/', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' },
+        body: '{}'
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (res.ok) {
+            if (proposalRedirect) window.location.href = proposalRedirect;
+            else selectConversation(currentConvId);
+          } else {
+            alert(res.error || (t('execute_failed') || '처리에 실패했습니다.'));
+            proposalConfirmBtn.disabled = false;
+            if (proposalDeclineBtn) proposalDeclineBtn.disabled = false;
+          }
+        })
+        .catch(function() {
+          alert(t('execute_failed') || '처리에 실패했습니다.');
+          proposalConfirmBtn.disabled = false;
+          if (proposalDeclineBtn) proposalDeclineBtn.disabled = false;
+        });
+      return;
+    }
+
+    var proposalDeclineBtn = e.target.closest('.btn-decline-proposal');
+    if (proposalDeclineBtn) {
+      var declineProposalId = proposalDeclineBtn.getAttribute('data-proposal-id');
+      if (!declineProposalId || proposalDeclineBtn.disabled) return;
+      var declineCard = proposalDeclineBtn.closest('.inbox-action-card');
+      var declineConfirmBtn = declineCard ? declineCard.querySelector('.btn-confirm-proposal') : null;
+      proposalDeclineBtn.disabled = true;
+      if (declineConfirmBtn) declineConfirmBtn.disabled = true;
+      fetch('/api/settlement/proposal/' + declineProposalId + '/decline/', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' },
+        body: '{}'
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (res.ok) {
+            selectConversation(currentConvId);
+          } else {
+            alert(res.error || (t('execute_failed') || '처리에 실패했습니다.'));
+            proposalDeclineBtn.disabled = false;
+            if (declineConfirmBtn) declineConfirmBtn.disabled = false;
+          }
+        })
+        .catch(function() {
+          alert(t('execute_failed') || '처리에 실패했습니다.');
+          proposalDeclineBtn.disabled = false;
+          if (declineConfirmBtn) declineConfirmBtn.disabled = false;
+        });
+      return;
+    }
+
+    var offerExecuteBtn = e.target.closest('.btn-execute-offer');
+    if (offerExecuteBtn) {
+      var offerId = offerExecuteBtn.getAttribute('data-offer-id');
+      var offerRedirect = offerExecuteBtn.getAttribute('data-redirect-url') || currentSurveyEditUrl || '';
+      if (!offerId || offerExecuteBtn.disabled) return;
+      offerExecuteBtn.disabled = true;
+      fetch('/api/settlement/action-offer/' + offerId + '/execute/', {
+        method: 'POST',
+        body: new FormData(),
+        credentials: 'same-origin',
+        headers: { 'X-CSRFToken': csrf }
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (res.ok) {
+            if (offerRedirect) window.location.href = offerRedirect;
+            else selectConversation(currentConvId);
+          } else {
+            alert(res.error || (t('execute_failed') || '처리에 실패했습니다.'));
+            offerExecuteBtn.disabled = false;
+          }
+        })
+        .catch(function() {
+          alert(t('execute_failed') || '처리에 실패했습니다.');
+          offerExecuteBtn.disabled = false;
+        });
+      return;
+    }
+
+    var btn = e.target.closest('.btn-model-feedback');
+    if (!btn) return;
+    if (!currentConvId || btn.disabled) return;
+    var requestId = btn.getAttribute('data-request-id') || '';
+    var messageId = btn.getAttribute('data-message-id') || '';
+    var value = btn.getAttribute('data-value') || '';
+    if (!requestId || !messageId || !value) return;
+    var wrap = btn.closest('.msg-feedback');
+    if (wrap) wrap.querySelectorAll('.btn-model-feedback').forEach(function(el) { el.disabled = true; });
+    fetch(API_BASE + '/conversations/' + currentConvId + '/messages/' + messageId + '/feedback/', {
+      method: 'POST',
+      headers: getHeaders('POST'),
+      body: JSON.stringify({ request_id: requestId, value: value }),
+      credentials: 'same-origin',
+    })
+      .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+      .then(function(res) {
+        if (!res.ok) throw new Error((res.data && res.data.error) || (t('execute_failed') || '처리에 실패했습니다.'));
+        setFeedbackUiState(messageId, value);
+      })
+      .catch(function(err) {
+        if (wrap) wrap.querySelectorAll('.btn-model-feedback').forEach(function(el) { el.disabled = false; });
+        alert((err && err.message) || (t('execute_failed') || '처리에 실패했습니다.'));
+      });
+  });
 
   function loadConversations() {
     var ul = document.getElementById('inboxConversations');
@@ -316,6 +672,27 @@
     _lastMsgId = 0;
     currentConvId = convId;
     currentAppointmentId = null;
+    currentSurveyEditUrl = null;
+    currentQuoteViewUrl = null;
+    currentQuotePayUrl = null;
+    _messagePage = 1;
+    _hasMoreHistory = false;
+    _historyLoading = false;
+    _loadedMessages = [];
+    _loadedOffers = [];
+    _pendingNewCount = 0;
+    updateNewMessageIndicator();
+      var box = document.getElementById('inboxMessages');
+    if (box && !box.dataset.historyBound) {
+      box.addEventListener('scroll', function() {
+        if (box.scrollTop <= 60) loadOlderMessages();
+        if (isNearBottom(box, 60)) {
+          _pendingNewCount = 0;
+          updateNewMessageIndicator();
+        }
+      });
+      box.dataset.historyBound = '1';
+    }
     document.querySelectorAll('#inboxConversations li[data-id]').forEach(function(li) {
       li.classList.toggle('active', parseInt(li.dataset.id, 10) === convId);
     });
@@ -339,30 +716,24 @@
     if (quoteActionsEl) quoteActionsEl.style.display = 'none';
     var bottomActionsEl = document.getElementById('inboxBottomActions');
     if (bottomActionsEl) bottomActionsEl.style.display = 'none';
-    document.getElementById('inboxMessages').innerHTML = '<div class="inbox-loading">' + t('loading') + '</div>';
-    function fetchJson(url) {
-      return fetch(url, { method: 'GET', headers: getHeaders('GET'), credentials: 'same-origin' })
-        .then(function(r) {
-          return r.json().then(function(data) { return { ok: r.ok, data: data }; })
-            .catch(function() { return { ok: false, data: { error: null } }; });
-        });
-    }
+    box.innerHTML = '<div class="inbox-loading">' + t('loading') + '</div>';
     Promise.all([
-      fetchJson(API_BASE + '/conversations/' + convId + '/'),
-      fetchJson(API_BASE + '/conversations/' + convId + '/messages/')
+      fetch(API_BASE + '/conversations/' + convId + '/', { method: 'GET', headers: getHeaders('GET'), credentials: 'same-origin' }).then(function(r) {
+        return r.json().then(function(data) {
+          if (!r.ok) throw new Error((data && data.error) || 'failed to load conversation detail');
+          return data;
+        });
+      }),
+      fetch(API_BASE + '/conversations/' + convId + '/messages/?page=1&page_size=' + _messagePageSize, { method: 'GET', headers: getHeaders('GET'), credentials: 'same-origin' }).then(function(r) {
+        return r.json().then(function(data) {
+          if (!r.ok) throw new Error((data && data.error) || 'failed to load conversation messages');
+          return data;
+        });
+      })
     ])
       .then(function(results) {
-        var detailRes = results[0], dataRes = results[1];
-        if (!detailRes.ok) {
-          box.innerHTML = '<p class="text-muted">' + escapeHtml(detailRes.data && detailRes.data.error || t('messages_load_failed')) + '</p>';
-          return;
-        }
-        if (!dataRes.ok) {
-          box.innerHTML = '<p class="text-muted">' + escapeHtml(dataRes.data && dataRes.data.error || t('messages_load_failed')) + '</p>';
-          return;
-        }
-        var detail = detailRes.data;
-        var data = dataRes.data;
+        var detail = results[0];
+        var data = results[1];
         var showBottom = false;
         if (detail.display_title_preferred != null || detail.display_title != null) {
           var pref = detail.viewer_preferred_language || window.VIEWER_PREFERRED_LANGUAGE || 'en';
@@ -389,15 +760,12 @@
           editLink.href = detail.survey_edit_url;
           editLink.textContent = t('edit_survey') || '설문 수정하기';
           document.getElementById('inboxSurveyEditActions').style.display = 'flex';
+          currentSurveyEditUrl = detail.survey_edit_url;
           showBottom = true;
         }
         if (!window.VIEWER_IS_STAFF && detail.show_quote_actions && detail.quote_view_url) {
-          var qView = document.getElementById('inboxQuoteViewLink');
-          var qPay = document.getElementById('inboxQuotePayLink');
-          if (qView) { qView.href = detail.quote_view_url; qView.textContent = t('view_quote') || '견적서 보기'; }
-          if (qPay && detail.quote_payment_url) { qPay.href = detail.quote_payment_url; qPay.textContent = t('pay') || '결제하기'; }
-          if (quoteActionsEl) quoteActionsEl.style.display = 'flex';
-          showBottom = true;
+          currentQuoteViewUrl = detail.quote_view_url;
+          currentQuotePayUrl = detail.quote_payment_url || '';
         }
         if (showBottom && bottomActionsEl) bottomActionsEl.style.display = 'block';
 
@@ -405,56 +773,15 @@
 
         var msgs = data.messages || [];
         var offers = (detail && detail.action_offers) || [];
-        var combined = [];
-        msgs.forEach(function(m) {
-          combined.push({ type: 'message', data: m });
-        });
-        offers.forEach(function(o) {
-          combined.push({ type: 'action_offer', data: o });
-        });
-        // created_at으로 정렬
-        combined.sort(function(a, b) {
-          var aTime = a.type === 'message' ? a.data.created_at : a.data.created_at;
-          var bTime = b.type === 'message' ? b.data.created_at : b.data.created_at;
-          return aTime.localeCompare(bTime);
-        });
-        // 렌더링
-        box.innerHTML = combined.map(function(item) {
-          if (item.type === 'message') {
-            var m = item.data;
-            var cls = m.sender_id === currentUserId ? 'mine' : 'theirs';
-            var meta = m.sender_username + ' · ' + (m.created_at ? m.created_at.replace('T', ' ').slice(0, 16) : '');
-            var readIcon = (m.sender_id === currentUserId && m.read_by_others !== undefined)
-              ? readStatusIcon(m.read_by_others) : '';
-            return '<div class="inbox-msg ' + cls + '">' +
-              '<div>' + messageBodyHtml(m) + '</div>' +
-              '<div class="msg-meta">' + meta + readIcon + '</div></div>';
-          } else {
-            var o = item.data;
-            var bc = o.status === 'EXECUTED' ? 'executed' : (o.status === 'EXPIRED' ? 'expired' : 'pending');
-            var bt = o.status === 'EXECUTED' ? (t('completed') || '처리 완료') : (o.status === 'EXPIRED' ? (t('expired') || '만료') : (t('pending') || '대기'));
-            var ti = (o.title || '').trim() || (t('action_offer') || '안내');
-            var bd = (o.body || '').trim();
-            var showBtn = o.status === 'PENDING' && o.can_execute && (o.button_label || o.button_action_key);
-            var btnHtml = '';
-            if (showBtn && o.proposal_id) {
-              btnHtml = '<div class="action-card-btn">' +
-                '<button type="button" class="btn btn-primary btn-confirm-proposal" data-proposal-id="' + o.proposal_id + '">' + escapeHtml(o.button_label || t('confirm') || '확인') + '</button>' +
-                '<button type="button" class="btn btn-decline-proposal" data-proposal-id="' + o.proposal_id + '">' + escapeHtml(o.decline_label || t('cancel') || '취소') + '</button>' +
-                '</div>';
-            } else if (showBtn) {
-              btnHtml = '<div class="action-card-btn"><button type="button" class="btn btn-primary btn-execute-offer" data-offer-id="' + o.id + '">' + escapeHtml(o.button_label || t('confirm') || '확인') + '</button></div>';
-            }
-            return '<div class="inbox-msg theirs inbox-action-card" data-offer-id="' + (o.id || '') + '">' +
-              '<span class="action-card-badge ' + bc + '">' + escapeHtml(bt) + '</span>' +
-              (ti ? '<div class="action-card-title">' + escapeHtml(ti) + '</div>' : '') +
-              (bd ? '<div class="action-card-body">' + escapeHtml(bd).replace(/\n/g, '<br>') + '</div>' : '') +
-              btnHtml +
-              '<div class="msg-meta">' + (o.created_at ? o.created_at.replace('T', ' ').slice(0, 16) : '') + '</div>' +
-              '</div>';
-          }
-        }).join('');
-        if (msgs.length) _lastMsgId = Math.max.apply(null, msgs.map(function(m) { return m.id; }));
+        _loadedMessages = dedupeMessagesById(msgs);
+        _loadedOffers = offers;
+        _messagePage = Number(data.page || 1);
+        _hasMoreHistory = !!data.has_more;
+        renderTimeline(box, _loadedMessages, _loadedOffers);
+        box.scrollTop = box.scrollHeight;
+        _pendingNewCount = 0;
+        updateNewMessageIndicator();
+        if (_loadedMessages.length) _lastMsgId = Math.max.apply(null, _loadedMessages.map(function(m) { return m.id; }));
         fetch(API_BASE + '/conversations/' + convId + '/read/', { method: 'POST', headers: getHeaders('POST'), body: '{}', credentials: 'same-origin' });
         loadConversations();
         // 초기 로드 완료 후 폴링 시작
@@ -462,7 +789,7 @@
         var pollConvId = convId;
         _pollTimer = setInterval(function() {
           if (currentConvId !== pollConvId) { clearInterval(_pollTimer); _pollTimer = null; return; }
-          fetch(API_BASE + '/conversations/' + pollConvId + '/messages/', {
+          fetch(API_BASE + '/conversations/' + pollConvId + '/messages/?page=1&page_size=' + _messagePageSize, {
             method: 'GET', headers: getHeaders('GET'), credentials: 'same-origin'
           })
             .then(function(r) { return r.json(); })
@@ -472,19 +799,20 @@
               if (!pollMsgs.length) return;
               var latestId = Math.max.apply(null, pollMsgs.map(function(m) { return m.id; }));
               if (latestId <= _lastMsgId) return;
-              _lastMsgId = latestId;
               var pollBox = document.getElementById('inboxMessages');
               if (pollData.viewer_preferred_language) window.VIEWER_PREFERRED_LANGUAGE = pollData.viewer_preferred_language;
-              pollBox.innerHTML = pollMsgs.map(function(m) {
-                var cls = m.sender_id === currentUserId ? 'mine' : 'theirs';
-                var meta = m.sender_username + ' · ' + (m.created_at ? m.created_at.replace('T', ' ').slice(0, 16) : '');
-                var readIcon = (m.sender_id === currentUserId && m.read_by_others !== undefined)
-                  ? readStatusIcon(m.read_by_others) : '';
-                return '<div class="inbox-msg ' + cls + '">' +
-                  '<div>' + messageBodyHtml(m) + '</div>' +
-                  '<div class="msg-meta">' + meta + readIcon + '</div></div>';
-              }).join('');
-              pollBox.scrollTop = pollBox.scrollHeight;
+              var shouldStickBottom = isNearBottom(pollBox, 120);
+              var newMsgs = pollMsgs.filter(function(m) { return Number(m.id || 0) > Number(_lastMsgId || 0); });
+              _loadedMessages = dedupeMessagesById(_loadedMessages.concat(newMsgs));
+              _lastMsgId = latestId;
+              renderTimeline(pollBox, _loadedMessages, _loadedOffers);
+              if (shouldStickBottom) {
+                pollBox.scrollTop = pollBox.scrollHeight;
+                _pendingNewCount = 0;
+              } else {
+                _pendingNewCount += newMsgs.length;
+              }
+              updateNewMessageIndicator();
               fetch(API_BASE + '/conversations/' + pollConvId + '/read/', { method: 'POST', headers: getHeaders('POST'), body: '{}', credentials: 'same-origin' });
               loadConversations();
               refreshActionCards(pollConvId);
@@ -492,7 +820,7 @@
             .catch(function() {});
         }, 5000);
       })
-      .catch(function() { document.getElementById('inboxMessages').innerHTML = '<p class="text-muted">' + t('messages_load_failed') + '</p>'; });
+      .catch(function() { box.innerHTML = '<p class="text-muted">' + t('messages_load_failed') + '</p>'; });
   }
 
   document.getElementById('inboxAppointmentAcceptBtn').addEventListener('click', function() {
@@ -530,15 +858,15 @@
       .then(function(msg) {
         if (msg.id) {
           if (msg.id > _lastMsgId) _lastMsgId = msg.id;
+          _loadedMessages = dedupeMessagesById(_loadedMessages.concat([msg]));
           var box = document.getElementById('inboxMessages');
           var p = box.querySelector('p.text-muted');
           if (p) p.remove();
-          var meta = (msg.sender_username || '') + ' · ' + (msg.created_at ? msg.created_at.replace('T', ' ').slice(0, 16) : '');
-          var readIcon = readStatusIcon(false);
-          box.insertAdjacentHTML('beforeend', '<div class="inbox-msg mine">' +
-            '<div>' + messageBodyHtml(msg) + '</div>' +
-            '<div class="msg-meta">' + meta + readIcon + '</div></div>');
+          msg.read_by_others = false;
+          box.insertAdjacentHTML('beforeend', renderMessageCard(msg));
           box.scrollTop = box.scrollHeight;
+          _pendingNewCount = 0;
+          updateNewMessageIndicator();
           loadConversations();
         } else if (msg.error) alert(msg.error);
       })
@@ -561,15 +889,14 @@
       .then(function(msg) {
         if (msg.id) {
           if (msg.id > _lastMsgId) _lastMsgId = msg.id;
+          _loadedMessages = dedupeMessagesById(_loadedMessages.concat([msg]));
           var box = document.getElementById('inboxMessages');
           var p = box.querySelector('p.text-muted');
           if (p) p.remove();
-          var meta = (msg.sender_username || '') + ' · ' + (msg.created_at ? msg.created_at.replace('T', ' ').slice(0, 16) : '');
-          var readIcon = readStatusIcon(msg.read_by_others === true);
-          box.insertAdjacentHTML('beforeend', '<div class="inbox-msg mine">' +
-            '<div>' + messageBodyHtml(msg) + '</div>' +
-            '<div class="msg-meta">' + meta + readIcon + '</div></div>');
+          box.insertAdjacentHTML('beforeend', renderMessageCard(msg));
           box.scrollTop = box.scrollHeight;
+          _pendingNewCount = 0;
+          updateNewMessageIndicator();
           loadConversations();
           refreshActionCards(currentConvId);
         } else if (msg.error) alert(msg.error);
@@ -619,15 +946,14 @@
         }
         var msg = JSON.parse(xhr.responseText);
         if (msg.id > _lastMsgId) _lastMsgId = msg.id;
+        _loadedMessages = dedupeMessagesById(_loadedMessages.concat([msg]));
         var box = document.getElementById('inboxMessages');
         var p = box.querySelector('p.text-muted');
         if (p) p.remove();
-        var meta = (msg.sender_username || '') + ' · ' + (msg.created_at ? msg.created_at.replace('T', ' ').slice(0, 16) : '');
-        var readIcon = readStatusIcon(msg.read_by_others === true);
-        box.insertAdjacentHTML('beforeend', '<div class="inbox-msg mine">' +
-          '<div>' + messageBodyHtml(msg) + '</div>' +
-          '<div class="msg-meta">' + meta + readIcon + '</div></div>');
+        box.insertAdjacentHTML('beforeend', renderMessageCard(msg));
         box.scrollTop = box.scrollHeight;
+        _pendingNewCount = 0;
+        updateNewMessageIndicator();
         loadConversations();
       };
       xhr.onerror = function() { alert(t('send_failed')); };
@@ -638,6 +964,16 @@
   })();
 
   var openConv = getQueryParam('conversation');
+  var newMessageBtn = document.getElementById('inboxNewMessageBtn');
+  if (newMessageBtn) {
+    newMessageBtn.addEventListener('click', function() {
+      var box = document.getElementById('inboxMessages');
+      if (!box) return;
+      box.scrollTop = box.scrollHeight;
+      _pendingNewCount = 0;
+      updateNewMessageIndicator();
+    });
+  }
   if (openConv) {
     loadConversations().then(function() { selectConversation(parseInt(openConv, 10)); });
   } else {

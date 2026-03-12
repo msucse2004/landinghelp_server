@@ -445,16 +445,30 @@ def send_quote_release_message(quote, language_code='ko'):
         from messaging.models import Message
         lang = payload.get('lang_preferred') or language_code
         subject = _get_display_text('견적서를 보냈습니다', lang)
-        # Notice + short summary + payment link
-        body = _get_display_text('요청하신 정착 서비스 견적을 보냈습니다.', lang)
+        # UCD copy: 핵심 안내만 간결히. 링크는 메시지 본문에 노출하지 않고 UI 버튼으로 제공.
+        body = _get_display_text('요청하신 정착 서비스 견적이 도착했습니다.', lang)
+
+        item_labels = []
+        for item in (getattr(quote, 'items', None) or []):
+            if not isinstance(item, dict):
+                continue
+            label = (item.get('label') or item.get('name') or item.get('code') or '').strip()
+            if label and label not in item_labels:
+                item_labels.append(label)
+        item_preview = ''
+        if item_labels:
+            preview_labels = item_labels[:4]
+            item_preview = ', '.join(preview_labels)
+            if len(item_labels) > len(preview_labels):
+                item_preview += ' +' + str(len(item_labels) - len(preview_labels))
+
         body += '\n\n'
+        if item_preview:
+            body += (_get_display_text('항목', lang) or '항목') + ': ' + item_preview
+            body += '\n'
         body += (_get_display_text('항목 수', lang) or '항목 수') + ': ' + str(payload.get('item_count', 0))
         body += '  |  ' + (_get_display_text('합계', lang) or '합계') + ': $' + f"{payload.get('total_display', 0):,.2f}" + ' USD'
-        body += '\n\n'
-        body += _get_display_text('결제 및 자세한 내용은 아래 링크에서 확인해 주세요.', lang)
-        if payload.get('payment_link'):
-            body += '\n' + payload['payment_link']
-        body += '\n\n' + _get_display_text('추가로 필요한 사항이 있으면 메시지로 문의해 주세요.', lang)
+        body += '\n\n' + _get_display_text('추가 요청이 있으면 메시지로 남겨 주세요.', lang)
         submission = quote.submission
         conv = _get_or_create_shared_conversation(submission, subject_fallback=subject)
         msg = Message(conversation=conv, sender=sender, body=body)

@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass, field
+import uuid
+from dataclasses import dataclass, field, replace
 from typing import Any, Dict, Optional, Tuple
 
 from django.utils import timezone
@@ -47,6 +48,7 @@ class RequestFlowResult:
     policy: Optional[Any] = None
     analysis: Optional[Any] = None            # CustomerRequestIntentAnalysis
     proposal: Optional[Any] = None            # CustomerActionProposal or None
+    request_id: Optional[str] = None
     should_require_user_confirmation: bool = False
     should_route_to_human_review: bool = False
     error: Optional[str] = None
@@ -136,25 +138,22 @@ def _intake_messaging(conversation: Any, message: Any, user: Any) -> RequestCont
 
 def analyze_customer_request(ctx: RequestContext) -> Any:
     """
-    요청 분류. PolicyResult 반환.
+    요청 분류. ClassificationResult 반환.
     - quote 경로이고 이미 LLM 분석(QuoteChangeAnalysis)이 있으면 그 결과를 PolicyResult로 변환해 사용.
     - 그 외에는 classify_customer_request() (Heuristic → Ollama → Gemini) 호출.
     """
     from customer_request_policy import (
+        ClassificationResult,
         Intent,
         RecommendedAction,
         ExecutionMode,
         HumanReviewTarget,
         PolicyResult,
         classify_customer_request,
+        normalize_customer_request_text,
     )
 
     analysis = ctx.extra.get("analysis") if ctx.extra else None
-    if ctx.channel == "customer_quote_revision" and analysis:
-        policy = _policy_from_quote_analysis(analysis, ctx)
-        if policy:
-            ctx.policy_result = policy
-            return policy
 
     context = {
         "channel": ctx.channel,
@@ -170,13 +169,75 @@ def analyze_customer_request(ctx: RequestContext) -> Any:
         context["quote_status"] = getattr(ctx.quote, "status", None)
 
     allow_llm = ctx.channel == "messaging_inbox"
-    policy = classify_customer_request(
+    classification = classify_customer_request(
         ctx.text,
         context=context,
         allow_llm=allow_llm,
     )
+    policy = classification.policy
+
+    if ctx.channel == "customer_quote_revision":
+        selected_primary_page = (getattr(classification, "selected_primary_page", "") or "").strip()
+        if not getattr(policy, "target_section_ids", None) and selected_primary_page:
+            inferred_section_ids = _infer_target_section_ids_from_primary_page(selected_primary_page)
+            if inferred_section_ids:
+                policy = replace(policy, target_section_ids=inferred_section_ids)
+                classification.policy = policy
+
+        if analysis and (not (policy.customer_facing_summary or "").strip()):
+            quote_policy = _policy_from_quote_analysis(analysis, ctx)
+            if quote_policy and (quote_policy.customer_facing_summary or "").strip():
+                policy = replace(policy, customer_facing_summary=quote_policy.customer_facing_summary)
+                classification.policy = policy
+
     ctx.policy_result = policy
-    return policy
+    return classification
+
+
+def _infer_target_section_ids_from_primary_page(selected_primary_page: str) -> Tuple[int, ...]:
+    """추천 1순위 page_key(또는 섹션명)를 SurveySection ID로 변환."""
+    page = (selected_primary_page or "").strip()
+    if not page:
+        return ()
+
+    page_to_section_title = {
+        "applicant_info": "신청자 정보",
+        "household_info": "입국 인원",
+        "region_status": "지역·현황",
+        "entry_purpose_stay": "입국 목적·체류",
+        "service_selection": "희망 서비스",
+        "delivery_preferences": "서비스 진행 방식",
+        "other_requests": "기타 의뢰 내용",
+        "희망 서비스": "희망 서비스",
+        "서비스 진행 방식": "서비스 진행 방식",
+        "신청자 정보": "신청자 정보",
+        "입국 인원": "입국 인원",
+        "지역·현황": "지역·현황",
+        "입국 목적·체류": "입국 목적·체류",
+        "기타 의뢰 내용": "기타 의뢰 내용",
+    }
+
+    title = page_to_section_title.get(page)
+    if not title:
+        return ()
+
+    try:
+        from survey.models import SurveySection
+
+        section = (
+            SurveySection.objects.filter(title=title, is_active=True, is_internal=False)
+            .order_by('display_order', 'id')
+            .first()
+        )
+        if section:
+            return (int(section.id),)
+    except Exception:
+        logger.warning(
+            "_infer_target_section_ids_from_primary_page failed: page=%s",
+            page,
+            exc_info=True,
+        )
+    return ()
 
 
 def _policy_from_quote_analysis(analysis: Any, ctx: RequestContext) -> Optional[Any]:
@@ -233,9 +294,16 @@ def _policy_from_quote_analysis(analysis: Any, ctx: RequestContext) -> Optional[
 # ---------------------------------------------------------------------------
 
 
-def _save_intent_analysis(ctx: RequestContext, policy: Any) -> Any:
-    """PolicyResult → CustomerRequestIntentAnalysis 저장. 항상 새 레코드 생성."""
+def _save_intent_analysis(
+    ctx: RequestContext,
+    policy: Any,
+    *,
+    request_id: Optional[str] = None,
+    classification: Any = None,
+) -> Any:
+    """PolicyResult → CustomerRequestIntentAnalysis 저장. classification이 있으면 정규화 텍스트와 top-k 후보도 저장."""
     from messaging.models import CustomerRequestIntentAnalysis
+    from customer_request_policy import normalize_customer_request_text
 
     source = getattr(policy, "source", "") or ""
     if not source and ctx.channel == "customer_quote_revision":
@@ -246,13 +314,25 @@ def _save_intent_analysis(ctx: RequestContext, policy: Any) -> Any:
         raw_llm = getattr(ctx.extra["analysis"], "raw_llm_output", None)
         if raw_llm:
             raw_output = raw_llm
+    if raw_output is None and classification is not None:
+        raw_output = getattr(classification, "llm_result", None)
+
+    normalized_text = normalize_customer_request_text(ctx.text)
+    route_candidates = {}
+    if classification is not None:
+        normalized_text = (getattr(classification, "normalized_text", "") or normalized_text)[:10000]
+        route_candidates = {
+            "merged_candidates": getattr(classification, "merged_candidates", []) or [],
+            "selected_primary_page": getattr(classification, "selected_primary_page", "") or "",
+            "recommendation_confidence": getattr(classification, "recommendation_confidence", "") or "",
+        }
 
     record = CustomerRequestIntentAnalysis(
         customer=ctx.user,
         conversation=ctx.conversation,
         message=ctx.message,
         original_text=(ctx.text or "")[:10000],
-        normalized_text="",
+        normalized_text=normalized_text,
         predicted_intent=str(getattr(policy, "detected_intent", "")),
         predicted_action=str(getattr(policy, "recommended_action", "")),
         execution_mode=str(getattr(policy, "execution_mode", "")),
@@ -260,6 +340,8 @@ def _save_intent_analysis(ctx: RequestContext, policy: Any) -> Any:
         source=source or "heuristic",
         raw_model_output=raw_output,
         target_section_ids=list(getattr(policy, "target_section_ids", ()) or []),
+        request_id=request_id or None,
+        route_candidates=route_candidates,
     )
     record.save()
     logger.info(
@@ -267,6 +349,27 @@ def _save_intent_analysis(ctx: RequestContext, policy: Any) -> Any:
         record.id, record.predicted_intent, record.source, record.confidence,
     )
     return record
+
+
+def _attach_feedback_target_message(analysis_record: Any, response_message: Any) -> None:
+    if not analysis_record or not response_message:
+        return
+    try:
+        message_id = getattr(response_message, "id", None)
+        if not isinstance(message_id, int):
+            return
+        route_candidates = dict(getattr(analysis_record, "route_candidates", {}) or {})
+        route_candidates["feedback_target_message_id"] = message_id
+        route_candidates["feedback_enabled"] = True
+        analysis_record.route_candidates = route_candidates
+        analysis_record.save(update_fields=["route_candidates"])
+    except Exception:
+        logger.warning(
+            "_attach_feedback_target_message failed: analysis_id=%s message_id=%s",
+            getattr(analysis_record, "id", None),
+            getattr(response_message, "id", None),
+            exc_info=True,
+        )
 
 
 def _build_action_payload(ctx: RequestContext, action_code: str) -> dict:
@@ -437,6 +540,27 @@ def confirm_proposal(proposal_id: int, user: Any) -> Tuple[bool, Optional[str], 
             proposal, "USER_CONFIRMED", actor=user,
             payload=_build_learning_signal(proposal, "confirmed"),
         )
+
+    try:
+        request_id = (getattr(getattr(proposal, "analysis", None), "request_id", None) or "").strip()
+        route_candidates = getattr(getattr(proposal, "analysis", None), "route_candidates", None)
+        route_candidates = route_candidates if isinstance(route_candidates, dict) else {}
+        selected_primary_page = (route_candidates.get("selected_primary_page") or "").strip() or None
+        if request_id:
+            from messaging.feedback_events import log_suggestion_clicked
+
+            log_suggestion_clicked(
+                request_id,
+                user_id=getattr(user, "id", None),
+                survey_submission_id=getattr(proposal, "submission_id", None),
+                page_key=selected_primary_page,
+                clicked_item="proposal_confirm",
+                metadata={
+                    "suggested_page_key": selected_primary_page,
+                },
+            )
+    except Exception:
+        logger.warning("confirm_proposal: suggestion_clicked logging failed proposal_id=%s", proposal_id, exc_info=True)
 
     # Phase 2: 실행 (예외 포함 안전 처리)
     _log_feedback(proposal, "ACTION_STARTED", actor=user)
@@ -1263,6 +1387,7 @@ def build_customer_ui_payload(
             "executed_at": p.executed_at.isoformat() if p.executed_at else None,
             "execution_mode": "AUTO_CONFIRMABLE",
             "created_at": p.analysis.created_at.isoformat() if p.analysis and p.analysis.created_at else None,
+            "request_id": getattr(p.analysis, "request_id", None) or "",
         }
         out["action_offers"].append(item)
         if p.status == CustomerActionProposal.Status.PROPOSED:
@@ -1286,6 +1411,7 @@ def build_customer_ui_payload(
             "can_execute": bool(o.can_execute),
             "executed_at": o.executed_at.isoformat() if o.executed_at else None,
             "execution_mode": "AUTO_CONFIRMABLE",
+            "request_id": "",
         }
         out["action_offers"].append(item)
         if o.status == CustomerActionOffer.Status.PENDING:
@@ -1461,15 +1587,47 @@ def handle_customer_request_flow(
     if not ctx:
         return RequestFlowResult(error="요청을 접수할 수 없습니다.")
 
-    policy = analyze_customer_request(ctx)
+    classification = analyze_customer_request(ctx)
+    if classification is None:
+        return RequestFlowResult(error="요청을 분류할 수 없습니다.")
+    policy = classification.policy
+    request_id = uuid.uuid4().hex
 
-    analysis_record = _save_intent_analysis(ctx, policy)
+    analysis_record = _save_intent_analysis(
+        ctx,
+        policy,
+        request_id=request_id,
+        classification=classification,
+    )
 
     conv = ctx.conversation
     staff_sender = _pick_staff_sender(conv)
     auto_reply_body = (policy.customer_facing_summary or "").strip() or "요청을 확인했습니다. 검토 후 안내드리겠습니다."
 
-    result = RequestFlowResult(ctx=ctx, policy=policy, analysis=analysis_record)
+    result = RequestFlowResult(ctx=ctx, policy=policy, analysis=analysis_record, request_id=request_id)
+
+    try:
+        from messaging.feedback_events import log_message_received, log_route_predicted
+
+        log_message_received(
+            request_id,
+            user_id=getattr(ctx.user, "id", None),
+            survey_submission_id=getattr(ctx.submission, "id", None) if ctx.submission else None,
+            message_text=(ctx.text or "")[:2000],
+        )
+        log_route_predicted(
+            request_id,
+            user_id=getattr(ctx.user, "id", None),
+            survey_submission_id=getattr(ctx.submission, "id", None) if ctx.submission else None,
+            user_message=getattr(classification, "user_message", "") or (ctx.text or ""),
+            heuristic_result=getattr(classification, "heuristic_result", None),
+            llm_result=getattr(classification, "llm_result", None),
+            merged_candidates=getattr(classification, "merged_candidates", None),
+            selected_primary_page=getattr(classification, "selected_primary_page", None),
+            recommendation_confidence=getattr(classification, "recommendation_confidence", None),
+        )
+    except Exception:
+        logger.warning("feedback event logging failed request_id=%s", request_id, exc_info=True)
 
     if policy.execution_mode == ExecutionMode.AUTO_CONFIRMABLE and policy.should_create_action_offer:
         proposal = _create_action_proposal(analysis_record, ctx, policy)
@@ -1484,17 +1642,20 @@ def handle_customer_request_flow(
             result.proposal = proposal
             result.should_require_user_confirmation = True
         if staff_sender:
-            create_customer_auto_reply(conv, auto_reply_body, staff_sender)
+            reply_msg = create_customer_auto_reply(conv, auto_reply_body, staff_sender)
+            _attach_feedback_target_message(analysis_record, reply_msg)
 
     elif policy.execution_mode == ExecutionMode.HUMAN_REVIEW_REQUIRED:
         route_request_for_human_review(ctx, policy)
         result.should_route_to_human_review = True
         if staff_sender:
             body = _human_review_auto_reply_body("RECEIVED", policy)
-            create_customer_auto_reply(conv, body, staff_sender)
+            reply_msg = create_customer_auto_reply(conv, body, staff_sender)
+            _attach_feedback_target_message(analysis_record, reply_msg)
     else:
         if staff_sender:
-            create_customer_auto_reply(conv, auto_reply_body, staff_sender)
+            reply_msg = create_customer_auto_reply(conv, auto_reply_body, staff_sender)
+            _attach_feedback_target_message(analysis_record, reply_msg)
 
     return result
 

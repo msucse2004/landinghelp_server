@@ -100,6 +100,16 @@ Django 백엔드 (설문·견적·메시지·고객 요청 자동 분류·제안
 - **Admin이 설문 재개 승인**  
   Admin 승인 시 즉시 REVISION_REQUESTED. 고객에게 “설문 수정 허용” 메시지 발송. 고객은 별도 수락 없이 「설문 수정하기」만 누르면 편집 페이지로 이동.
 
+### 2.7 설문 수정 학습용 Feedback (request_id · 이벤트 · label)
+
+수정 요청 메시지부터 저장·피드백까지 한 흐름을 **request_id**로 묶어 이벤트를 수집하고, 학습용 label/summary를 생성합니다.
+
+- **이벤트**: `CustomerRequestFeedbackEvent` (message_received, route_predicted, suggestion_clicked, page_viewed, edit_saved, feedback_clicked)
+- **요약**: `CustomerRequestLearningSummary` (request_id 단위 학습 요약·label_quality)
+- **Admin/debug**: `/admin/debug/request-flow/` (목록·상세), `/admin/debug/request-flow/api/?request_id=xxx` (JSON)
+
+**상세 설명·프론트 연동·ML 파이프라인 제안·TODO**는 **[docs/SURVEY_REVISION_LEARNING_FEEDBACK.md](docs/SURVEY_REVISION_LEARNING_FEEDBACK.md)** 참고.
+
 ---
 
 ## 3. 환경 및 실행

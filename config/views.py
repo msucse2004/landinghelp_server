@@ -794,6 +794,30 @@ def submission_review(request, submission_id):
             status=SettlementQuote.Status.DRAFT,
         ).order_by('-updated_at').first()
     )
+    if not quote_draft:
+        latest_revision_base_quote = (
+            SettlementQuote.objects.filter(submission=submission)
+            .exclude(status=SettlementQuote.Status.DRAFT)
+            .order_by('-created_at', '-updated_at')
+            .first()
+        )
+        if latest_revision_base_quote and latest_revision_base_quote.items:
+            cloned_items = []
+            for it in (latest_revision_base_quote.items or []):
+                if not isinstance(it, dict):
+                    continue
+                cloned_items.append({k: v for k, v in it.items() if k not in ('_auto', '_needs_review')})
+            if cloned_items:
+                quote_draft = SettlementQuote.objects.create(
+                    submission=submission,
+                    status=SettlementQuote.Status.DRAFT,
+                    version=(latest_revision_base_quote.version or 1) + 1,
+                    region=latest_revision_base_quote.region or '',
+                    items=cloned_items,
+                    total=latest_revision_base_quote.total or 0,
+                    draft_source='auto',
+                    auto_generated_at=timezone.now(),
+                )
     # 고객 요청 서비스 형태 라벨 (직접 검색 / AI 서비스 / Agent 직접 도움)
     _delivery_labels = {
         'direct_search': '직접 검색',
@@ -833,6 +857,18 @@ def submission_review(request, submission_id):
             'version': quote_draft.version,
         }
     needs_quote_review = any(i.get('needs_review') for i in items_with_flags)
+
+    def _quote_item_codes(quote_obj):
+        out = []
+        if not quote_obj:
+            return out
+        for it in (getattr(quote_obj, 'items', None) or []):
+            if not isinstance(it, dict):
+                continue
+            code = str(it.get('code') or '').strip()
+            if code and code not in out:
+                out.append(code)
+        return out
 
     # 워크플로우 상태
     workflow_status = {
@@ -888,6 +924,23 @@ def submission_review(request, submission_id):
             'version': payment_quote.version,
         }
         quotation_read_only = True
+
+    survey_service_codes = list(dict.fromkeys(list(getattr(submission, 'requested_required_services', None) or []) + list(getattr(submission, 'requested_optional_services', None) or [])))
+    if not survey_service_codes:
+        survey_service_codes = list(request_summary.get('service_codes') or [])
+    compare_quote = quote_draft or payment_quote
+    quote_service_codes = _quote_item_codes(compare_quote)
+    missing_in_survey = [c for c in quote_service_codes if c not in set(survey_service_codes)]
+    missing_in_quote = [c for c in survey_service_codes if c not in set(quote_service_codes)]
+    service_mismatch = {
+        'has_mismatch': bool(missing_in_survey or missing_in_quote),
+        'survey_codes': survey_service_codes,
+        'quote_codes': quote_service_codes,
+        'missing_in_survey': missing_in_survey,
+        'missing_in_quote': missing_in_quote,
+        'missing_in_survey_labels': [get_service_label(c) for c in missing_in_survey],
+        'missing_in_quote_labels': [get_service_label(c) for c in missing_in_quote],
+    }
 
     # 일정 준비도 및 필요 작업 (결제 후)
     scheduling_summary = None
@@ -1019,6 +1072,7 @@ def submission_review(request, submission_id):
     )
     latest_change_analysis = None
     suggested_actions = []
+    latest_customer_revision = None
     if latest_change_request:
         latest_change_analysis = latest_change_request.latest_analysis()
         if latest_change_analysis and getattr(latest_change_analysis, 'extracted_actions', None):
@@ -1031,6 +1085,81 @@ def submission_review(request, submission_id):
                         'service_label': get_service_label(sc) if sc else '',
                         'reason': (a.get('reason') or '')[:300],
                     })
+        changed_items = []
+        ignore_action_codes = {
+            'ROUTE_TO_ADMIN_REVIEW', 'ROUTE_TO_AGENT_REVIEW', 'ROUTE_TO_ADMIN_THEN_AGENT',
+            'REPLY_WITH_INFORMATION', 'REPLY_WITH_STATUS',
+        }
+        action_label_map = {
+            'PROPOSE_ADD_SERVICE': '서비스 추가',
+            'PROPOSE_REMOVE_SERVICE': '서비스 제거',
+            'PROPOSE_CHANGE_SERVICE': '서비스 변경',
+            'OFFER_SURVEY_REOPEN': '설문 항목 수정',
+            'OFFER_SURVEY_RESUME': '설문 재개',
+            'OFFER_QUOTE_REVISION_REQUEST': '견적 항목 수정',
+            'ADD': '서비스 추가',
+            'REMOVE': '서비스 제거',
+            'CHANGE': '서비스 변경',
+        }
+        for a in suggested_actions:
+            raw_action = (a.get('action_type') or '').strip().upper()
+            if not raw_action or raw_action in ignore_action_codes:
+                continue
+            action_text = action_label_map.get(raw_action, '')
+            label = (a.get('service_label') or a.get('service_code') or '').strip()
+            if action_text and label:
+                text = f"{action_text}: {label}"
+            elif action_text:
+                text = action_text
+            else:
+                text = label
+            if text and text not in changed_items:
+                changed_items.append(text)
+
+        hint_texts = [
+            (latest_change_request.customer_message or ''),
+            (getattr(latest_change_analysis, 'normalized_summary', '') if latest_change_analysis else ''),
+            (getattr(latest_change_analysis, 'recommended_next_step', '') if latest_change_analysis else ''),
+        ]
+        merged_hint_text = ' '.join([str(t or '').lower() for t in hint_texts])
+        field_hints = [
+            ('서비스 항목', ('서비스', '희망 서비스', '추가', '삭제', '제거', '변경', 'option')),
+            ('입국 날짜', ('입국', '입국일', 'entry', 'arrival date')),
+            ('출국 날짜', ('출국', '출국일', 'departure date', 'return date')),
+            ('체류 기간', ('체류', '기간', 'stay period', 'duration')),
+            ('인원 수', ('인원', '가구', '동반', 'household')),
+            ('비자 정보', ('비자', 'visa')),
+            ('이름 정보', ('이름', '성명', 'first name', 'last name', '한글 이름')),
+            ('연락처 정보', ('휴대폰', '전화', '이메일', '채팅앱', '카톡', 'whatsapp', 'telegram')),
+            ('거주 국가/도시', ('현재 거주', '국가', '도시', 'state', 'city', 'address')),
+            ('입국 목적/체류 신분', ('입국 목적', '체류 신분', 'purpose', 'status')),
+            ('주거 정보', ('거주 형태', 'housing', 'house', '아파트', '콘도')),
+            ('공항/항공편 정보', ('공항', '항공편', '비행편', '도착 시간', '도착시간', 'flight')),
+            ('픽업 일정', ('픽업', 'pickup', 'pick up')),
+            ('서비스 진행 방식', ('진행 방식', '서비스 방식', 'delivery mode', 'preference')),
+            ('기타 요청 내용', ('기타 요청', 'other request', '추가 요청', '메모')),
+        ]
+        for label, keywords in field_hints:
+            if any(str(k).lower() in merged_hint_text for k in keywords):
+                if label not in changed_items:
+                    changed_items.append(label)
+
+        if not changed_items and latest_change_analysis and getattr(latest_change_analysis, 'extracted_service_codes', None):
+            for code in (latest_change_analysis.extracted_service_codes or []):
+                sc = str(code or '').strip()
+                if not sc:
+                    continue
+                label = get_service_label(sc) or sc
+                if label not in changed_items:
+                    changed_items.append(label)
+        if not changed_items and (latest_change_request.customer_message or '').strip():
+            changed_items.append('고객 원문 기반 수동 확인 필요')
+        latest_customer_revision = {
+            'changed_at': latest_change_request.created_at,
+            'status_label': latest_change_request.get_status_display(),
+            'changed_items': changed_items[:8],
+            'raw_message': (latest_change_request.customer_message or '').strip(),
+        }
     can_reopen_survey = bool(
         latest_change_request and getattr(latest_change_request, 'can_be_reopened_for_survey_edit', lambda: False)()
     )
@@ -1100,12 +1229,14 @@ def submission_review(request, submission_id):
         'quotation_read_only': quotation_read_only,
         'latest_change_request': latest_change_request,
         'latest_change_analysis': latest_change_analysis,
+        'latest_customer_revision': latest_customer_revision,
         'suggested_actions': suggested_actions,
         'can_reopen_survey': can_reopen_survey,
         'can_start_quote_revision': can_start_quote_revision,
         'reopen_status': reopen_status,
         'quote_trail': quote_trail,
         'submission_revision_info': submission_revision_info,
+        'service_mismatch': service_mismatch,
     })
 
 
@@ -1311,6 +1442,23 @@ def submission_review_approve_quote(request, submission_id):
     )
     if not quote:
         messages.error(request, '이 제출에 대한 견적 초안이 없습니다. 먼저 초안을 생성하세요.')
+        return redirect('app_submission_review', submission_id=submission_id)
+
+    survey_service_codes = list(dict.fromkeys(
+        list(getattr(submission, 'requested_required_services', None) or [])
+        + list(getattr(submission, 'requested_optional_services', None) or [])
+    ))
+    quote_service_codes = []
+    for it in (quote.items or []):
+        if not isinstance(it, dict):
+            continue
+        code = str(it.get('code') or '').strip()
+        if code and code not in quote_service_codes:
+            quote_service_codes.append(code)
+    missing_in_survey = [c for c in quote_service_codes if c not in set(survey_service_codes)]
+    missing_in_quote = [c for c in survey_service_codes if c not in set(quote_service_codes)]
+    if missing_in_survey or missing_in_quote:
+        messages.error(request, '설문 서비스 필드와 견적 서비스 항목이 불일치합니다. 불일치를 해소한 뒤 송부해 주세요.')
         return redirect('app_submission_review', submission_id=submission_id)
     # 견적서 폼에서 넘어온 가격(price_0, price_1, ...)이 있으면 먼저 저장
     if quote.items:

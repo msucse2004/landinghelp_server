@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "라벨 정확도 리포트" %} – LifeAI US{% endblock %}
+{% block content %}
+<div class="container" style="max-width: 980px;">
+  <h1 style="margin-top: 0;">{% trans "라벨 정확도 리포트" %}</h1>
+  <p class="text-muted">{% trans "수동 확정 라벨 대비 자동 예측 오차를 집계합니다. (staff 전용)" %}</p>
+
+  <p style="margin-bottom: 1rem;">
+    <a href="{% url 'app_admin_dashboard' %}" class="btn btn-outline">← {% trans "관리자 대시보드" %}</a>
+  </p>
+
+  <div class="card" style="margin-bottom: 1rem;">
+    <form method="get" action="{% url 'app_debug_label_accuracy' %}" style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+      <label for="limit">limit:</label>
+      <input type="number" id="limit" name="limit" min="1" max="200" value="{{ limit }}" style="width: 120px; padding: 0.35rem 0.5rem;">
+      <label for="period">period:</label>
+      <select id="period" name="period" style="padding: 0.35rem 0.5rem;">
+        <option value="all" {% if period == 'all' %}selected{% endif %}>all</option>
+        <option value="7" {% if period == '7' %}selected{% endif %}>7d</option>
+        <option value="30" {% if period == '30' %}selected{% endif %}>30d</option>
+        <option value="90" {% if period == '90' %}selected{% endif %}>90d</option>
+        <option value="custom" {% if period == 'custom' %}selected{% endif %}>custom</option>
+      </select>
+      <label for="days">days:</label>
+      <input type="number" id="days" name="days" min="1" value="{{ days|default:'' }}" style="width: 100px; padding: 0.35rem 0.5rem;">
+      <button type="submit" class="btn btn-primary">{% trans "조회" %}</button>
+      <a href="{% url 'app_debug_label_accuracy_api' %}?limit={{ limit }}&period={{ period|default:'all' }}&days={{ days|default:'' }}" class="btn btn-outline" target="_blank">{% trans "JSON API" %}</a>
+    </form>
+  </div>
+
+  <div class="card" style="margin-bottom: 1rem;">
+    <h2 style="margin-top: 0; font-size: 1.05rem;">{% trans "요약" %}</h2>
+    <p><strong>total_manual_labeled:</strong> {{ report.total_manual_labeled }}</p>
+    <p><strong>period_days:</strong> {{ report.period_days|default:'all' }}</p>
+    <p><strong>page_mismatch_count:</strong> {{ report.page_mismatch_count }}</p>
+    <p><strong>intent_mismatch_count:</strong> {{ report.intent_mismatch_count }}</p>
+  </div>
+
+  <div class="card" style="margin-bottom: 1rem;">
+    <h2 style="margin-top: 0; font-size: 1.05rem;">{% trans "자주 틀린 예측 페이지" %}</h2>
+    {% if report.top_wrong_predicted_pages %}
+    <table style="width:100%; border-collapse: collapse; font-size:0.9rem;">
+      <thead><tr style="border-bottom:2px solid var(--color-border); text-align:left;"><th style="padding:0.4rem;">predicted_page_key</th><th style="padding:0.4rem;">count</th></tr></thead>
+      <tbody>
+      {% for row in report.top_wrong_predicted_pages %}
+      <tr style="border-bottom:1px solid var(--color-border);"><td style="padding:0.4rem;">{{ row.predicted_page_key }}</td><td style="padding:0.4rem;">{{ row.count }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="text-muted">{% trans "데이터 없음" %}</p>{% endif %}
+  </div>
+
+  <div class="card" style="margin-bottom: 1rem;">
+    <h2 style="margin-top: 0; font-size: 1.05rem;">{% trans "자주 틀린 예측 의도" %}</h2>
+    {% if report.top_wrong_predicted_intents %}
+    <table style="width:100%; border-collapse: collapse; font-size:0.9rem;">
+      <thead><tr style="border-bottom:2px solid var(--color-border); text-align:left;"><th style="padding:0.4rem;">predicted_intent</th><th style="padding:0.4rem;">count</th></tr></thead>
+      <tbody>
+      {% for row in report.top_wrong_predicted_intents %}
+      <tr style="border-bottom:1px solid var(--color-border);"><td style="padding:0.4rem;">{{ row.predicted_intent }}</td><td style="padding:0.4rem;">{{ row.count }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="text-muted">{% trans "데이터 없음" %}</p>{% endif %}
+  </div>
+
+  <div class="card" style="margin-bottom: 1rem;">
+    <h2 style="margin-top: 0; font-size: 1.05rem;">{% trans "오분류 page 매핑 (predicted → manual)" %}</h2>
+    {% if report.top_page_mismatch_pairs %}
+    <table style="width:100%; border-collapse: collapse; font-size:0.9rem;">
+      <thead><tr style="border-bottom:2px solid var(--color-border); text-align:left;"><th style="padding:0.4rem;">predicted_page_key</th><th style="padding:0.4rem;">manual_page_key</th><th style="padding:0.4rem;">count</th></tr></thead>
+      <tbody>
+      {% for row in report.top_page_mismatch_pairs %}
+      <tr style="border-bottom:1px solid var(--color-border);"><td style="padding:0.4rem;">{{ row.predicted_page_key }}</td><td style="padding:0.4rem;">{{ row.manual_page_key }}</td><td style="padding:0.4rem;">{{ row.count }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="text-muted">{% trans "데이터 없음" %}</p>{% endif %}
+  </div>
+
+  <div class="card" style="margin-bottom: 1rem;">
+    <h2 style="margin-top: 0; font-size: 1.05rem;">{% trans "오분류 intent 매핑 (predicted → manual)" %}</h2>
+    {% if report.top_intent_mismatch_pairs %}
+    <table style="width:100%; border-collapse: collapse; font-size:0.9rem;">
+      <thead><tr style="border-bottom:2px solid var(--color-border); text-align:left;"><th style="padding:0.4rem;">predicted_intent</th><th style="padding:0.4rem;">manual_intent</th><th style="padding:0.4rem;">count</th></tr></thead>
+      <tbody>
+      {% for row in report.top_intent_mismatch_pairs %}
+      <tr style="border-bottom:1px solid var(--color-border);"><td style="padding:0.4rem;">{{ row.predicted_intent }}</td><td style="padding:0.4rem;">{{ row.manual_intent }}</td><td style="padding:0.4rem;">{{ row.count }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="text-muted">{% trans "데이터 없음" %}</p>{% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -14,6 +14,77 @@ from django.utils import timezone
 from .models import SurveyQuestion, SurveySection, SurveySubmission, SurveySubmissionSectionRequest
 
 
+# ---------------------------------------------------------------------------
+# 학습용 strongest label: 실제 저장된 페이지를 semantic page_key로 기록
+# ---------------------------------------------------------------------------
+
+# 설문 섹션 제목 → 학습/분석용 page_key (여러 수정 페이지를 명시적으로 구분)
+SECTION_TITLE_TO_PAGE_KEY = {
+    "신청자 정보": "applicant_info",
+    "입국 인원": "household_info",
+    "지역·현황": "region_status",
+    "입국 목적·체류": "entry_purpose_stay",
+    "희망 서비스": "service_selection",
+    "서비스 진행 방식": "delivery_preferences",
+    "기타 의뢰 내용": "other_requests",
+}
+
+
+def get_page_key_for_section(section, step):
+    """
+    현재 step의 섹션에 대한 semantic page_key 반환.
+    학습 시 "실제로 어떤 페이지에서 저장했는가"를 strongest label로 쓸 때 사용.
+    """
+    if section and getattr(section, "title", None):
+        key = SECTION_TITLE_TO_PAGE_KEY.get((section.title or "").strip())
+        if key:
+            return key
+    return "step_%s" % (step or 1)
+
+
+def _record_edit_saved(
+    request_id,
+    request,
+    draft,
+    step,
+    step_keys,
+    save_result,
+    page_key=None,
+):
+    """
+    저장 성공/실패 시 edit_saved 이벤트 기록 (공통).
+    request_id가 없으면 기록하지 않음(graceful fallback).
+    """
+    if not request_id or not request_id.strip():
+        return
+    try:
+        from messaging.feedback_events import log_edit_saved
+        if page_key is None:
+            current_section = _get_current_section_for_step(step, draft)
+            page_key = get_page_key_for_section(current_section, step)
+        log_edit_saved(
+            request_id,
+            user_id=getattr(request.user, "id", None) if request.user.is_authenticated else None,
+            survey_submission_id=getattr(draft, "id", None),
+            page_key=page_key,
+            changed_fields=list(step_keys) if step_keys else [],
+            save_result=save_result,
+            entity_type="survey_submission",
+            entity_id=str(getattr(draft, "id", "")),
+            metadata_extra={
+                "changed_entity_type": "survey_submission",
+                "changed_entity_id": str(getattr(draft, "id", "")),
+            },
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(
+            "survey: log_edit_saved failed (non-blocking) request_id=%s step=%s: %s",
+            request_id, step, e,
+            exc_info=True,
+        )
+
+
 def _get_applicant_answers_from_user(user):
     """계정(User)에 있는 신청자 정보만 추출. 설문 키 → 값."""
     if not user or not user.is_authenticated:
@@ -234,6 +305,18 @@ def _compute_agent_selection_context(answers, selected_required, current_section
     return result
 
 
+def _get_request_id_from_request(request):
+    """
+    request_id를 GET → POST → session 순으로 조회.
+    프론트: 설문 수정하기 클릭 시 redirect URL에 ?request_id=xxx 포함 권장.
+    저장/제출 시 POST body에 request_id 넣거나, 진입 시 이미 session에 있으면 유지.
+    """
+    rid = (request.GET.get("request_id") or request.POST.get("request_id") or "").strip()
+    if rid:
+        return rid
+    return request.session.get("survey_request_id") or ""
+
+
 @require_GET
 @ensure_csrf_cookie
 def survey_start(request):
@@ -241,11 +324,23 @@ def survey_start(request):
     GET /settlement/survey/
     우선순위: (1) 로그인 user의 DRAFT/REVISION_REQUESTED가 있으면 resume (2) 없으면 제출 이력 있으면 이미 제출 페이지 (3) 새 설문 step 1.
     ?resume=1: 메시지/대시보드 진입점; 비로그인 시 로그인 후 이 URL로 복귀.
+    ?request_id=xxx: 수정 요청 세션 ID (같은 request_id로 추천 클릭·저장·피드백 이벤트 묶음).
+    ?from=suggestion|manual_navigation|deep_link: 진입 경로 (page_viewed source).
     """
     # 메시지/대시보드의 "설문 다시 수정하기" 링크로 진입 시: 비로그인이면 로그인 유도
     if request.GET.get('resume') and not request.user.is_authenticated:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path(), login_url=None)
+
+    request_id = _get_request_id_from_request(request)
+    if request_id:
+        request.session["survey_request_id"] = request_id
+
+    from_param = (request.GET.get("from") or "").strip() or None
+    if from_param in ("suggestion", "manual_navigation", "deep_link"):
+        request.session["survey_view_source"] = from_param
+    elif from_param:
+        request.session["survey_view_source"] = "deep_link"
 
     draft = _get_or_create_draft(request)
     steps = _get_step_list(draft)
@@ -268,7 +363,15 @@ def survey_start(request):
         else:
             step = min(max(1, draft.current_step), steps[-1] if steps else 1)
             step = step if step in steps else (steps[0] if steps else 1)
-        return redirect(reverse('survey:survey_step', kwargs={'step': step}))
+        url = reverse('survey:survey_step', kwargs={'step': step})
+        q = []
+        if request_id:
+            q.append("request_id=" + request_id)
+        if from_param:
+            q.append("from=" + from_param)
+        if q:
+            url += "?" + "&".join(q)
+        return redirect(url)
 
     # DRAFT 없음: 로그인 사용자면 제출 이력 확인
     if request.user.is_authenticated and _has_submitted_survey(request.user):
@@ -276,13 +379,25 @@ def survey_start(request):
 
     # 새 설문: step 1부터 (제출은 첫 저장 시 생성)
     step = steps[0] if steps else 1
-    return redirect(reverse('survey:survey_step', kwargs={'step': step}))
+    url = reverse('survey:survey_step', kwargs={'step': step})
+    q = []
+    if request_id:
+        q.append("request_id=" + request_id)
+    if from_param:
+        q.append("from=" + from_param)
+    if q:
+        url += "?" + "&".join(q)
+    return redirect(url)
 
 
 @require_GET
 @ensure_csrf_cookie
 def survey_step(request, step):
-    """GET /settlement/survey/step/<n>/ → n단계 폼. 재접속 시 이 단계부터 이어쓰기되도록 current_step 갱신."""
+    """GET /settlement/survey/step/<n>/ → n단계 폼. 재접속 시 이 단계부터 이어쓰기되도록 current_step 갱신. ?request_id= 있으면 세션에 저장·학습 이벤트(page_viewed) 기록."""
+    request_id = _get_request_id_from_request(request)
+    if request_id:
+        request.session["survey_request_id"] = request_id
+
     draft = _get_or_create_draft(request)
     # 로그인 사용자: 초안 없이 이미 제출한 이력만 있으면 새 설문 불가 → 이미 제출 페이지로
     if not draft and request.user.is_authenticated and _has_submitted_survey(request.user):
@@ -290,12 +405,38 @@ def survey_step(request, step):
     steps = _get_step_list(draft)
     if step not in steps:
         step = steps[0] if steps else 1
-        return redirect(reverse('survey:survey_step', kwargs={'step': step}))
+        url = reverse('survey:survey_step', kwargs={'step': step})
+        if request_id:
+            url += '?request_id=' + request_id
+        return redirect(url)
 
     # 로그인/세션 초안이 있으면, 이번에 열어 본 단계까지 진행으로 기록 (재접속 시 이 단계에서 재개)
     if draft and step > getattr(draft, 'current_step', 0):
         draft.current_step = step
         draft.save(update_fields=['current_step', 'updated_at'])
+
+    # 학습용: 페이지 진입 이벤트 (request_id 있을 때만). source로 추천 진입 vs 직접 이동 구분
+    view_source = (request.GET.get("from") or "").strip() or request.session.get("survey_view_source") or "manual_navigation"
+    if request_id and draft:
+        try:
+            from messaging.feedback_events import log_page_viewed
+            current_section = _get_current_section_for_step(step, draft)
+            page_key = get_page_key_for_section(current_section, step)
+            log_page_viewed(
+                request_id,
+                user_id=getattr(request.user, "id", None) if request.user.is_authenticated else None,
+                survey_submission_id=getattr(draft, "id", None),
+                page_key=page_key,
+                source=view_source,
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                "survey: log_page_viewed failed (non-blocking) request_id=%s step=%s: %s",
+                request_id, step, e,
+                exc_info=True,
+            )
+    request.session["survey_view_source"] = "manual_navigation"
 
     questions = _get_questions_for_step(step, draft)
     step_index = steps.index(step) if step in steps else 0
@@ -360,6 +501,7 @@ def survey_step(request, step):
 
     revision_message = getattr(draft, 'revision_requested_message', '') if draft else ''
     progress_pct = round(100 * step / len(steps)) if steps else 0
+    revision_feedback_page_key = get_page_key_for_section(current_section, step) if current_section else ''
     return render(request, 'survey/survey_wizard.html', {
         'step': step,
         'steps': steps,
@@ -373,6 +515,8 @@ def survey_step(request, step):
         'use_cards': use_cards,
         'revision_requested_message': revision_message,
         'is_revision_requested': draft and draft.status == SurveySubmission.Status.REVISION_REQUESTED,
+        'request_id': request_id or '',
+        'revision_feedback_page_key': revision_feedback_page_key,
         'sections_need_update_titles': sections_need_update_titles,
         'locked_section_titles': locked_section_titles,
         'services_by_category': services_by_category,
@@ -551,9 +695,15 @@ def survey_step_save(request, step):
     if email:
         draft.email = email.strip()
     draft.current_step = step
-    draft.save(update_fields=['email', 'answers', 'current_step', 'updated_at', 'preferred_support_mode', 'requested_required_services', 'requested_optional_services'])
 
-    return JsonResponse({'ok': True, 'submission_id': draft.id, 'current_step': draft.current_step})
+    request_id = _get_request_id_from_request(request)
+    try:
+        draft.save(update_fields=['email', 'answers', 'current_step', 'updated_at', 'preferred_support_mode', 'requested_required_services', 'requested_optional_services'])
+        _record_edit_saved(request_id, request, draft, step, step_keys, "success")
+        return JsonResponse({'ok': True, 'submission_id': draft.id, 'current_step': draft.current_step})
+    except Exception as e:
+        _record_edit_saved(request_id, request, draft, step, step_keys, "failure")
+        return JsonResponse({'ok': False, 'error': str(e)[:500]}, status=500)
 
 
 def _log_submission_event(submission, event_type, created_by=None, meta=None):
@@ -598,6 +748,9 @@ def survey_submit(request):
         update_fields.append('user')
     draft.save(update_fields=update_fields)
     request.session.pop('survey_submission_id', None)
+    request_id = _get_request_id_from_request(request)
+    if request_id:
+        request.session.pop("survey_request_id", None)
 
     # reopen 후 재제출: 해당 submission의 CUSTOMER_ACTION_REQUIRED change request → IN_REVIEW (Admin 검토 대기)
     change_request_ids_moved = []
@@ -674,6 +827,60 @@ def survey_submit(request):
         logging.getLogger(__name__).warning("Survey submit notifications failed: %s", e, exc_info=True)
 
     return redirect(reverse('survey:survey_thankyou'))
+
+
+# ---------------------------------------------------------------------------
+# Explicit feedback (수정 관련 사용자 피드백 버튼)
+# ---------------------------------------------------------------------------
+
+FEEDBACK_VALUES = frozenset({"corrected_here", "used_other_page", "could_not_find"})
+
+
+@require_POST
+@ensure_csrf_cookie
+def survey_revision_feedback(request):
+    """
+    POST: 수정 안내 화면에서 사용자가 클릭한 피드백 저장 (feedback_clicked).
+    Body (JSON 또는 form): request_id, value (corrected_here | used_other_page | could_not_find), page_key(선택).
+    """
+    try:
+        if request.content_type and "application/json" in request.content_type:
+            body = json.loads(request.body or "{}")
+        else:
+            body = request.POST.dict()
+        request_id = (body.get("request_id") or "").strip()
+        value = (body.get("value") or "").strip().lower()
+        page_key = (body.get("page_key") or "").strip() or None
+    except (ValueError, TypeError):
+        return JsonResponse({"ok": False, "error": "invalid body"}, status=400)
+
+    if not request_id:
+        return JsonResponse({"ok": False, "error": "request_id required"}, status=400)
+    if value not in FEEDBACK_VALUES:
+        return JsonResponse({"ok": False, "error": "value must be one of: corrected_here, used_other_page, could_not_find"}, status=400)
+
+    draft = _get_or_create_draft(request)
+    survey_submission_id = getattr(draft, "id", None) if draft else None
+    user_id = getattr(request.user, "id", None) if request.user.is_authenticated else None
+
+    try:
+        from messaging.feedback_events import log_feedback_clicked
+        log_feedback_clicked(
+            request_id,
+            value=value,
+            user_id=user_id,
+            survey_submission_id=survey_submission_id,
+            page_key=page_key,
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(
+            "survey_revision_feedback: log_feedback_clicked failed (non-blocking) request_id=%s: %s",
+            request_id, e,
+            exc_info=True,
+        )
+        # 로그 저장 실패가 본 기능(피드백 수신)을 막지 않도록 200 반환
+    return JsonResponse({"ok": True})
 
 
 @require_GET

@@ -1,6 +1,7 @@
 # messaging: 고객↔에이전트 약속 대화, 관리자 공지
 from django.conf import settings
 from django.db import models
+from typing import List
 
 
 class Conversation(models.Model):
@@ -214,11 +215,17 @@ class CustomerRequestIntentAnalysis(models.Model):
 
     class AnalysisSource(models.TextChoices):
         HEURISTIC = 'heuristic', '휴리스틱 규칙'
+        SEMANTIC = 'semantic', '시맨틱 유사도'
+        SEMANTIC_SAFE = 'semantic_safe', '시맨틱 유사도(안전 게이트)'
+        SEMANTIC_LOCAL = 'semantic_local', '시맨틱+로컬 앙상블'
+        SEMANTIC_LOCAL_SAFE = 'semantic_local_safe', '시맨틱+로컬 앙상블(안전 게이트)'
         GEMINI = 'gemini', 'Gemini LLM'
         OLLAMA = 'ollama', 'Ollama LLM'
         STUB = 'stub', 'Stub (미연동)'
         RETRIEVAL = 'retrieval', '검색 기반'
         LOCAL_CLASSIFIER = 'local_classifier', '로컬 분류기'
+        LOCAL_CLASSIFIER_SAFE = 'local_classifier_safe', '로컬 분류기(안전 게이트)'
+        QUOTE_LLM = 'quote_llm', '견적 변경 LLM'
 
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -290,6 +297,21 @@ class CustomerRequestIntentAnalysis(models.Model):
         blank=True,
         verbose_name='대상 설문 섹션',
         help_text='LLM이 분석한 수정 대상 설문 섹션 ID 배열.',
+    )
+    request_id = models.CharField(
+        max_length=64,
+        unique=True,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name='요청 세션 ID',
+        help_text='한 번의 수정 요청 흐름을 묶는 UUID. feedback 이벤트·타임라인 조회용.',
+    )
+    route_candidates = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name='경로 추천 후보',
+        help_text='top-k 후보(merged_candidates), selected_primary_page, recommendation_confidence. 학습·ranking용.',
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -501,3 +523,317 @@ class CustomerActionFeedbackLog(models.Model):
             f'제안#{self.proposal_id} '
             f'{self.get_event_type_display()}'
         )
+
+
+# ---------------------------------------------------------------------------
+# 설문 수정 흐름 학습용 이벤트 로그 (추천 페이지 vs 실제 수정 페이지 추적)
+# ---------------------------------------------------------------------------
+
+
+class CustomerRequestFeedbackEvent(models.Model):
+    """
+    수정 요청 흐름에서 발생하는 이벤트를 학습용 feedback으로 기록.
+
+    - message_received: 사용자 수정 요청 메시지 수신
+    - route_predicted: 휴리스틱/LLM 추천 페이지 예측
+    - suggestion_clicked: 사용자가 추천 항목(설문 수정하기 등) 클릭
+    - page_viewed: 설문 특정 페이지(step/section) 조회
+    - edit_saved: 특정 페이지에서 수정 저장 발생
+    - feedback_clicked: 사용자 피드백 (corrected_here / used_other_page / could_not_find)
+
+    request_id로 동일 요청 흐름의 이벤트를 묶어서 분석·학습에 사용.
+    """
+
+    class EventType(models.TextChoices):
+        MESSAGE_RECEIVED = 'message_received', '메시지 수신'
+        ROUTE_PREDICTED = 'route_predicted', '경로 예측'
+        SUGGESTION_CLICKED = 'suggestion_clicked', '추천 클릭'
+        PAGE_VIEWED = 'page_viewed', '페이지 조회'
+        EDIT_SAVED = 'edit_saved', '수정 저장'
+        FEEDBACK_CLICKED = 'feedback_clicked', '피드백 클릭'
+
+    # feedback_clicked 시 선택 값 (metadata에도 저장 가능)
+    class FeedbackValue(models.TextChoices):
+        CORRECTED_HERE = 'corrected_here', '여기서 수정함'
+        USED_OTHER_PAGE = 'used_other_page', '다른 페이지에서 수정함'
+        COULD_NOT_FIND = 'could_not_find', '찾지 못함'
+        THUMBS_UP = 'thumbs_up', '도움됨'
+        THUMBS_DOWN = 'thumbs_down', '도움 안 됨'
+
+    request_id = models.CharField(
+        max_length=64,
+        db_index=True,
+        verbose_name='요청 흐름 ID',
+        help_text='동일 수정 요청 흐름을 묶는 식별자 (UUID 또는 analysis_id 등).',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='request_feedback_events',
+        verbose_name='사용자',
+    )
+    survey_submission = models.ForeignKey(
+        'survey.SurveySubmission',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='feedback_events',
+        verbose_name='설문 제출',
+    )
+    event_type = models.CharField(
+        max_length=32,
+        choices=EventType.choices,
+        db_index=True,
+        verbose_name='이벤트 유형',
+    )
+    page_key = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+        verbose_name='페이지 키',
+        help_text='step 번호, section id, 또는 페이지 식별자.',
+    )
+    message_text = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name='메시지 텍스트',
+        help_text='message_received 시 원문, 기타 이벤트 시 보조 텍스트.',
+    )
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name='메타데이터',
+        help_text='이벤트별 상세 데이터. route_predicted: heuristic_page, llm_page, top_candidates, final_recommended_pages / edit_saved: changed_fields, save_result, entity_type, entity_id / feedback_clicked: value 등.',
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='발생 시각')
+
+    class Meta:
+        verbose_name = '요청 피드백 이벤트'
+        verbose_name_plural = '요청 피드백 이벤트'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['request_id', 'event_type']),
+            models.Index(fields=['request_id', '-created_at']),
+            models.Index(fields=['survey_submission', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.request_id} / {self.get_event_type_display()} @ {self.created_at}'
+
+
+# ---------------------------------------------------------------------------
+# 학습용 label 요약 (request_id 단위 materialized summary)
+# ---------------------------------------------------------------------------
+
+
+class CustomerRequestLearningSummary(models.Model):
+    """
+    request_id 단위로 이벤트를 집계한 학습용 summary.
+    supervised learning training example 생성용. admin/debug 조회용.
+    """
+    request_id = models.CharField(
+        max_length=64,
+        unique=True,
+        db_index=True,
+        verbose_name='요청 흐름 ID',
+    )
+    summary = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name='학습 요약',
+        help_text='user_message, predicted_primary_page, actual_edit_page, label_quality, positive_labels, negative_labels 등.',
+    )
+    label_quality = models.CharField(
+        max_length=16,
+        db_index=True,
+        blank=True,
+        verbose_name='라벨 품질',
+        help_text='strong | medium | weak',
+    )
+    manual_confirmed_intent = models.CharField(
+        max_length=60,
+        blank=True,
+        db_index=True,
+        verbose_name='관리자 확정 의도',
+        help_text='관리자가 수동으로 확정한 intent. 비어 있으면 자동 라벨 사용.',
+    )
+    manual_confirmed_page_key = models.CharField(
+        max_length=128,
+        blank=True,
+        db_index=True,
+        verbose_name='관리자 확정 페이지 키',
+        help_text='관리자가 수동으로 확정한 정답 페이지 키. 비어 있으면 자동 라벨 사용.',
+    )
+    manual_label_notes = models.TextField(
+        blank=True,
+        verbose_name='수동 라벨 메모',
+        help_text='수동 확정 사유/메모.',
+    )
+    manual_labeled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='manual_labeled_learning_summaries',
+        verbose_name='수동 라벨 담당자',
+    )
+    manual_labeled_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='수동 라벨 시각',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = '요청 학습 요약'
+        verbose_name_plural = '요청 학습 요약'
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['label_quality']),
+        ]
+
+    def __str__(self):
+        return f'{self.request_id} ({self.label_quality})'
+
+    @property
+    def label_source(self) -> str:
+        if (self.manual_confirmed_intent or "").strip() or (self.manual_confirmed_page_key or "").strip():
+            return "manual"
+        return "auto"
+
+    def get_effective_intent(self) -> str:
+        manual_intent = (self.manual_confirmed_intent or "").strip()
+        if manual_intent:
+            return manual_intent
+        summary = self.summary if isinstance(self.summary, dict) else {}
+        return (summary.get("predicted_intent") or "").strip()
+
+    def get_effective_page_keys(self) -> List[str]:
+        manual_page = (self.manual_confirmed_page_key or "").strip()
+        if manual_page:
+            return [manual_page]
+        summary = self.summary if isinstance(self.summary, dict) else {}
+        positives = summary.get("positive_labels")
+        if isinstance(positives, list):
+            return [str(v).strip() for v in positives if str(v).strip()]
+        return []
+
+
+class CustomerRequestManualLabelRevision(models.Model):
+    """
+    관리자 수동 라벨 변경 이력.
+    before/after를 저장해 학습 데이터에서 수정 전/후 신호를 함께 사용할 수 있게 한다.
+    """
+
+    learning_summary = models.ForeignKey(
+        CustomerRequestLearningSummary,
+        on_delete=models.CASCADE,
+        related_name='manual_label_revisions',
+        verbose_name='학습 요약',
+    )
+    request_id = models.CharField(
+        max_length=64,
+        db_index=True,
+        verbose_name='요청 흐름 ID',
+    )
+    before_intent = models.CharField(
+        max_length=60,
+        blank=True,
+        verbose_name='수정 전 확정 의도',
+    )
+    after_intent = models.CharField(
+        max_length=60,
+        blank=True,
+        verbose_name='수정 후 확정 의도',
+    )
+    before_page_key = models.CharField(
+        max_length=128,
+        blank=True,
+        verbose_name='수정 전 확정 페이지 키',
+    )
+    after_page_key = models.CharField(
+        max_length=128,
+        blank=True,
+        verbose_name='수정 후 확정 페이지 키',
+    )
+    before_notes = models.TextField(
+        blank=True,
+        verbose_name='수정 전 메모',
+    )
+    after_notes = models.TextField(
+        blank=True,
+        verbose_name='수정 후 메모',
+    )
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='manual_label_revision_events',
+        verbose_name='변경한 관리자',
+    )
+    changed_at = models.DateTimeField(auto_now_add=True, verbose_name='변경 시각')
+
+    class Meta:
+        verbose_name = '수동 라벨 변경 이력'
+        verbose_name_plural = '수동 라벨 변경 이력'
+        ordering = ['-changed_at']
+        indexes = [
+            models.Index(fields=['request_id', '-changed_at']),
+            models.Index(fields=['learning_summary', '-changed_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.request_id} manual_label_revision @ {self.changed_at}'
+
+
+# ---------------------------------------------------------------------------
+# 페이지 키별 피드백 점수 (추천 경로 보정용 학습 결과)
+# ---------------------------------------------------------------------------
+
+
+class PageKeyFeedbackScore(models.Model):
+    """
+    page_key 단위로 집계된 피드백 점수.
+    rebuild_feedback_scores() 가 CustomerRequestLearningSummary 전체를 집계해 upsert 한다.
+
+    score_boost: [-1, 1] 범위. 양수=추천 정확도 높음, 음수=추천 부정확.
+    classify_customer_request() 의 _merge_candidates() 에서 base score 에 가중치로 적용된다.
+    """
+    page_key = models.CharField(
+        max_length=128,
+        unique=True,
+        db_index=True,
+        verbose_name='페이지 키',
+    )
+    thumbs_up_count = models.PositiveIntegerField(default=0, verbose_name='👍 수')
+    thumbs_down_count = models.PositiveIntegerField(default=0, verbose_name='👎 수')
+    positive_label_count = models.PositiveIntegerField(
+        default=0, verbose_name='positive 라벨 수',
+        help_text='edit_saved success 기반 strong/medium label',
+    )
+    negative_label_count = models.PositiveIntegerField(
+        default=0, verbose_name='negative 라벨 수',
+        help_text='used_other_page 기반 negative label',
+    )
+    total_seen = models.PositiveIntegerField(
+        default=0, verbose_name='예측 총 회수',
+        help_text='이 page_key 가 predicted_primary_page 로 선택된 총 회수',
+    )
+    score_boost = models.FloatField(
+        default=0.0,
+        verbose_name='점수 보정값',
+        help_text='[-1, 1] 범위. 집계 데이터 부족 시 신뢰도 감쇠 적용.',
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = '페이지 키 피드백 점수'
+        verbose_name_plural = '페이지 키 피드백 점수'
+        ordering = ['-score_boost']
+
+    def __str__(self):
+        return f'{self.page_key} (boost={self.score_boost:+.3f})'

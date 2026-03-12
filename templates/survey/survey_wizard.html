@@ -38,6 +38,10 @@
   @keyframes surveyLegRight { 0%, 100% { transform: rotate(28deg); } 50% { transform: rotate(-22deg); } }
   #survey-agent-selection-wrap { display: none; }
   #survey-agent-selection-wrap.survey-agent-wrap-visible { display: block !important; }
+  .revision-feedback-wrap { margin-bottom: 1.25rem; padding: 0.75rem 0; border-top: 1px solid rgba(245,158,11,0.25); }
+  .revision-feedback-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+  .revision-feedback-btn { font-size: 0.8rem; padding: 0.35rem 0.65rem; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; color: #6b7280; cursor: pointer; transition: background 0.15s, color 0.15s; }
+  .revision-feedback-btn:hover { background: #f3f4f6; color: #374151; }
 </style>
 {% endblock %}
 
@@ -106,11 +110,27 @@
       <p style="margin: 0.35rem 0 0; color: var(--color-muted); font-size: 0.9rem;">{% trans "이번에는 수정하지 않습니다 (잠김)" %}: {{ locked_section_titles|join:", " }}</p>
       {% endif %}
     </div>
+    {% if request_id %}
+    <div class="revision-feedback-wrap" id="revision-feedback-wrap" data-request-id="{{ request_id }}" data-page-key="{{ revision_feedback_page_key|default:'' }}" data-feedback-url="{% url 'survey:survey_revision_feedback' %}">
+      <p class="revision-feedback-label" style="margin: 0 0 0.4rem; font-size: 0.85rem; color: var(--color-muted);">{% trans "피드백 (선택)" %}:</p>
+      <div class="revision-feedback-buttons" id="revision-feedback-buttons">
+        <button type="button" class="revision-feedback-btn" data-feedback-value="corrected_here" aria-label="{% trans '여기서 수정했어요' %}">{% trans "여기서 수정했어요" %}</button>
+        <span class="revision-feedback-btn-wrap" data-extension="other-pages">
+          <button type="button" class="revision-feedback-btn" data-feedback-value="used_other_page" data-extension-trigger="other-pages" aria-label="{% trans '다른 페이지에서 했어요' %}">{% trans "다른 페이지에서 했어요" %}</button>
+          {% comment %} 확장: 클릭 시 이 영역에 다른 수정 페이지 링크 목록을 채울 수 있음 (data-extension-placeholder="other-pages") {% endcomment %}
+          <div class="js-feedback-other-pages-links revision-feedback-other-pages" data-extension-placeholder="other-pages" style="display: none; margin-top: 0.5rem;"></div>
+        </span>
+        <button type="button" class="revision-feedback-btn" data-feedback-value="could_not_find" data-fallback-flow="admin_review" aria-label="{% trans '못 찾겠어요' %}">{% trans "못 찾겠어요" %}</button>
+      </div>
+      <p class="revision-feedback-thanks" id="revision-feedback-thanks" style="display: none; margin: 0.35rem 0 0; font-size: 0.9rem; color: var(--color-muted);">{% trans "감사합니다." %}</p>
+    </div>
+    {% endif %}
     {% endif %}
 
     <form id="survey-form" method="post" action="{% url 'survey:survey_step_save' step=step %}">
       {% csrf_token %}
       <input type="hidden" name="email" id="id_email" value="{{ submission.email|default:request.user.email|default:'' }}">
+      {% if request_id %}<input type="hidden" name="request_id" value="{{ request_id }}">{% endif %}
 
       {% for q in questions %}
       {% if q.key != 'airport_pickup_date' and q.key != 'flight_number' and q.key != 'airport_arrival_time' %}
@@ -168,20 +188,19 @@
         </select>
 
         {% elif q.key == 'service_delivery_mode' %}
-        {% comment %} 일괄 vs 서비스별 선택 {% endcomment %}
+        {% comment %} 일괄 vs 서비스별 선택 (필수) {% endcomment %}
         <div class="survey-delivery-mode-options" style="display:flex; flex-direction:column; gap:0.75rem;">
           {% for opt in q.choices %}
           <label class="survey-delivery-option" style="display:flex; align-items:flex-start; gap:0.75rem; padding:1rem 1.25rem; border:2px solid #e5e7eb; border-radius:12px; cursor:pointer; transition: border-color 0.2s, background 0.2s; background:#fff;">
-            <input type="radio" name="{{ q.key }}" value="{{ opt.value|default:opt }}" style="margin-top:0.25rem;" class="js-delivery-mode"
-              {% if answers|get_item:q.key == opt.value or answers|get_item:q.key == opt %}checked{% endif %}
-              {% if q.required %}required{% endif %}>
+            <input type="radio" name="{{ q.key }}" value="{{ opt.value|default:opt }}" style="margin-top:0.25rem;" class="js-delivery-mode" required
+              {% if answers|get_item:q.key == opt.value or answers|get_item:q.key == opt %}checked{% endif %}>
             <span><strong>{{ opt.label|default:opt }}</strong></span>
           </label>
           {% endfor %}
         </div>
         {% elif q.key == 'service_delivery_preference' %}
-        {% comment %} 일괄 적용 시: 직접 검색 / AI / Agent 카드형 선택 {% endcomment %}
-        <div id="service-delivery-bulk-wrap" class="survey-delivery-bulk" style="margin-top:0.5rem;">
+        {% comment %} 일괄 적용 선택 시에만 노출: 직접 검색 / AI / Agent 카드형 선택 {% endcomment %}
+        <div id="service-delivery-bulk-wrap" class="survey-delivery-bulk" style="margin-top:0.5rem; display:none;">
         {% if q.help_text %}<p class="text-muted" style="font-size:0.9rem; margin:0 0 0.75rem;">{{ q.help_text }}</p>{% endif %}
         <div class="survey-delivery-options" style="display:flex; flex-direction:column; gap:0.75rem;">
           {% for opt in q.choices %}
@@ -310,13 +329,27 @@
       {% endif %}
 
       <div class="survey-actions">
+        {% if is_revision_requested %}
         {% if prev_step %}
-        <a href="{% url 'survey:survey_step' step=prev_step %}" class="btn btn-outline">← {% trans "이전" %}</a>
+        <a href="{% url 'survey:survey_step' step=prev_step %}{% if request_id %}?request_id={{ request_id }}{% endif %}" class="btn btn-outline">← {% trans "이전" %}</a>
+        {% else %}
+        <span class="btn btn-outline" style="opacity:0.5; cursor:default; pointer-events:none;">← {% trans "이전" %}</span>
+        {% endif %}
+        {% if next_step %}
+        <button type="button" id="btn-next" class="btn btn-survey-next" data-next="{{ next_step }}">{% trans "다음" %} →</button>
+        {% else %}
+        <span class="btn btn-survey-next" style="opacity:0.5; cursor:default; pointer-events:none;">{% trans "다음" %} →</span>
+        {% endif %}
+        <button type="button" id="btn-submit" class="btn btn-survey-submit">✓ {% trans "최종 제출" %}</button>
+        {% else %}
+        {% if prev_step %}
+        <a href="{% url 'survey:survey_step' step=prev_step %}{% if request_id %}?request_id={{ request_id }}{% endif %}" class="btn btn-outline">← {% trans "이전" %}</a>
         {% endif %}
         {% if next_step %}
         <button type="button" id="btn-next" class="btn btn-survey-next" data-next="{{ next_step }}">{% trans "다음" %} →</button>
         {% else %}
         <button type="button" id="btn-submit" class="btn btn-survey-submit">✓ {% trans "최종 제출" %}</button>
+        {% endif %}
         {% endif %}
       </div>
     </form>
@@ -412,11 +445,19 @@
 
   var bulkWrap = document.getElementById('service-delivery-bulk-wrap');
   var perServiceWrap = document.getElementById('service-delivery-per-service-wrap');
+  var prefFormGroup = form.querySelector('.form-group[data-key="service_delivery_preference"]');
   function toggleDeliveryModeVisibility() {
     var checked = form.querySelector('input[name="service_delivery_mode"]:checked');
     var mode = checked ? checked.value : '';
-    if (bulkWrap) bulkWrap.style.display = mode === 'per_service' ? 'none' : 'block';
+    if (bulkWrap) bulkWrap.style.display = mode === 'bulk' ? 'block' : 'none';
     if (perServiceWrap) perServiceWrap.style.display = mode === 'per_service' ? 'block' : 'none';
+    if (prefFormGroup) prefFormGroup.style.display = mode === 'bulk' ? '' : 'none';
+    var prefRadios = form.querySelectorAll('input[name="service_delivery_preference"]');
+    if (mode === 'bulk') {
+      prefRadios.forEach(function(r) { r.setAttribute('required', 'required'); });
+    } else {
+      prefRadios.forEach(function(r) { r.removeAttribute('required'); });
+    }
   }
   toggleDeliveryModeVisibility();
 
@@ -551,12 +592,18 @@
       .catch(function() { showStatus('저장 중 오류', true); if (cb) cb(true); });
   }
 
+  var requestIdEl = form.querySelector('input[name="request_id"]');
+  var requestId = requestIdEl ? requestIdEl.value : '';
   var btnNext = document.getElementById('btn-next');
   if (btnNext) btnNext.addEventListener('click', function() {
     if (!form.checkValidity()) { form.reportValidity(); return; }
     var next = this.getAttribute('data-next');
     doSave(function(err) {
-      if (!err && next) window.location.href = stepBaseUrl + next + '/';
+      if (!err && next) {
+        var url = stepBaseUrl + next + '/';
+        if (requestId) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'request_id=' + encodeURIComponent(requestId);
+        window.location.href = url;
+      }
     });
   });
 
@@ -566,6 +613,14 @@
   submitForm.style.display = 'none';
   var csrf = document.querySelector('[name=csrfmiddlewaretoken]');
   if (csrf) submitForm.appendChild(csrf.cloneNode(true));
+  var ridInput = form.querySelector('input[name="request_id"]');
+  if (ridInput && ridInput.value) {
+    var r = document.createElement('input');
+    r.type = 'hidden';
+    r.name = 'request_id';
+    r.value = ridInput.value;
+    submitForm.appendChild(r);
+  }
   document.body.appendChild(submitForm);
 
   var btnSubmit = document.getElementById('btn-submit');
@@ -575,6 +630,49 @@
       if (!err) submitForm.submit();
     });
   });
+
+  (function initRevisionFeedback() {
+    var wrap = document.getElementById('revision-feedback-wrap');
+    if (!wrap) return;
+    var buttons = document.getElementById('revision-feedback-buttons');
+    var thanks = document.getElementById('revision-feedback-thanks');
+    var feedbackUrl = wrap.getAttribute('data-feedback-url');
+    var requestId = wrap.getAttribute('data-request-id');
+    var pageKey = wrap.getAttribute('data-page-key') || '';
+    var csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (!feedbackUrl || !requestId || !csrfInput) return;
+    wrap.querySelectorAll('.revision-feedback-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var value = btn.getAttribute('data-feedback-value');
+        if (!value) return;
+        btn.disabled = true;
+        var body = JSON.stringify({ request_id: requestId, value: value, page_key: pageKey || undefined });
+        var req = new XMLHttpRequest();
+        req.open('POST', feedbackUrl);
+        req.setRequestHeader('Content-Type', 'application/json');
+        req.setRequestHeader('X-CSRFToken', csrfInput.value);
+        req.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        req.onload = function() {
+          if (buttons) buttons.style.display = 'none';
+          if (thanks) thanks.style.display = 'block';
+          if (value === 'used_other_page') {
+            var otherLinks = wrap.querySelector('.js-feedback-other-pages-links');
+            if (otherLinks && typeof window.revisionFeedbackShowOtherPages === 'function') {
+              window.revisionFeedbackShowOtherPages(otherLinks, wrap);
+            }
+          }
+          if (value === 'could_not_find') {
+            var fallbackUrl = wrap.getAttribute('data-fallback-url');
+            if (fallbackUrl && typeof window.revisionFeedbackCouldNotFind === 'function') {
+              window.revisionFeedbackCouldNotFind(wrap, fallbackUrl);
+            }
+          }
+        };
+        req.onerror = function() { btn.disabled = false; };
+        req.send(body);
+      });
+    });
+  })();
 
   if (AUTOSAVE_DELAY_MS > 0) {
     form.querySelectorAll('input, textarea, select').forEach(function(el) {

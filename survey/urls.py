@@ -8,5 +8,6 @@ urlpatterns = [
     path('step/<int:step>/save/', views.survey_step_save, name='survey_step_save'),
     path('step/<int:step>/agent-selection-fragment/', views.survey_agent_selection_fragment, name='survey_agent_selection_fragment'),
     path('submit/', views.survey_submit, name='survey_submit'),
+    path('feedback/', views.survey_revision_feedback, name='survey_revision_feedback'),
     path('thankyou/', views.survey_thankyou, name='survey_thankyou'),
 ]

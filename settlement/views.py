@@ -688,14 +688,17 @@ def api_quote_request_revision(request):
     from customer_request_service import handle_customer_request_flow
     from .services_quote_change import serialize_change_request_for_response, serialize_analysis_for_response
 
-    ctx, policy, err = handle_customer_request_flow(
+    flow = handle_customer_request_flow(
         'customer_quote_revision',
         request.user,
         message,
         quote=quote,
     )
-    if err:
-        return JsonResponse({'ok': False, 'error': err}, status=400)
+    if not flow or flow.error:
+        return JsonResponse({'ok': False, 'error': (flow.error if flow else '요청을 접수할 수 없습니다.')}, status=400)
+
+    ctx = flow.ctx
+    policy = flow.policy
     if not ctx:
         return JsonResponse({'ok': False, 'error': '요청을 접수할 수 없습니다.'}, status=400)
 

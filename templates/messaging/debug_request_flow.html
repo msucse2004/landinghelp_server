@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "요청 흐름 디버그" %} – LifeAI US{% endblock %}
+{% block content %}
+<div class="container" style="max-width: 900px;">
+  <h1 style="margin-top: 0;">{% trans "요청 흐름 (request_id) 디버그" %}</h1>
+  <p class="text-muted">{% trans "request_id 기준으로 사용자 이동·수정 결과·추천 품질을 확인합니다. (staff 전용)" %}</p>
+
+  <p style="margin-bottom: 1rem;">
+    <a href="{% url 'app_admin_dashboard' %}" class="btn btn-outline">← {% trans "관리자 대시보드" %}</a>
+  </p>
+
+  <div class="card" style="margin-bottom: 1.5rem;">
+    <form method="get" action="{% url 'app_debug_request_flow' %}" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+      <label for="rid">request_id:</label>
+      <input type="text" id="rid" name="request_id" placeholder="request_id 입력" style="flex: 1; min-width: 200px; padding: 0.4rem 0.6rem;" value="{{ request_id|default:'' }}">
+      <button type="submit" class="btn btn-primary">{% trans "조회" %}</button>
+    </form>
+  </div>
+
+  {% if error %}
+  <div class="card" style="border-color: #dc2626;">
+    <p style="color: #dc2626;">{{ error }} {% if request_id %}(request_id: {{ request_id|truncatechars:24 }}){% endif %}</p>
+  </div>
+  {% endif %}
+
+  {% if detail %}
+  {% comment %} 상세: 타임라인 + 추천/클릭/저장/피드백/추론 결과 {% endcomment %}
+  <div class="card">
+    <h2 style="margin-top: 0; font-size: 1.1rem;">{% trans "요약" %}</h2>
+    <p><strong>request_id:</strong> <code style="font-size: 0.85rem;">{{ detail.request_id }}</code></p>
+    <p><strong>{% trans "사용자 메시지" %}:</strong> {{ detail.user_message|default:"—"|truncatewords:30 }}</p>
+    <p><strong>{% trans "추천 1순위" %}:</strong> {{ detail.selected_primary_page|default:"—" }}</p>
+    {% with inf=detail.inferred %}
+    <p>
+      <strong>{% trans "실제 수정 페이지" %}:</strong>
+      {{ inf.actual_edit_page|default:"—" }}
+      {% if inf.all_edit_saved_pages %}(전체: {{ inf.all_edit_saved_pages|join:", " }}){% endif %}
+    </p>
+    <p>
+      <strong>{% trans "추천 성공" %}:</strong>
+      {% if inf.recommendation_success %}<span style="color: #059669;">예</span>{% else %}<span style="color: #dc2626;">아니오</span>{% endif %}
+      &nbsp;|&nbsp;
+      <strong>{% trans "추천 실패(못 찾겠어요)" %}:</strong>
+      {% if inf.recommendation_failure %}<span style="color: #dc2626;">예</span>{% else %}아니오{% endif %}
+      &nbsp;|&nbsp;
+      <strong>label_quality:</strong> {{ inf.label_quality|default:"—" }}
+    </p>
+    {% endwith %}
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top: 0; font-size: 1.1rem;">{% trans "타임라인 (시간순)" %}</h2>
+    <table style="width:100%; border-collapse: collapse; font-size: 0.9rem;">
+      <thead>
+        <tr style="border-bottom: 2px solid var(--color-border); text-align: left;">
+          <th style="padding: 0.4rem 0.6rem;">{% trans "시각" %}</th>
+          <th style="padding: 0.4rem 0.6rem;">event_type</th>
+          <th style="padding: 0.4rem 0.6rem;">page_key</th>
+          <th style="padding: 0.4rem 0.6rem;">{% trans "요약" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ev in detail.timeline %}
+        <tr style="border-bottom: 1px solid var(--color-border);">
+          <td style="padding: 0.4rem 0.6rem;">{{ ev.at|slice:":19" }}</td>
+          <td style="padding: 0.4rem 0.6rem;"><code>{{ ev.event_type }}</code></td>
+          <td style="padding: 0.4rem 0.6rem;">{{ ev.page_key|default:"—" }}</td>
+          <td style="padding: 0.4rem 0.6rem;">{{ ev.message_preview|default:""|truncatewords:15 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top: 0; font-size: 1.1rem;">{% trans "휴리스틱 / LLM 결과" %}</h2>
+    <p><strong>heuristic_result:</strong> {% if detail.heuristic_result %}<pre style="margin: 0; font-size: 0.8rem; overflow-x: auto;">{{ detail.heuristic_result }}</pre>{% else %}—{% endif %}</p>
+    <p><strong>llm_result:</strong> {% if detail.llm_result %}<pre style="margin: 0; font-size: 0.8rem; overflow-x: auto;">{{ detail.llm_result }}</pre>{% else %}—{% endif %}</p>
+    <p><strong>predicted_candidates:</strong> {% if detail.predicted_candidates %}<pre style="margin: 0; font-size: 0.8rem; overflow-x: auto;">{{ detail.predicted_candidates }}</pre>{% else %}—{% endif %}</p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top: 0; font-size: 1.1rem;">{% trans "suggestion_clicked" %}</h2>
+    {% if detail.suggestion_clicked_list %}
+    <table style="width:100%; border-collapse: collapse; font-size: 0.9rem;">
+      <thead>
+        <tr style="border-bottom: 2px solid var(--color-border);"><th style="padding: 0.4rem;">{% trans "시각" %}</th><th style="padding: 0.4rem;">suggested_page_key</th><th style="padding: 0.4rem;">clicked_item</th></tr>
+      </thead>
+      <tbody>
+        {% for s in detail.suggestion_clicked_list %}
+        <tr style="border-bottom: 1px solid var(--color-border);">
+          <td style="padding: 0.4rem;">{{ s.at|slice:":19" }}</td>
+          <td style="padding: 0.4rem;">{{ s.suggested_page_key|default:"—" }}</td>
+          <td style="padding: 0.4rem;">{{ s.clicked_item|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted">{% trans "없음" %}</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top: 0; font-size: 1.1rem;">{% trans "page_viewed" %}</h2>
+    {% if detail.page_viewed_list %}
+    <table style="width:100%; border-collapse: collapse; font-size: 0.9rem;">
+      <thead>
+        <tr style="border-bottom: 2px solid var(--color-border);"><th style="padding: 0.4rem;">{% trans "시각" %}</th><th style="padding: 0.4rem;">page_key</th><th style="padding: 0.4rem;">source</th></tr>
+      </thead>
+      <tbody>
+        {% for v in detail.page_viewed_list %}
+        <tr style="border-bottom: 1px solid var(--color-border);">
+          <td style="padding: 0.4rem;">{{ v.at|slice:":19" }}</td>
+          <td style="padding: 0.4rem;">{{ v.page_key|default:"—" }}</td>
+          <td style="padding: 0.4rem;">{{ v.source|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted">{% trans "없음" %}</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top: 0; font-size: 1.1rem;">{% trans "edit_saved" %}</h2>
+    {% if detail.edit_saved_list %}
+    <table style="width:100%; border-collapse: collapse; font-size: 0.9rem;">
+      <thead>
+        <tr style="border-bottom: 2px solid var(--color-border);"><th style="padding: 0.4rem;">{% trans "시각" %}</th><th style="padding: 0.4rem;">page_key</th><th style="padding: 0.4rem;">save_result</th></tr>
+      </thead>
+      <tbody>
+        {% for e in detail.edit_saved_list %}
+        <tr style="border-bottom: 1px solid var(--color-border);">
+          <td style="padding: 0.4rem;">{{ e.at|slice:":19" }}</td>
+          <td style="padding: 0.4rem;">{{ e.page_key|default:"—" }}</td>
+          <td style="padding: 0.4rem;">{{ e.save_result|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted">{% trans "없음" %}</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top: 0; font-size: 1.1rem;">{% trans "feedback_clicked" %}</h2>
+    {% if detail.feedback_clicked %}
+    <p>{% trans "시각" %}: {{ detail.feedback_clicked.at|slice:":19" }} &nbsp;|&nbsp; value: <code>{{ detail.feedback_clicked.value }}</code></p>
+    {% else %}
+    <p class="text-muted">{% trans "없음" %}</p>
+    {% endif %}
+  </div>
+
+  <p style="margin-top: 1rem;">
+    <a href="{% url 'app_debug_request_flow' %}" class="btn btn-outline">← {% trans "목록으로" %}</a>
+    <a href="{% url 'app_debug_request_flow_api' %}?request_id={{ detail.request_id }}" class="btn btn-outline" target="_blank">{% trans "JSON API" %}</a>
+  </p>
+  {% else %}
+  {% comment %} 목록: 최근 request_id {% endcomment %}
+  <div class="card">
+    <h2 style="margin-top: 0; font-size: 1.1rem;">{% trans "최근 request_id" %}</h2>
+    {% if recent_ids %}
+    <table style="width:100%; border-collapse: collapse; font-size: 0.9rem;">
+      <thead>
+        <tr style="border-bottom: 2px solid var(--color-border); text-align: left;">
+          <th style="padding: 0.4rem 0.6rem;">request_id</th>
+          <th style="padding: 0.4rem 0.6rem;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rid in recent_ids %}
+        <tr style="border-bottom: 1px solid var(--color-border);">
+          <td style="padding: 0.4rem 0.6rem;"><code style="font-size: 0.8rem;">{{ rid|truncatechars:40 }}</code></td>
+          <td style="padding: 0.4rem 0.6rem;"><a href="?request_id={{ rid }}" class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.85rem;">{% trans "상세" %}</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted">{% trans "최근 이벤트가 없습니다." %}</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -20,6 +20,53 @@ from .models import (
 )
 
 
+def _extract_service_codes_from_quote_items(items):
+    codes = []
+    for it in (items or []):
+        if not isinstance(it, dict):
+            continue
+        code = str(it.get('code') or '').strip()
+        if code and code not in codes:
+            codes.append(code)
+    return codes
+
+
+def _sync_submission_service_fields_from_quote(quote):
+    submission = getattr(quote, 'submission', None)
+    if not submission:
+        return False
+
+    quote_codes = _extract_service_codes_from_quote_items(getattr(quote, 'items', None) or [])
+
+    current_required = list(getattr(submission, 'requested_required_services', None) or [])
+    current_optional = list(getattr(submission, 'requested_optional_services', None) or [])
+    answers = dict(getattr(submission, 'answers', None) or {})
+
+    next_answers = dict(answers)
+    next_answers['requested_required_services'] = quote_codes
+    next_answers['requested_optional_services'] = []
+
+    per_service = next_answers.get('service_delivery_per_service')
+    if isinstance(per_service, dict):
+        next_answers['service_delivery_per_service'] = {
+            k: v for k, v in per_service.items() if k in set(quote_codes)
+        }
+
+    has_changes = (
+        current_required != quote_codes
+        or current_optional != []
+        or answers != next_answers
+    )
+    if not has_changes:
+        return False
+
+    submission.requested_required_services = quote_codes
+    submission.requested_optional_services = []
+    submission.answers = next_answers
+    submission.save(update_fields=['requested_required_services', 'requested_optional_services', 'answers', 'updated_at'])
+    return True
+
+
 class ServiceStatePriceInline(admin.TabularInline):
     model = ServiceStatePrice
     extra = 0
@@ -130,6 +177,7 @@ class SettlementQuoteAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
+        _sync_submission_service_fields_from_quote(obj)
         if obj.status in (SettlementQuote.Status.FINAL_SENT, SettlementQuote.Status.PAID):
             from .quote_approval import finalize_and_send_quote
             finalize_and_send_quote(obj, actor=request.user)

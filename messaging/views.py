@@ -11,6 +11,7 @@ from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils import timezone
 
+from .feedback_events import log_feedback_clicked
 from .models import Conversation, ConversationParticipant, Message, MessageRead, MessageTranslation
 
 
@@ -102,29 +103,92 @@ def _detect_and_translate_to_en(body_text):
     return (detected, body_en or '')
 
 
-def _message_to_dict(msg, request, read_by_others=None):
+def _message_to_dict(msg, request, read_by_others=None, feedback_target=None):
     """
     메시지 객체를 API 응답용 dict로.
     body_preferred: 열람자 선호어 본문 (첫 줄).
     body_en: 영어 본문 (선호어가 영어가 아니면 둘째 줄).
     viewer_preferred_language: 열람자 선호어 (영어면 한 줄만 표시).
     """
-    body_pref, body_en, pref_lang = _get_message_body_for_viewer(msg, request.user)
+    try:
+        body_pref, body_en, pref_lang = _get_message_body_for_viewer(msg, request.user)
+    except Exception:
+        body = msg.body or ''
+        body_en = getattr(msg, 'body_en', '') or body
+        body_pref, pref_lang = body, (getattr(request.user, 'preferred_language', None) or '').strip() or 'en'
+    sender = getattr(msg, 'sender', None)
+    sender_username = (getattr(sender, 'username', None) if sender else None) or str(msg.sender_id) if msg.sender_id else '?'
+    image_url = None
+    if getattr(msg, 'image', None):
+        try:
+            image_url = request.build_absolute_uri(msg.image.url)
+        except Exception:
+            pass
     d = {
         'id': msg.id,
         'sender_id': msg.sender_id,
-        'sender_username': msg.sender.username,
+        'sender_username': sender_username,
         'body': msg.body or '',
         'body_preferred': body_pref,
         'body_en': body_en,
         'viewer_preferred_language': pref_lang,
         'detected_lang': getattr(msg, 'detected_lang', '') or '',
         'created_at': msg.created_at.isoformat(),
-        'image_url': request.build_absolute_uri(msg.image.url) if msg.image else None,
+        'image_url': image_url,
     }
     if read_by_others is not None:
         d['read_by_others'] = read_by_others
+    if feedback_target:
+        d['feedback_enabled'] = bool(feedback_target.get('enabled'))
+        d['feedback_request_id'] = feedback_target.get('request_id') or ''
+        d['feedback_message_id'] = feedback_target.get('message_id') or msg.id
+        d['feedback_value'] = feedback_target.get('value') or ''
     return d
+
+
+def _get_model_result_feedback_targets(conversation, message_ids):
+    from .models import CustomerRequestFeedbackEvent, CustomerRequestIntentAnalysis
+
+    if not conversation or not message_ids:
+        return {}
+
+    message_id_set = set(message_ids)
+    by_message_id = {}
+    request_ids = []
+    analyses = (
+        CustomerRequestIntentAnalysis.objects
+        .filter(conversation=conversation, request_id__isnull=False)
+        .order_by('-created_at')
+    )
+    for analysis in analyses:
+        route_candidates = analysis.route_candidates if isinstance(analysis.route_candidates, dict) else {}
+        feedback_target_message_id = route_candidates.get('feedback_target_message_id')
+        if feedback_target_message_id in message_id_set and feedback_target_message_id not in by_message_id:
+            by_message_id[feedback_target_message_id] = {
+                'enabled': True,
+                'message_id': feedback_target_message_id,
+                'request_id': analysis.request_id,
+            }
+            request_ids.append(analysis.request_id)
+
+    latest_feedback_by_request = {}
+    if request_ids:
+        events = (
+            CustomerRequestFeedbackEvent.objects
+            .filter(request_id__in=request_ids, event_type=CustomerRequestFeedbackEvent.EventType.FEEDBACK_CLICKED)
+            .order_by('request_id', '-created_at')
+        )
+        for event in events:
+            if event.request_id in latest_feedback_by_request:
+                continue
+            metadata = event.metadata if isinstance(event.metadata, dict) else {}
+            if (metadata.get('source') or '').strip() != 'model_result_message':
+                continue
+            latest_feedback_by_request[event.request_id] = (metadata.get('value') or '').strip()
+
+    for payload in by_message_id.values():
+        payload['value'] = latest_feedback_by_request.get(payload['request_id'], '')
+    return by_message_id
 
 
 def _user_conversations(user):
@@ -186,6 +250,9 @@ def inbox(request):
         'confirm': get_display_text('확인', lang),
         'cancel': get_display_text('취소', lang),
         'execute_failed': get_display_text('처리에 실패했습니다.', lang),
+        'feedback_helpful': get_display_text('도움됐어요', lang),
+        'feedback_not_helpful': get_display_text('아쉬워요', lang),
+        'feedback_thanks': get_display_text('피드백 감사합니다.', lang),
     }
     # 메시지함 페이지에서는 팝업 절대 표시하지 않음 (context processor에서 체크)
     request._suppress_message_popup = True
@@ -441,16 +508,18 @@ def api_conversation_messages(request, conversation_id):
         MessageRead.objects.get_or_create(message=msg, user=user)
         conv.updated_at = timezone.now()
         conv.save(update_fields=['updated_at'])
+        flow_request_id = None
         try:
             if not getattr(user, 'is_staff', False):
                 from customer_request_service import handle_customer_request_flow
-                handle_customer_request_flow(
+                result = handle_customer_request_flow(
                     'messaging_inbox',
                     user,
                     msg.body or '',
                     conversation=conv,
                     message=msg,
                 )
+                flow_request_id = getattr(result, 'request_id', None)
         except Exception as e:
             import logging
             logging.getLogger(__name__).warning(
@@ -469,6 +538,8 @@ def api_conversation_messages(request, conversation_id):
             except Exception:
                 pass
         out = _message_to_dict(msg, request, read_by_others=False)
+        if flow_request_id:
+            out['request_id'] = flow_request_id
         return JsonResponse(out, status=201)
 
     page = int(request.GET.get('page', 1))
@@ -480,6 +551,7 @@ def api_conversation_messages(request, conversation_id):
         if has_more:
             msgs = msgs[:page_size]
         msgs = list(reversed(msgs))
+        feedback_targets = _get_model_result_feedback_targets(conv, [m.id for m in msgs])
         read_ids = set(
             MessageRead.objects.filter(message__in=msgs, user=user).values_list('message_id', flat=True)
         )
@@ -503,13 +575,47 @@ def api_conversation_messages(request, conversation_id):
 
         out = []
         for m in msgs:
-            if m.sender_id == user.id:
-                read_by_others = read_by_other.get(m.id, False) if other_user_ids else True
-            else:
-                read_by_others = True  # 상대 메시지는 읽음 표시 없음
-            item = _message_to_dict(m, request, read_by_others=read_by_others)
-            item['read'] = m.id in read_ids or m.sender_id == user.id
-            out.append(item)
+            try:
+                if m.sender_id == user.id:
+                    read_by_others = read_by_other.get(m.id, False) if other_user_ids else True
+                else:
+                    read_by_others = True  # 상대 메시지는 읽음 표시 없음
+                item = _message_to_dict(
+                    m,
+                    request,
+                    read_by_others=read_by_others,
+                    feedback_target=feedback_targets.get(m.id),
+                )
+                item['read'] = m.id in read_ids or m.sender_id == user.id
+                out.append(item)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(
+                    'api_conversation_messages: skip message id=%s: %s', getattr(m, 'id', None), e,
+                    exc_info=True,
+                )
+                # 최소한의 dict로 추가해 목록은 반환
+                try:
+                    out.append({
+                        'id': m.id,
+                        'sender_id': m.sender_id,
+                        'sender_username': getattr(m.sender, 'username', None) if getattr(m, 'sender', None) else str(m.sender_id or '?'),
+                        'body': (m.body or '')[:500],
+                        'body_preferred': m.body or '',
+                        'body_en': getattr(m, 'body_en', None) or m.body or '',
+                        'viewer_preferred_language': (getattr(user, 'preferred_language', None) or '').strip() or 'en',
+                        'detected_lang': getattr(m, 'detected_lang', '') or '',
+                        'created_at': m.created_at.isoformat() if m.created_at else '',
+                        'image_url': None,
+                        'read': m.id in read_ids or m.sender_id == user.id,
+                        'read_by_others': True,
+                        'feedback_enabled': False,
+                        'feedback_request_id': '',
+                        'feedback_message_id': m.id,
+                        'feedback_value': '',
+                    })
+                except Exception:
+                    pass
         viewer_preferred_language = (getattr(user, 'preferred_language', None) or '').strip() or 'en'
         return JsonResponse({
             'messages': out,
@@ -520,8 +626,11 @@ def api_conversation_messages(request, conversation_id):
     except Exception as e:
         import logging
         logging.getLogger(__name__).exception('api_conversation_messages GET failed: %s', e)
+        err_msg = str(e).strip() if e else ''
+        if not err_msg:
+            err_msg = getattr(e, 'message', None) or '메시지를 불러올 수 없습니다.'
         return JsonResponse(
-            {'error': getattr(e, 'message', str(e)) or '메시지를 불러올 수 없습니다.'},
+            {'error': err_msg or '메시지를 불러올 수 없습니다.'},
             status=500,
         )
 
@@ -571,6 +680,60 @@ def api_unread_count(request):
         read_by__user=user
     ).count()
     return JsonResponse({'unread_count': count})
+
+
+@require_POST
+@ensure_csrf_cookie
+@login_required
+def api_message_feedback(request, conversation_id, message_id):
+    user = request.user
+    if not ConversationParticipant.objects.filter(conversation_id=conversation_id, user=user).exists():
+        return JsonResponse({'error': '권한이 없습니다.'}, status=403)
+
+    try:
+        conv = Conversation.objects.get(pk=conversation_id)
+        msg = Message.objects.get(pk=message_id, conversation=conv)
+    except Conversation.DoesNotExist:
+        return JsonResponse({'error': '대화를 찾을 수 없습니다.'}, status=404)
+    except Message.DoesNotExist:
+        return JsonResponse({'error': '메시지를 찾을 수 없습니다.'}, status=404)
+
+    try:
+        data = json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        return JsonResponse({'error': 'JSON 형식이 올바르지 않습니다.'}, status=400)
+
+    request_id = (data.get('request_id') or '').strip()
+    value = (data.get('value') or '').strip()
+    valid_values = {
+        'thumbs_up',
+        'thumbs_down',
+    }
+    if not request_id:
+        return JsonResponse({'error': 'request_id가 필요합니다.'}, status=400)
+    if value not in valid_values:
+        return JsonResponse({'error': '유효하지 않은 feedback value 입니다.'}, status=400)
+
+    feedback_targets = _get_model_result_feedback_targets(conv, [msg.id])
+    target = feedback_targets.get(msg.id)
+    if not target or target.get('request_id') != request_id:
+        return JsonResponse({'error': '피드백 대상 메시지가 아닙니다.'}, status=400)
+
+    log_feedback_clicked(
+        request_id,
+        value,
+        user_id=user.id,
+        metadata_extra={
+            'source': 'model_result_message',
+            'message_id': msg.id,
+        },
+    )
+    return JsonResponse({
+        'ok': True,
+        'message_id': msg.id,
+        'request_id': request_id,
+        'value': value,
+    })
 
 
 @require_POST
@@ -763,3 +926,171 @@ def api_conversation_detail(request, conversation_id):
             {'error': getattr(e, 'message', str(e)) or '대화 정보를 불러올 수 없습니다.'},
             status=500,
         )
+
+
+# ---------------------------------------------------------------------------
+# Admin/Debug: 학습용 label summary 조회 (internal)
+# ---------------------------------------------------------------------------
+
+
+from django.contrib.admin.views.decorators import staff_member_required
+
+
+@require_GET
+@staff_member_required
+def api_learning_summary(request):
+    """
+    GET ?request_id=xxx → 해당 request_id의 학습용 summary JSON 반환.
+    staff 전용. summary가 DB에 없으면 이벤트로부터 생성 후 반환(및 저장).
+    """
+    request_id = (request.GET.get("request_id") or "").strip()
+    if not request_id:
+        return JsonResponse({"error": "request_id required"}, status=400)
+    from .learning_labels import get_or_build_learning_summary
+    summary = get_or_build_learning_summary(request_id, save=True)
+    if not summary:
+        return JsonResponse({"error": "no events for request_id", "request_id": request_id}, status=404)
+    return JsonResponse(summary)
+
+
+@require_GET
+@staff_member_required
+def api_request_flow_detail(request):
+    """
+    GET ?request_id=xxx → 해당 request_id의 디버그용 상세 흐름 JSON.
+    타임라인, 휴리스틱/LLM 결과, 추천 후보, 클릭/조회/저장/피드백 목록, 추천 성공 여부.
+    """
+    request_id = (request.GET.get("request_id") or "").strip()
+    if not request_id:
+        return JsonResponse({"error": "request_id required"}, status=400)
+    from .learning_labels import build_request_flow_detail
+    detail = build_request_flow_detail(request_id)
+    if not detail:
+        return JsonResponse({"error": "no events for request_id", "request_id": request_id}, status=404)
+    return JsonResponse(detail)
+
+
+@require_GET
+@staff_member_required
+def debug_request_flow_page(request):
+    """
+    GET: request_id 없으면 최근 request_id 목록. ?request_id=xxx 있으면 해당 흐름 상세(타임라인).
+    staff 전용. 운영자가 추천 품질 확인용.
+    """
+    from .learning_labels import build_request_flow_detail
+
+    request_id = (request.GET.get("request_id") or "").strip()
+    if request_id:
+        detail = build_request_flow_detail(request_id)
+        if not detail:
+            return render(
+                request,
+                "messaging/debug_request_flow.html",
+                {"error": "no events", "request_id": request_id, "recent_ids": _recent_request_ids()},
+            )
+        return render(
+            request,
+            "messaging/debug_request_flow.html",
+            {"detail": detail, "request_id": request_id},
+        )
+
+    recent = _recent_request_ids()
+    return render(
+        request,
+        "messaging/debug_request_flow.html",
+        {"recent_ids": recent, "detail": None},
+    )
+
+
+def _recent_request_ids(limit=50):
+    """최근 이벤트가 있는 request_id 목록 (최신순)."""
+    from django.db.models import Max
+    from .models import CustomerRequestFeedbackEvent
+    qs = (
+        CustomerRequestFeedbackEvent.objects
+        .values("request_id")
+        .annotate(latest=Max("created_at"))
+        .order_by("-latest")[:limit]
+    )
+    return [r["request_id"] for r in qs]
+
+
+def _parse_label_accuracy_period(period_raw: str, days_raw: str):
+    period = (period_raw or "all").strip().lower()
+    days_text = (days_raw or "").strip()
+
+    if period == "all":
+        return period, None, None
+
+    if period == "custom":
+        try:
+            days = int(days_text)
+            if days <= 0:
+                raise ValueError
+        except ValueError:
+            return None, None, "days must be a positive integer when period=custom"
+        return period, days, None
+
+    try:
+        days = int(period)
+        if days <= 0:
+            raise ValueError
+    except ValueError:
+        return None, None, "period must be one of: all, 7, 30, 90, custom"
+    return period, days, None
+
+
+@require_GET
+@staff_member_required
+def api_label_accuracy_report(request):
+    """
+    GET ?limit=20 → 수동 확정 라벨 대비 자동 예측 오차 집계 JSON.
+    staff 전용.
+    """
+    from .learning_labels import build_manual_label_accuracy_report
+
+    limit = request.GET.get("limit") or "20"
+    period_raw = request.GET.get("period") or "all"
+    days_raw = request.GET.get("days") or ""
+    try:
+        cap = max(1, int(limit))
+    except ValueError:
+        return JsonResponse({"error": "limit must be integer"}, status=400)
+    period, days, period_error = _parse_label_accuracy_period(period_raw, days_raw)
+    if period_error:
+        return JsonResponse({"error": period_error}, status=400)
+    return JsonResponse(build_manual_label_accuracy_report(limit=cap, days=days))
+
+
+@require_GET
+@staff_member_required
+def debug_label_accuracy_page(request):
+    """
+    staff 전용: 수동 확정 라벨 기반 예측 오차 리포트 페이지.
+    """
+    from .learning_labels import build_manual_label_accuracy_report
+
+    limit = request.GET.get("limit") or "20"
+    period_raw = request.GET.get("period") or "all"
+    days_raw = request.GET.get("days") or ""
+    try:
+        cap = max(1, int(limit))
+    except ValueError:
+        cap = 20
+    period, days, period_error = _parse_label_accuracy_period(period_raw, days_raw)
+    if period_error:
+        period = "all"
+        days = None
+        days_raw = ""
+
+    report = build_manual_label_accuracy_report(limit=cap, days=days)
+    return render(
+        request,
+        "messaging/debug_label_accuracy.html",
+        {
+            "limit": cap,
+            "period": period,
+            "days": days_raw,
+            "report": report,
+        },
+    )

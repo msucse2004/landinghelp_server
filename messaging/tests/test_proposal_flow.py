@@ -193,7 +193,7 @@ class HeuristicClassificationTests(TestCase):
     def test_high_confidence_heuristic_skips_llm(self, mock_gemini, mock_ollama):
         """4. heuristic confidence 높으면 LLM 호출 안 함."""
         result = classify_customer_request("서비스를 변경하고 싶어요", allow_llm=True)
-        self.assertEqual(result.detected_intent, Intent.SURVEY_REOPEN_REQUEST)
+        self.assertEqual(result.policy.detected_intent, Intent.SURVEY_REOPEN_REQUEST)
         mock_ollama.assert_not_called()
         mock_gemini.assert_not_called()
 
@@ -224,8 +224,8 @@ class LLMEscalationTests(TestCase):
         )
         result = classify_customer_request("좀 다른 걸로 바꾸고 싶은데요", allow_llm=True)
         mock_ollama.assert_called_once()
-        self.assertEqual(result.detected_intent, Intent.SURVEY_REOPEN_REQUEST)
-        self.assertEqual(result.source, "ollama")
+        self.assertEqual(result.policy.detected_intent, Intent.SURVEY_REOPEN_REQUEST)
+        self.assertEqual(result.policy.source, "ollama")
 
 
 # =========================================================================

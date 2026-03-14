@@ -98,6 +98,10 @@ def _get_applicant_answers_from_user(user):
         out['email'] = (user.email or '').strip()
     if getattr(user, 'gender', None) and user.gender in ('M', 'F'):
         out['gender'] = user.gender
+    if getattr(user, 'birth_date', None):
+        out['birth_date'] = str(user.birth_date)  # 'YYYY-MM-DD'
+    if getattr(user, 'phone', None) and (user.phone or '').strip():
+        out['phone'] = user.phone.strip()
     return {k: v for k, v in out.items() if v}
 
 
@@ -136,28 +140,88 @@ def _get_pending_section_requests(submission):
     )
 
 
+def _ensure_section_requests_for_revision(draft):
+    """
+    REVISION_REQUESTED 상태인데 pending section requests가 없을 때,
+    가장 최근 reopen_survey 제안의 분석 결과에서 section requests를 복구 생성.
+    (이전 버전에서 생성 누락된 경우 대응)
+    """
+    if not draft or draft.status != SurveySubmission.Status.REVISION_REQUESTED:
+        return
+    existing = SurveySubmissionSectionRequest.objects.filter(
+        submission=draft, resolved_at__isnull=True,
+    ).exists()
+    if existing:
+        return
+    try:
+        from messaging.models import CustomerActionProposal
+        from customer_request_service import _infer_target_section_ids_from_primary_page, _create_section_requests_for_submission
+        prop = (
+            CustomerActionProposal.objects
+            .filter(submission=draft, action_code='reopen_survey')
+            .select_related('analysis')
+            .order_by('-created_at')
+            .first()
+        )
+        if not prop or not prop.analysis:
+            return
+        # 1순위: action_payload
+        target_ids = []
+        ap = prop.action_payload or {}
+        if isinstance(ap, dict):
+            raw = ap.get('target_section_ids') or []
+            if isinstance(raw, list):
+                target_ids = [int(v) for v in raw if str(v).isdigit()]
+        # 2순위: route_candidates.selected_primary_page
+        if not target_ids:
+            rc = prop.analysis.route_candidates or {}
+            page = (rc.get('selected_primary_page') or '').strip()
+            if page:
+                inferred = _infer_target_section_ids_from_primary_page(page)
+                if inferred:
+                    target_ids = list(inferred)
+        if target_ids:
+            _create_section_requests_for_submission(
+                draft, tuple(target_ids),
+                requested_by=None,
+                message='이전 요청 분석에서 자동 복구',
+            )
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            'survey: _ensure_section_requests_for_revision failed submission=%s',
+            getattr(draft, 'id', None), exc_info=True,
+        )
+
+
 def _get_sections_for_draft(draft):
     """
     고객이 이번에 편집할 카드 목록.
-    REVISION_REQUESTED이고 카드별 수정 요청이 있으면 → 요청된 카드만 (순서 유지).
-    그 외 → 전체 고객 노출 카드.
+    REVISION_REQUESTED여도 설문 전체 카드를 열어 둔다.
+    다만 survey_start에서 요청된 카드로 우선 진입시켜 탐색 시작점만 맞춘다.
     반환: [{"section": SurveySection, "questions": [SurveyQuestion, ...]}, ...]
     """
     full_sections = _get_sections_with_questions(customer_visible=True)
+    return full_sections
+
+
+def _get_revision_focus_step(draft):
+    """
+    REVISION_REQUESTED 설문 진입 시 우선 보여줄 단계 계산.
+    pending section request가 있으면 해당 section이 위치한 전체 step 번호를 반환.
+    """
+    steps = _get_step_list(draft)
     if not draft or draft.status != SurveySubmission.Status.REVISION_REQUESTED:
-        return full_sections
+        return steps[0] if steps else 1
     pending = _get_pending_section_requests(draft)
     if not pending:
-        return full_sections
-    # 요청된 section_id 순서대로, 해당 section+questions만
-    section_ids_ordered = [r.section_id for r in pending]
-    result = []
-    for sec_id in section_ids_ordered:
-        for item in full_sections:
-            if item['section'].id == sec_id:
-                result.append(item)
-                break
-    return result
+        return steps[0] if steps else 1
+    target_section_ids = {req.section_id for req in pending}
+    sections = _get_sections_for_draft(draft)
+    for index, item in enumerate(sections, start=1):
+        if item['section'].id in target_section_ids:
+            return index
+    return steps[0] if steps else 1
 
 
 def _get_step_list(draft=None):
@@ -302,6 +366,10 @@ def _compute_agent_selection_context(answers, selected_required, current_section
         result['agent_direct_service_codes'] = []
     result['show_agent_selection'] = bool(result['agent_direct_service_codes'])
     result['agent_direct_service_codes_str'] = ','.join(result['agent_direct_service_codes'])
+    if result['show_agent_selection']:
+        result['preferred_agent_id'] = 'admin_assign'
+    elif result.get('preferred_agent_id') == 'admin_assign':
+        result['preferred_agent_id'] = ''
     return result
 
 
@@ -343,6 +411,8 @@ def survey_start(request):
         request.session["survey_view_source"] = "deep_link"
 
     draft = _get_or_create_draft(request)
+    if draft and draft.status == SurveySubmission.Status.REVISION_REQUESTED:
+        _ensure_section_requests_for_revision(draft)
     steps = _get_step_list(draft)
 
     if draft:
@@ -359,7 +429,7 @@ def survey_start(request):
                 'message_body': '현재 이 설문은 수정할 수 없는 상태입니다. 이미 제출되었거나 관리자 검토 중일 수 있습니다. 문의 사항은 메시지함으로 연락해 주세요.',
             })
         if draft.status == SurveySubmission.Status.REVISION_REQUESTED:
-            step = steps[0] if steps else 1
+            step = _get_revision_focus_step(draft)
         else:
             step = min(max(1, draft.current_step), steps[-1] if steps else 1)
             step = step if step in steps else (steps[0] if steps else 1)
@@ -445,20 +515,17 @@ def survey_step(request, step):
     current_section = _get_current_section_for_step(step, draft)
     use_cards = current_section is not None
 
-    # 카드별 수정 요청 시: 수정할 카드 목록 / 잠긴 카드 목록 (고객 안내용)
+    # 카드별 수정 요청 시: 우선 확인이 필요한 카드 목록만 안내
     sections_need_update_titles = []
     locked_section_titles = []
     if draft and draft.status == SurveySubmission.Status.REVISION_REQUESTED:
         pending = _get_pending_section_requests(draft)
         if pending:
-            full_sections = _get_sections_with_questions(customer_visible=True)
             need_ids = {r.section_id for r in pending}
-            for item in full_sections:
+            for item in _get_sections_with_questions(customer_visible=True):
                 title = item['section'].title
                 if item['section'].id in need_ids:
                     sections_need_update_titles.append(title)
-                else:
-                    locked_section_titles.append(title)
 
     services_by_category = _services_for_survey_display()
     selected_required = list(draft.requested_required_services) if draft else []
@@ -491,13 +558,6 @@ def survey_step(request, step):
     agent_direct_service_codes = agent_ctx.get('agent_direct_service_codes', []) if on_delivery_step else []
     preferred_agent_id = agent_ctx.get('preferred_agent_id', '') if on_delivery_step else ''
     agents = []
-    if on_delivery_step and selected_required:
-        from settlement.views import get_agents_for_survey_fragment
-        agents = get_agents_for_survey_fragment(
-            agent_ctx.get('state_for_agent', ''),
-            list(selected_required),
-            request,
-        )
 
     revision_message = getattr(draft, 'revision_requested_message', '') if draft else ''
     progress_pct = round(100 * step / len(steps)) if steps else 0
@@ -588,11 +648,6 @@ def survey_agent_selection_fragment(request, step):
     )
 
     agents = []
-    if show_agent_selection and agent_direct_service_codes:
-        from settlement.views import get_agents_for_survey_fragment
-        agents = get_agents_for_survey_fragment(
-            state_for_agent, agent_direct_service_codes, request
-        )
 
     agents_json = json.dumps(agents) if agents else '[]'
 
@@ -681,17 +736,15 @@ def survey_step_save(request, step):
         draft.answers['service_delivery_per_service'] = per_service
     elif delivery_mode == 'bulk':
         draft.answers['service_delivery_per_service'] = {}
-    # 설문에서 선호 Agent 선택 시 저장
-    preferred_agent_id = (request.POST.get('preferred_agent_id') or '').strip()
-    if preferred_agent_id:
-        if preferred_agent_id == 'admin_assign':
-            draft.answers['preferred_agent_id'] = preferred_agent_id
-        else:
-            try:
-                int(preferred_agent_id)
-                draft.answers['preferred_agent_id'] = preferred_agent_id
-            except (ValueError, TypeError):
-                pass
+    agent_ctx = _compute_agent_selection_context(
+        draft.answers,
+        list(draft.requested_required_services or []),
+        _get_current_section_for_step(step, draft),
+    )
+    if agent_ctx.get('show_agent_selection'):
+        draft.answers['preferred_agent_id'] = 'admin_assign'
+    else:
+        draft.answers.pop('preferred_agent_id', None)
     if email:
         draft.email = email.strip()
     draft.current_step = step
@@ -799,6 +852,19 @@ def survey_submit(request):
             generate_quote_draft_from_submission(draft, actor=request.user if request.user.is_authenticated else None)
         elif not SettlementQuote.objects.filter(submission=draft, status=SettlementQuote.Status.DRAFT).exists():
             generate_quote_draft_from_submission(draft, actor=request.user if request.user.is_authenticated else None)
+    except Exception:
+        pass
+
+    # 설문 제출 직후(Admin 검토용) 일정 초안 생성: 결제 전 단계에서 대면 Agent 서비스 우선 제안.
+    # idempotent 보장: 동일 submission의 DRAFT/REVIEWING 플랜이 있으면 재생성하지 않음.
+    try:
+        from settlement.models import ServiceScheduleItem
+        from settlement.scheduling_engine import ensure_submission_schedule_draft
+        ensure_submission_schedule_draft(
+            draft,
+            actor=request.user if request.user.is_authenticated else None,
+            service_type_whitelist={ServiceScheduleItem.ServiceType.IN_PERSON_AGENT},
+        )
     except Exception:
         pass
 

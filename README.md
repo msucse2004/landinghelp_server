@@ -181,6 +181,8 @@ python manage.py test messaging.tests.test_proposal_flow settlement.tests.test_q
 ## 6. 문서 (docs/)
 
 - `docs/WORKFLOW_AND_INTEGRATION.md` : 설문·견적·결제·스케줄·AI 어시스턴트·후기 플로우, 상태 전이, 스케줄링  
+- `docs/WORKFLOW_STEP11_FINAL_INTEGRATION.md` : Survey→LSA→Contract→Execution 최종 통합 패스(라이프사이클/스냅샷/권한별 캘린더/제약)  
+- `docs/WORKFLOW_STEP13_FINAL_INTEGRATION_PASS.md` : Step13 최종 통합 리포트(학습데이터/피처/추천레이어/라이프사이클/LSA/최종 규칙/산출물)  
 - `docs/SCHEDULING.md` : 스케줄 작업(설문 리마인드 등)  
 - `docs/quote-change-request-llm-plan.md`, `docs/customer_request_action_workflow_plan.md` : 견적 수정·고객 요청 액션 설계  
 - 기타 번역/검증/플로우 검토 문서 다수

@@ -163,7 +163,7 @@
     </div>
   </div>
 
-  {% if user_plan %}
+  {% if user_plan and show_customer_calendar %}
   <div class="dashboard-calendar">
     <h2 style="font-size:1.1rem; margin:1rem 0 0.5rem;">{{ dashboard_i18n.my_schedule|default:"내 정착 일정" }}</h2>
     {% if not schedule_has_items %}
@@ -382,6 +382,24 @@
     };
   })();
   </script>
+  {% elif user_plan %}
+  <div style="margin-top: 1rem; padding: 1rem; border: 1px solid var(--color-border); border-radius: var(--radius); background: #f8fafc;">
+    <p class="text-muted" style="margin: 0; font-size: 0.95rem;">{{ dashboard_i18n.schedule_waiting_admin|default:"관리자가 일정을 확정하면 캘린더가 표시됩니다." }}</p>
+    <p style="margin-top: 1rem;">
+      {% if pending_reopen_offer %}
+      <form id="form-execute-reopen-cta" action="{% url 'api_settlement_action_offer_execute' offer_id=pending_reopen_offer.id %}" method="post" style="display:inline;" data-redirect-url="{{ survey_resume_url|default:'' }}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary">{{ pending_reopen_offer.button_label }}</button>
+      </form>
+      {% elif show_reopen_survey %}
+      <a href="{{ survey_resume_url|default:'' }}" class="btn btn-primary">{{ dashboard_i18n.survey_reopen_label|default:"설문 다시 수정하기" }}</a>
+      {% else %}
+      <a href="{% url 'survey:survey_start' %}" class="btn btn-primary">{{ dashboard_i18n.survey_link|default:"설문 작성" }}</a>
+      {% endif %}
+      <a href="{% url 'customer_quote' %}" class="btn btn-outline" style="margin-left:0.5rem;">{{ dashboard_i18n.my_quote|default:"내 견적" }}</a>
+      <a href="{% url 'ai_agent:assistant_chat' %}" class="btn btn-outline" style="margin-left:0.5rem;">{{ dashboard_i18n.assistant_link|default:"AI 어시스턴트" }}</a>
+    </p>
+  </div>
   {% else %}
   <div style="margin-top: 1rem; padding: 1rem; border: 1px solid var(--color-border); border-radius: var(--radius); background: #f8fafc;">
     <p style="margin: 0 0 0.75rem; font-weight: 600;">{% if pending_reopen_offer %}{% trans "관리자가 설문 수정을 허용했습니다. 아래 버튼을 눌러 설문 수정을 시작하세요." %}{% elif show_reopen_survey %}{% trans "관리자가 수정 요청을 승인했습니다. 설문을 수정해 주세요." %}{% else %}{{ dashboard_i18n.survey_title|default:"서비스 이용을 위해 설문을 작성해 주세요" }}{% endif %}</p>

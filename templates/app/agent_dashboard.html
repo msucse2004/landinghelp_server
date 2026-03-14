@@ -12,4 +12,34 @@
     <a href="{% url 'content:list' %}" class="btn btn-outline" style="margin-left: 0.5rem;">{{ agent_i18n.view_content }}</a>
   </p>
 </div>
+
+<div class="card" style="margin-top: 1rem;">
+  <h2 style="margin: 0 0 0.6rem; font-size: 1rem;">{{ agent_i18n.execution_schedule }}</h2>
+  {% if execution_items %}
+  <table style="width:100%; border-collapse:collapse; font-size:0.88rem;">
+    <thead>
+      <tr>
+        <th style="text-align:left; border-bottom:1px solid var(--color-border); padding:6px;">{% trans "고객" %}</th>
+        <th style="text-align:left; border-bottom:1px solid var(--color-border); padding:6px;">{% trans "서비스" %}</th>
+        <th style="text-align:left; border-bottom:1px solid var(--color-border); padding:6px;">{% trans "시작" %}</th>
+        <th style="text-align:left; border-bottom:1px solid var(--color-border); padding:6px;">{% trans "종료" %}</th>
+        <th style="text-align:left; border-bottom:1px solid var(--color-border); padding:6px;">{% trans "상태" %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in execution_items %}
+      <tr>
+        <td style="border-bottom:1px solid #eee; padding:6px;">{{ it.schedule_plan.customer.get_full_name|default:it.schedule_plan.customer.username }}</td>
+        <td style="border-bottom:1px solid #eee; padding:6px;">{{ it.service_label|default:it.service_code }}</td>
+        <td style="border-bottom:1px solid #eee; padding:6px;">{{ it.starts_at|date:"Y-m-d H:i"|default:'-' }}</td>
+        <td style="border-bottom:1px solid #eee; padding:6px;">{{ it.ends_at|date:"Y-m-d H:i"|default:'-' }}</td>
+        <td style="border-bottom:1px solid #eee; padding:6px;">{{ it.get_status_display }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="text-muted" style="margin:0;">{{ agent_i18n.execution_empty }}</p>
+  {% endif %}
+</div>
 {% endblock %}

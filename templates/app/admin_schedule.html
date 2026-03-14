@@ -3,40 +3,146 @@
 {% block title %}{% trans "일정 편집" %} #{{ submission.id }} – LifeAI US{% endblock %}
 {% block content %}
 <style>
+  /* === Page layout === */
   .schedule-page { display: flex; flex-direction: column; gap: 1rem; }
   .schedule-summary { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; }
   .schedule-summary .card { flex: 1; min-width: 200px; }
   .schedule-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 1rem; }
+  .schedule-toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
   .schedule-actions .btn { padding: 0.4rem 0.75rem; font-size: 0.9rem; }
-  .schedule-main { display: grid; grid-template-columns: 1fr 220px; gap: 1rem; }
-  @media (max-width: 900px) { .schedule-main { grid-template-columns: 1fr; } }
+  .schedule-status { color: var(--color-muted); font-size: 0.9rem; margin-left: 0.5rem; }
+  .stage-chip { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.5rem; border-radius: 999px; font-size: 0.78rem; border: 1px solid var(--color-border); background: #f8fafc; }
+  .meta-badge { display: inline-block; margin-top: 0.2rem; margin-right: 0.2rem; font-size: 0.65rem; padding: 0.1rem 0.35rem; border-radius: 999px; background: #eef2ff; color: #312e81; }
+  .lsa-panel { margin-top: 1rem; padding: 0.8rem; border: 1px solid var(--color-border); border-radius: var(--radius); background: #f8fafc; }
+  .lsa-panel h3 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+  .lsa-candidate-list { display: flex; flex-direction: column; gap: 0.45rem; margin-top: 0.4rem; }
+  .lsa-candidate-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 0.55rem; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; padding: 0.45rem 0.55rem; }
+  .lsa-agent-badge { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 0.15rem 0.45rem; border-radius: 999px; border: 1px solid #d1d5db; background: #f8fafc; color: #334155; }
+  .lsa-agent-badge.level-bronze { background: #f6efe8; color: #7c4a1d; border-color: #d6b08d; }
+  .lsa-agent-badge.level-silver { background: #f1f5f9; color: #334155; border-color: #94a3b8; }
+  .lsa-agent-badge.level-gold { background: #fef3c7; color: #92400e; border-color: #f59e0b; }
+  .lsa-agent-badge.level-diamond { background: #e0f2fe; color: #0c4a6e; border-color: #38bdf8; }
+  .lsa-agent-badge.level-platinum { background: #ede9fe; color: #4c1d95; border-color: #8b5cf6; }
+  .lsa-agent-name-btn { border: 0; background: transparent; color: #0f172a; font-size: 0.86rem; text-align: left; cursor: pointer; padding: 0; }
+  .lsa-agent-name-btn:hover { text-decoration: underline; }
+  .lsa-preview-btn { padding: 0.25rem 0.65rem; font-size: 0.82rem; }
+  .lsa-modal-backdrop { position: fixed !important; inset: 0; background: rgba(2,6,23,0.45); display: none; align-items: flex-start; justify-content: center; z-index: 99999; padding: 1rem; overflow-y: auto; }
+  .lsa-modal-backdrop.open { display: flex; }
+  .lsa-modal-card { width: min(920px, 96vw); max-height: 86vh; overflow: auto; background: #fff; border-radius: 12px; border: 1px solid #cbd5e1; box-shadow: 0 20px 45px rgba(15,23,42,0.35); padding: 0.9rem; margin: 4vh 0; }
+  .lsa-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.55rem; }
+  .lsa-modal-head h4 { margin: 0; font-size: 0.95rem; }
+  .lsa-modal-close { border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; cursor: pointer; padding: 0.2rem 0.55rem; }
+  .lsa-agent-detail-list { margin: 0; padding-left: 1rem; font-size: 0.86rem; }
+  .lsa-preview-code { width: 100%; min-height: 360px; font-family: Consolas, 'Courier New', monospace; font-size: 0.78rem; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.55rem; background: #f8fafc; box-sizing: border-box; }
+  .lsa-preview-table-wrap { margin-top: 0.75rem; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; }
+  .lsa-preview-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .lsa-preview-table th, .lsa-preview-table td { border-bottom: 1px solid #e2e8f0; padding: 0.45rem 0.5rem; text-align: left; }
+  .lsa-preview-table th { background: #f1f5f9; color: #334155; font-weight: 700; }
+  .lsa-preview-table tbody tr:last-child td { border-bottom: 0; }
+  .lsa-preview-empty { margin: 0.65rem 0 0; font-size: 0.82rem; color: #64748b; }
+
+  /* === Calendar nav bar === */
+  .cal-section { display: flex; flex-direction: column; gap: 0.75rem; }
+  .cal-nav-bar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; padding: 0.25rem 0; }
+  .cal-nav-arrow { width: 34px; height: 34px; border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; cursor: pointer; font-size: 1.25rem; line-height: 1; color: #475569; display: inline-flex; align-items: center; justify-content: center; transition: background 0.15s, box-shadow 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+  .cal-nav-arrow:hover { background: #f1f5f9; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .cal-today-btn { height: 34px; padding: 0 1rem; border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; cursor: pointer; font-size: 0.875rem; font-weight: 500; color: #334155; transition: background 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+  .cal-today-btn:hover { background: #f1f5f9; }
+  .cal-nav-title { flex: 1; text-align: center; font-size: 1.1rem; font-weight: 700; color: #1e293b; min-width: 160px; }
+  .cal-view-group { display: flex; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+  .cal-view-group button { border: none; background: #fff; padding: 0 1rem; height: 34px; font-size: 0.875rem; cursor: pointer; color: #475569; border-right: 1px solid #e2e8f0; transition: background 0.15s; }
+  .cal-view-group button:last-child { border-right: none; }
+  .cal-view-group button:hover:not(.active) { background: #f1f5f9; }
+  .cal-view-group button.active { background: #3b82f6; color: #fff; font-weight: 600; }
+
+  /* === Calendar grid === */
   .admin-cal-wrap { overflow-x: auto; }
-  .admin-cal-grid { display: grid; grid-template-columns: 60px repeat(7, 1fr); grid-template-rows: auto; border: 1px solid var(--color-border); border-radius: var(--radius); background: #fff; min-width: 700px; }
-  .admin-cal-cell { min-height: 36px; border-right: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); padding: 2px; font-size: 0.8rem; }
-  .admin-cal-cell:nth-child(8n) { border-right: none; }
-  .admin-cal-cell.header { background: #f1f5f9; font-weight: 600; text-align: center; }
-  .admin-cal-cell.drop-target { background: #f8fafc; }
+  .admin-cal-grid { display: grid; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .admin-cal-cell { border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: 4px; font-size: 0.8rem; }
+  .admin-cal-grid.view-month .admin-cal-cell:nth-child(7n) { border-right: none; }
+  .admin-cal-grid.view-week  .admin-cal-cell:nth-child(8n) { border-right: none; }
+  .admin-cal-grid.view-day   .admin-cal-cell:nth-child(2n) { border-right: none; }
+  .admin-cal-cell.header { background: #f8fafc; font-weight: 600; text-align: center; padding: 10px 4px; font-size: 0.78rem; color: #64748b; letter-spacing: 0.04em; }
+  .admin-cal-cell.header.weekend-col { color: #f43f5e; }
+  .admin-cal-cell.drop-target { background: #fafafa; cursor: default; transition: background 0.1s; }
+  .admin-cal-cell.drop-target:hover { background: #f0f9ff; }
   .admin-cal-cell.drop-target.drag-over { background: #dbeafe; }
-  .admin-cal-item { background: #e0f2fe; border: 1px solid #0ea5e9; border-radius: 4px; padding: 4px 6px; margin: 2px 0; cursor: grab; font-size: 0.8rem; }
-  .admin-cal-item:active { cursor: grabbing; }
-  .admin-cal-item.finalized { background: #dcfce7; border-color: #16a34a; }
-  .unscheduled-pool { background: #f8fafc; border: 1px solid var(--color-border); border-radius: var(--radius); padding: 0.75rem; max-height: 400px; overflow-y: auto; }
-  .unscheduled-pool h3 { margin: 0 0 0.5rem; font-size: 0.95rem; }
-  .unscheduled-item { background: #fff; border: 1px solid var(--color-border); border-radius: 4px; padding: 6px 8px; margin-bottom: 4px; cursor: grab; font-size: 0.85rem; }
-  .unscheduled-item:active { cursor: grabbing; }
+  .admin-cal-cell.other-month { background: #f8fafc; }
+  .admin-cal-cell.is-today { background: #eff6ff !important; }
+  .admin-cal-cell.is-weekend { background: #fdf8f8; }
+  .admin-cal-cell.is-holiday { background: #fff5f5; }
+  .day-num { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; font-size: 0.8rem; font-weight: 500; color: #475569; margin-bottom: 2px; }
+  .day-num.today-circle { background: #3b82f6; color: #fff; font-weight: 700; box-shadow: 0 2px 4px rgba(59,130,246,0.35); }
+  .day-num.weekend-num { color: #f43f5e; }
+  .day-num.holiday-num { color: #dc2626; font-weight: 700; }
+  .admin-cal-cell.is-entry { background: #fef9ec !important; }
+  .entry-date-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 0.67rem; font-weight: 700; color: #b45309; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 999px; padding: 1px 7px; margin-left: 4px; white-space: nowrap; }
+  .entry-date-header-badge { display: inline-block; font-size: 0.65rem; font-weight: 700; color: #b45309; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 4px; padding: 1px 5px; margin-left: 4px; }
+  .holiday-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 0.64rem; font-weight: 700; color: #b91c1c; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 999px; padding: 1px 7px; margin-left: 4px; white-space: nowrap; }
+  .holiday-header-badge { display: inline-block; font-size: 0.63rem; font-weight: 700; color: #b91c1c; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 4px; padding: 1px 5px; margin-left: 4px; }
+
+  /* === Calendar item cards === */
+  .admin-cal-item { background: #e0f2fe; border: none; border-left: 3px solid #38bdf8; border-radius: 6px; padding: 5px 7px; margin: 2px 0; cursor: grab; font-size: 0.78rem; box-shadow: 0 1px 3px rgba(0,0,0,0.07); transition: box-shadow 0.15s, transform 0.1s; }
+  .admin-cal-item:hover { box-shadow: 0 3px 8px rgba(0,0,0,0.12); transform: translateY(-1px); }
+  .admin-cal-item:active { cursor: grabbing; transform: scale(0.98); }
+  .admin-cal-item.finalized { background: #dcfce7; border-left-color: #4ade80; }
   .item-edit-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; align-items: center; }
   .item-edit-row select { font-size: 0.8rem; padding: 2px 4px; }
   .item-edit-row input[type="number"] { width: 50px; font-size: 0.8rem; }
-  .schedule-status { color: var(--color-muted); font-size: 0.9rem; margin-left: 0.5rem; }
+
+  /* === Unscheduled service pool === */
+  .unscheduled-pool { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem; }
+  .unscheduled-pool-header { display: flex; align-items: center; gap: 0.65rem; margin-bottom: 0.75rem; }
+  .unscheduled-pool-header h3 { margin: 0; font-size: 0.9rem; font-weight: 700; color: #1e293b; }
+  .unscheduled-pool-hint { font-size: 0.78rem; color: #94a3b8; }
+  .unscheduled-pool-body { display: flex; flex-wrap: wrap; gap: 0.5rem; min-height: 60px; }
+  .unscheduled-item { background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; padding: 8px 12px; cursor: grab; font-size: 0.85rem; display: flex; flex-direction: column; gap: 3px; min-width: 130px; box-shadow: 0 1px 3px rgba(0,0,0,0.07); transition: box-shadow 0.15s, transform 0.1s; }
+  .unscheduled-item:hover { box-shadow: 0 4px 10px rgba(0,0,0,0.1); transform: translateY(-2px); }
+  .unscheduled-item:active { cursor: grabbing; transform: scale(0.97); }
+  .unscheduled-item.template-card { background: linear-gradient(135deg, #f0f9ff, #e0f2fe); border-color: #7dd3fc; }
+
+  /* === Service type badges === */
+  .service-type-badge { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 0.67rem; font-weight: 600; line-height: 1.5; }
+  .service-type-badge.self-search { background: #e5e7eb; color: #374151; }
+  .service-type-badge.ai-agent { background: #dbeafe; color: #1d4ed8; }
+  .service-type-badge.in-person-agent { background: #dcfce7; color: #166534; }
+  .schedule-page.embed-mode { gap: 0.75rem; }
+  .schedule-page.embed-mode .card { margin-bottom: 0; }
+  .schedule-workspace-shell { padding: 0; }
+  .schedule-subsection { margin-top: 1rem; }
+  .schedule-subsection-title { font-size: 1rem; margin: 0 0 0.5rem; }
+  {% if embed_mode %}
+  .user-info-bar, nav { display: none !important; }
+  main.main-content { padding: 0 !important; }
+  .schedule-page.embed-mode { max-width: 100%; padding: 0 !important; }
+  .schedule-page.embed-mode .card {
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+  }
+  {% endif %}
 </style>
 
-<div class="container schedule-page">
+<div class="container schedule-page{% if embed_mode %} embed-mode{% endif %}">
   <form style="display:none;">{% csrf_token %}</form>
-  <div class="card">
+  {% if not embed_mode %}
+  <div class="{% if embed_mode %}schedule-workspace-shell{% else %}card{% endif %}">
     <p style="margin: 0 0 0.75rem;">
       <a href="{% url 'app_submission_review' submission.id %}" class="btn btn-outline" style="padding: 0.35rem 0.75rem;">← {% trans "제출 검토" %}</a>
     </p>
     <h1 style="margin-top: 0;">{% trans "일정 편집" %} #{{ submission.id }}</h1>
+    <p style="margin: 0.35rem 0 0; font-size: 0.9rem;">
+      <span class="stage-chip">{% trans "현재 단계" %}: <strong id="currentStageLabel">{{ schedule_stage_key|default:'system_draft' }}</strong></span>
+    </p>
+    <p class="text-muted" style="font-size:0.82rem; margin-top:0.4rem;">
+      <span class="stage-chip">system_draft</span>
+      <span class="stage-chip">admin_adjusted_draft</span>
+      <span class="stage-chip">lsa_sent_draft</span>
+      <span class="stage-chip">finalized_execution_schedule</span>
+    </p>
   </div>
 
   <div class="schedule-summary">
@@ -54,6 +160,7 @@
       {% endif %}
     </div>
   </div>
+  {% endif %}
 
   <div class="card">
     <div class="schedule-actions">
@@ -61,24 +168,51 @@
       <button type="button" id="btnRegenerateUnscheduled" class="btn btn-outline">{% trans "미배정만 재배치" %}</button>
       <button type="button" id="btnRegenerateAgentDependent" class="btn btn-outline">{% trans "Agent 항목만 재배치" %}</button>
       <button type="button" id="btnRequestAvailability" class="btn btn-outline">{% trans "가용 시간 요청 (Agent)" %}</button>
+      <button type="button" id="btnSendLsa" class="btn btn-primary">{% trans "LSA 배치 발송" %}</button>
       <button type="button" id="btnSave" class="btn btn-primary">{% trans "저장" %}</button>
       <button type="button" id="btnFinalize" class="btn btn-outline">{% trans "확정 후 고객 반영" %}</button>
       <span id="scheduleStatus" class="schedule-status"></span>
     </div>
+    <p class="text-muted" style="font-size:0.85rem; margin:0 0 0.65rem;">{% trans "추천 서비스 카드는 캘린더에서 Drag & Drop으로 날짜/시간을 조정할 수 있습니다." %}</p>
 
-    <div class="schedule-main">
+    <div class="schedule-toolbar">
+      <input type="date" id="calendarAnchorDate" style="padding:0.25rem 0.45rem;" />
+      <input type="text" id="calendarSearch" placeholder="{% trans '카드 검색' %}" style="min-width:220px; padding:0.3rem 0.45rem;" />
+      <button type="button" class="btn btn-outline" id="btnSearchApply" style="padding:0.25rem 0.55rem;">{% trans "적용" %}</button>
+      <button type="button" class="btn btn-outline" id="btnSearchClear" style="padding:0.25rem 0.55rem;">{% trans "초기화" %}</button>
+    </div>
+
+    <div class="cal-section">
+      <div class="unscheduled-pool">
+        <div class="unscheduled-pool-header">
+          <h3>{% trans "미배정 서비스" %}</h3>
+          <span class="unscheduled-pool-hint">{% trans "카드를 달력에 드래그해 일정을 등록하세요" %}</span>
+        </div>
+        <div class="unscheduled-pool-body" id="unscheduledPool"></div>
+      </div>
+      <div class="cal-nav-bar">
+        <button class="cal-nav-arrow" type="button" id="btnPrevPeriod">&#8249;</button>
+        <button class="cal-today-btn" type="button" id="btnTodayPeriod">{% trans "오늘" %}</button>
+        <button class="cal-nav-arrow" type="button" id="btnNextPeriod">&#8250;</button>
+        <div class="cal-nav-title" id="adminCalTitle"></div>
+        <div class="cal-view-group">
+          <button type="button" id="btnViewDay">Day</button>
+          <button type="button" id="btnViewWeek">Week</button>
+          <button type="button" id="btnViewMonth">Month</button>
+        </div>
+      </div>
       <div class="admin-cal-wrap">
-        <div id="adminCalTitle" style="margin-bottom: 0.5rem; font-weight: 600;"></div>
         <div id="adminCalGrid" class="admin-cal-grid"></div>
       </div>
-      <div class="unscheduled-pool">
-        <h3>{% trans "미배정" %}</h3>
-        <div id="unscheduledPool"></div>
+      <div class="lsa-panel">
+        <h3>{% trans "LSA 후보 Agent" %}</h3>
+        <p class="text-muted" style="font-size:0.83rem; margin:0 0 0.5rem;">{% trans "동일 주(State)의 후보 Agent 전체에게 현재 Admin 조정안 스케줄 버전을 스냅샷으로 고정해 일괄 발송합니다." %}{% if candidate_state_code %} ({{ candidate_state_code }}){% endif %}</p>
+        <div id="lsaCandidateAgentList" class="lsa-candidate-list"></div>
       </div>
     </div>
     {% if schedule_plan %}
-    <div class="card" style="margin-top: 1rem;">
-      <h2 style="font-size: 1rem; margin: 0 0 0.5rem;">{% trans "Agent 가용 시간 (수신)" %}</h2>
+    <div class="{% if embed_mode %}schedule-subsection{% else %}card{% endif %}"{% if not embed_mode %} style="margin-top: 1rem;"{% endif %}>
+      <h2 class="schedule-subsection-title">{% trans "Agent 가용 시간 (수신)" %}</h2>
       {% if availability_by_agent %}
       {% for row in availability_by_agent %}
       <p style="margin: 0.5rem 0;"><strong>{{ row.agent_name }}</strong></p>
@@ -93,6 +227,71 @@
       {% endif %}
     </div>
     {% endif %}
+
+    <div class="{% if embed_mode %}schedule-subsection{% else %}card{% endif %}"{% if not embed_mode %} style="margin-top: 1rem;"{% endif %}>
+      <h2 class="schedule-subsection-title">{% trans "LSA Agent 응답" %}</h2>
+      {% if lsa_response_rows %}
+      <table style="width:100%; border-collapse: collapse; font-size: 0.86rem;">
+        <thead>
+          <tr>
+            <th style="text-align:left; border-bottom:1px solid var(--color-border); padding:6px;">{% trans "Batch" %}</th>
+            <th style="text-align:left; border-bottom:1px solid var(--color-border); padding:6px;">{% trans "Agent" %}</th>
+            <th style="text-align:left; border-bottom:1px solid var(--color-border); padding:6px;">{% trans "요청 상태" %}</th>
+            <th style="text-align:left; border-bottom:1px solid var(--color-border); padding:6px;">{% trans "응답" %}</th>
+            <th style="text-align:left; border-bottom:1px solid var(--color-border); padding:6px;">{% trans "메모" %}</th>
+            <th style="text-align:left; border-bottom:1px solid var(--color-border); padding:6px;">{% trans "검토" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in lsa_response_rows %}
+          <tr>
+            <td style="border-bottom:1px solid #eee; padding:6px;">#{{ r.batch_id }} / req#{{ r.request_id }}</td>
+            <td style="border-bottom:1px solid #eee; padding:6px;">{{ r.agent_name }}</td>
+            <td style="border-bottom:1px solid #eee; padding:6px;">{{ r.status }}</td>
+            <td style="border-bottom:1px solid #eee; padding:6px;">{{ r.response_decision|default:'-' }}{% if r.response_revision %} (r{{ r.response_revision }}){% endif %}</td>
+            <td style="border-bottom:1px solid #eee; padding:6px;">{{ r.response_note|default:'-' }}</td>
+            <td style="border-bottom:1px solid #eee; padding:6px;"><a href="{% url 'app_submission_review_lsa_batch_review' submission.id r.batch_id %}">{% trans "비교/선정" %}</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="text-muted" style="font-size:0.9rem;">{% trans "아직 수신된 LSA 응답이 없습니다." %}</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div id="lsaAgentDetailModal" class="lsa-modal-backdrop" aria-hidden="true">
+  <div class="lsa-modal-card" role="dialog" aria-modal="true" aria-labelledby="lsaAgentDetailTitle">
+    <div class="lsa-modal-head">
+      <h4 id="lsaAgentDetailTitle">Agent 상세</h4>
+      <button type="button" class="lsa-modal-close" id="btnCloseAgentDetail">닫기</button>
+    </div>
+    <ul id="lsaAgentDetailBody" class="lsa-agent-detail-list"></ul>
+  </div>
+</div>
+
+<div id="lsaPreviewModal" class="lsa-modal-backdrop" aria-hidden="true">
+  <div class="lsa-modal-card" role="dialog" aria-modal="true" aria-labelledby="lsaPreviewTitle">
+    <div class="lsa-modal-head">
+      <h4 id="lsaPreviewTitle">LSA Proposal Format 미리보기</h4>
+      <button type="button" class="lsa-modal-close" id="btnCloseLsaPreview">닫기</button>
+    </div>
+    <textarea id="lsaPreviewPayload" class="lsa-preview-code" readonly></textarea>
+    <div class="lsa-preview-table-wrap">
+      <table class="lsa-preview-table" aria-label="LSA 제안 일정 테이블">
+        <thead>
+          <tr>
+            <th>서비스</th>
+            <th>시작</th>
+            <th>종료</th>
+          </tr>
+        </thead>
+        <tbody id="lsaPreviewScheduleTableBody"></tbody>
+      </table>
+    </div>
+    <p id="lsaPreviewScheduleEmpty" class="lsa-preview-empty" style="display:none;">등록된 일정이 없습니다.</p>
   </div>
 </div>
 
@@ -101,12 +300,243 @@
   var submissionId = {{ submission.id }};
   var apiBase = '/admin/review/' + submissionId + '/schedule/api/';
   var agents = {{ agents_json|safe }};
+  var paidServices = {{ paid_services_json|safe }};
+  var entryDate = '{{ request_summary.entry_date|default:"" }}';
   var plan = null;
   var allItems = [];
-  var weekStart = null;
+  var viewItems = [];
+  var viewMode = 'month';
+  var anchorDate = null;
+  var searchQuery = '';
+  var tempSequence = 1;
+  var scheduleSaveInFlight = false;
+  var autoSaveTimer = null;
+
+  function stageLabelFromPlan(p) {
+    if (!p) return 'system_draft';
+    if (p.stage_key) return p.stage_key;
+    var s = p.status || '';
+    if (s === 'DRAFT') return 'system_draft';
+    if (s === 'REVIEWING') return 'admin_adjusted_draft';
+    if (s === 'FINALIZED') return 'lsa_sent_draft';
+    if (s === 'SENT' || s === 'ACTIVE') return 'finalized_execution_schedule';
+    return 'unknown';
+  }
+
+  function setStageLabel() {
+    var el = document.getElementById('currentStageLabel');
+    if (!el) return;
+    el.textContent = stageLabelFromPlan(plan);
+  }
+
+  function setWorkspaceEditable(isEditable) {
+    var ids = ['btnSave', 'btnRegenerateUnscheduled', 'btnRegenerateAgentDependent', 'btnRequestAvailability', 'btnSendLsa'];
+    ids.forEach(function(id) {
+      var btn = document.getElementById(id);
+      if (btn) btn.disabled = !isEditable;
+    });
+  }
+
+  function levelBadgeLabel(level) {
+    var key = String(level || '').toUpperCase();
+    if (!key) key = 'BRONZE';
+    return key;
+  }
+
+  function levelBadgeClass(level) {
+    var key = String(level || '').toUpperCase();
+    if (key === 'PLATINUM') return 'level-platinum';
+    if (key === 'DIAMOND') return 'level-diamond';
+    if (key === 'GOLD') return 'level-gold';
+    if (key === 'SILVER') return 'level-silver';
+    return 'level-bronze';
+  }
+
+  function formatPercent(value) {
+    if (value === null || value === undefined || value === '') return '-';
+    var v = Number(value);
+    if (!isFinite(v)) return '-';
+    if (v <= 1) return Math.round(v * 100) + '%';
+    return Math.round(v) + '%';
+  }
+
+  function openBackdrop(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var htmlEl = document.documentElement;
+    var bodyEl = document.body;
+    if (htmlEl) htmlEl.style.overflow = 'hidden';
+    if (bodyEl) bodyEl.style.overflow = 'hidden';
+    el.classList.add('open');
+    el.setAttribute('aria-hidden', 'false');
+    var card = el.querySelector('.lsa-modal-card');
+    if (card) {
+      card.scrollTop = 0;
+      card.setAttribute('tabindex', '-1');
+      requestAnimationFrame(function() { card.focus({ preventScroll: true }); });
+    }
+    el.scrollTop = 0;
+  }
+
+  function closeBackdrop(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('open');
+    el.setAttribute('aria-hidden', 'true');
+    var hasOpen = document.querySelector('.lsa-modal-backdrop.open');
+    if (!hasOpen) {
+      var htmlEl = document.documentElement;
+      var bodyEl = document.body;
+      if (htmlEl) htmlEl.style.overflow = '';
+      if (bodyEl) bodyEl.style.overflow = '';
+    }
+  }
+
+  function openAgentDetail(agent) {
+    var body = document.getElementById('lsaAgentDetailBody');
+    if (!body || !agent) return;
+    body.innerHTML = '';
+    var rows = [
+      '이름: ' + (agent.name || '-'),
+      '레벨: ' + levelBadgeLabel(agent.agent_level),
+      '레벨 점수: ' + (agent.agent_level_score !== undefined && agent.agent_level_score !== null ? agent.agent_level_score : '-'),
+      '수락률: ' + formatPercent(agent.accept_rate),
+      '평점: ' + ((agent.rating_avg || 0) + ' (' + (agent.rating_count || 0) + '건)'),
+      '주(State): ' + ((agent.states || []).join(', ') || '-'),
+      '서비스: ' + ((agent.service_names || []).join(', ') || '-'),
+      '제약(max_active_assignments): ' + ((agent.constraints && agent.constraints.max_active_assignments) || '-'),
+      '제약(lsa_auto_priority_weight): ' + ((agent.constraints && agent.constraints.lsa_auto_priority_weight) || '-'),
+    ];
+    rows.forEach(function(txt) {
+      var li = document.createElement('li');
+      li.textContent = txt;
+      body.appendChild(li);
+    });
+    openBackdrop('lsaAgentDetailModal');
+  }
+
+  function openLsaPreview(agent) {
+    if (!agent || !agent.id) return;
+    var textarea = document.getElementById('lsaPreviewPayload');
+    renderLsaPreviewScheduleTable([]);
+    if (textarea) textarea.value = '불러오는 중...';
+    openBackdrop('lsaPreviewModal');
+    fetch('/admin/review/' + submissionId + '/schedule/lsa-preview/' + agent.id + '/', {
+      method: 'GET',
+      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin',
+    })
+      .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+      .then(function(res) {
+        if (!textarea) return;
+        if (res.ok && res.data && res.data.ok) {
+          var payload = res.data.payload || {};
+          textarea.value = JSON.stringify(payload, null, 2);
+          renderLsaPreviewScheduleTable(payload.proposed_schedule || []);
+        } else {
+          textarea.value = (res.data && (res.data.error || res.data.message)) || '미리보기 로드 실패';
+          renderLsaPreviewScheduleTable([]);
+        }
+      })
+      .catch(function(e) {
+        if (textarea) textarea.value = '미리보기 오류: ' + e.message;
+        renderLsaPreviewScheduleTable([]);
+      });
+  }
+
+  function renderLsaPreviewScheduleTable(rows) {
+    var body = document.getElementById('lsaPreviewScheduleTableBody');
+    var empty = document.getElementById('lsaPreviewScheduleEmpty');
+    if (!body || !empty) return;
+    body.innerHTML = '';
+    var list = Array.isArray(rows) ? rows.filter(function(r) {
+      return r && r.starts_at && r.ends_at;
+    }) : [];
+    if (!list.length) {
+      empty.style.display = '';
+      return;
+    }
+    empty.style.display = 'none';
+    list.forEach(function(row) {
+      var tr = document.createElement('tr');
+      var serviceLabel = row.service_label || row.service_code || '-';
+      tr.innerHTML =
+        '<td>' + escapeHtml(serviceLabel) + '</td>' +
+        '<td>' + escapeHtml(String(row.starts_at || '-')) + '</td>' +
+        '<td>' + escapeHtml(String(row.ends_at || '-')) + '</td>';
+      body.appendChild(tr);
+    });
+  }
+
+  function renderLsaCandidates() {
+    var wrap = document.getElementById('lsaCandidateAgentList');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    if (!(agents && agents.length)) {
+      var empty = document.createElement('p');
+      empty.className = 'text-muted';
+      empty.style.margin = '0';
+      empty.style.fontSize = '0.85rem';
+      empty.textContent = '발송 가능한 후보 Agent가 없습니다.';
+      wrap.appendChild(empty);
+      return;
+    }
+    agents.forEach(function(agent) {
+      var row = document.createElement('div');
+      row.className = 'lsa-candidate-row';
+
+      var badge = document.createElement('span');
+      badge.className = 'lsa-agent-badge ' + levelBadgeClass(agent.agent_level);
+      badge.textContent = levelBadgeLabel(agent.agent_level);
+
+      var nameBtn = document.createElement('button');
+      nameBtn.type = 'button';
+      nameBtn.className = 'lsa-agent-name-btn';
+      nameBtn.textContent = agent.name || ('Agent #' + agent.id);
+      nameBtn.addEventListener('click', function() { openAgentDetail(agent); });
+
+      var lsaBtn = document.createElement('button');
+      lsaBtn.type = 'button';
+      lsaBtn.className = 'btn btn-outline lsa-preview-btn';
+      lsaBtn.textContent = 'LSA';
+      lsaBtn.addEventListener('click', function() { openLsaPreview(agent); });
+
+      row.appendChild(badge);
+      row.appendChild(nameBtn);
+      row.appendChild(lsaBtn);
+      wrap.appendChild(row);
+    });
+  }
+
+  function selectedLsaAgentIds() {
+    return (agents || [])
+      .map(function(a) { return parseInt(a.id, 10); })
+      .filter(function(v) { return !isNaN(v); });
+  }
 
   function scheduledItems() { return allItems.filter(function(i) { return i.starts_at && i.ends_at; }); }
   function unscheduledItems() { return allItems.filter(function(i) { return !i.starts_at || !i.ends_at; }); }
+
+  function getServiceTypeMeta(serviceType) {
+    var key = String(serviceType || '').trim().toUpperCase();
+    if (key === 'SELF_SEARCH') return { label: '직접 진행', cls: 'self-search' };
+    if (key === 'IN_PERSON_AGENT') return { label: 'Agent 직접', cls: 'in-person-agent' };
+    return { label: 'AI 지원', cls: 'ai-agent' };
+  }
+
+  function buildServiceTypeBadge(serviceType) {
+    var meta = getServiceTypeMeta(serviceType);
+    return '<span class="service-type-badge ' + meta.cls + '">' + escapeHtml(meta.label) + '</span>';
+  }
+
+  function existingServiceCodes() {
+    var out = {};
+    allItems.forEach(function(it) {
+      var code = (it.service_code || '').trim();
+      if (code) out[code] = true;
+    });
+    return out;
+  }
 
   function setStatus(msg, isError) {
     var el = document.getElementById('scheduleStatus');
@@ -122,12 +552,28 @@
 
   function fetchSchedule() {
     setStatus('로딩 중...');
-    fetch(apiBase, { method: 'GET', headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+    var qs = new URLSearchParams();
+    qs.set('view', viewMode);
+    if (anchorDate) qs.set('anchor_date', anchorDate);
+    if (searchQuery) qs.set('q', searchQuery);
+    fetch(apiBase + '?' + qs.toString(), { method: 'GET', headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
       .then(function(r) { return r.json(); })
       .then(function(data) {
         plan = data.plan;
         allItems = (data.items || []).concat(data.unscheduled || []);
-        setStatus('');
+        viewItems = (data.items_in_view || data.items || []);
+        if (data.calendar_view) {
+          viewMode = data.calendar_view.mode || viewMode;
+          anchorDate = data.calendar_view.anchor_date || anchorDate;
+        }
+        syncToolbarState();
+        setStageLabel();
+        setWorkspaceEditable(!!(plan && plan.editable));
+        if (plan && !plan.editable) {
+          setStatus('이 버전은 읽기 전용입니다. 이미 송부/활성된 일정입니다.', true);
+        } else {
+          setStatus('');
+        }
         render();
       })
       .catch(function(e) {
@@ -138,6 +584,19 @@
   function render() {
     renderCalendar();
     renderUnscheduled();
+  }
+
+  function syncToolbarState() {
+    var anchorEl = document.getElementById('calendarAnchorDate');
+    if (anchorEl && anchorDate) anchorEl.value = anchorDate;
+    var qEl = document.getElementById('calendarSearch');
+    if (qEl) qEl.value = searchQuery;
+    [['btnViewDay','day'],['btnViewWeek','week'],['btnViewMonth','month']].forEach(function(row) {
+      var btn = document.getElementById(row[0]);
+      if (!btn) return;
+      if (viewMode === row[1]) btn.classList.add('active');
+      else btn.classList.remove('active');
+    });
   }
 
   function getWeekStart(d) {
@@ -151,18 +610,82 @@
   function dateStr(d) { return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }
   function hourKey(d, h) { return dateStr(d) + 'T' + pad(h) + ':00:00'; }
 
+  function nthWeekdayOfMonth(year, monthIndex, weekday, nth) {
+    var first = new Date(year, monthIndex, 1);
+    var offset = (weekday - first.getDay() + 7) % 7;
+    return new Date(year, monthIndex, 1 + offset + ((nth - 1) * 7));
+  }
+
+  function lastWeekdayOfMonth(year, monthIndex, weekday) {
+    var last = new Date(year, monthIndex + 1, 0);
+    var offset = (last.getDay() - weekday + 7) % 7;
+    return new Date(year, monthIndex, last.getDate() - offset);
+  }
+
+  function observedHolidayDate(year, monthIndex, day) {
+    var actual = new Date(year, monthIndex, day);
+    var observed = new Date(actual);
+    if (actual.getDay() === 6) observed.setDate(actual.getDate() - 1);
+    if (actual.getDay() === 0) observed.setDate(actual.getDate() + 1);
+    return observed;
+  }
+
+  function getUSHolidaysForYear(year) {
+    var entries = [];
+
+    function addHoliday(name, dateObj) {
+      entries.push({ key: dateStr(dateObj), name: name });
+    }
+
+    addHoliday('New Year\'s Day', observedHolidayDate(year, 0, 1));
+    addHoliday('Martin Luther King Jr. Day', nthWeekdayOfMonth(year, 0, 1, 3));
+    addHoliday('Presidents\' Day', nthWeekdayOfMonth(year, 1, 1, 3));
+    addHoliday('Memorial Day', lastWeekdayOfMonth(year, 4, 1));
+    addHoliday('Juneteenth', observedHolidayDate(year, 5, 19));
+    addHoliday('Independence Day', observedHolidayDate(year, 6, 4));
+    addHoliday('Labor Day', nthWeekdayOfMonth(year, 8, 1, 1));
+    addHoliday('Columbus Day', nthWeekdayOfMonth(year, 9, 1, 2));
+    addHoliday('Veterans Day', observedHolidayDate(year, 10, 11));
+    addHoliday('Thanksgiving Day', nthWeekdayOfMonth(year, 10, 4, 4));
+    addHoliday('Christmas Day', observedHolidayDate(year, 11, 25));
+
+    var holidayMap = {};
+    entries.forEach(function(entry) {
+      holidayMap[entry.key] = entry.name;
+    });
+    return holidayMap;
+  }
+
+  function getHolidayLabel(dateValue) {
+    var d = dateValue instanceof Date ? dateValue : new Date(dateValue);
+    if (isNaN(d.getTime())) return '';
+    var yearMap = getUSHolidaysForYear(d.getFullYear());
+    return yearMap[dateStr(d)] || '';
+  }
+
   function renderCalendar() {
     var grid = document.getElementById('adminCalGrid');
     var titleEl = document.getElementById('adminCalTitle');
     if (!grid || !titleEl) return;
-    var base = weekStart || getWeekStart(new Date());
+    var base = anchorDate ? new Date(anchorDate + 'T00:00:00') : getWeekStart(new Date());
+    if (viewMode === 'week') base = getWeekStart(base);
+    if (viewMode === 'month') {
+      renderMonthCalendar(grid, titleEl, base);
+      return;
+    }
     var weekEnd = new Date(base);
-    weekEnd.setDate(weekEnd.getDate() + 6);
-    titleEl.textContent = base.getFullYear() + '년 ' + (base.getMonth()+1) + '월 ' + base.getDate() + '일 ~ ' + weekEnd.getDate() + '일';
+    var daySpan = viewMode === 'day' ? 1 : 7;
+    weekEnd.setDate(weekEnd.getDate() + (daySpan - 1));
+    titleEl.textContent = daySpan === 1
+      ? (base.getFullYear() + '년 ' + (base.getMonth()+1) + '월 ' + base.getDate() + '일')
+      : (base.getFullYear() + '년 ' + (base.getMonth()+1) + '월 ' + base.getDate() + '일 ~ ' + weekEnd.getDate() + '일');
 
+    grid.className = 'admin-cal-grid view-' + viewMode;
     grid.innerHTML = '';
+    grid.style.gridTemplateColumns = '60px repeat(' + daySpan + ', 1fr)';
+    grid.style.minWidth = viewMode === 'day' ? '320px' : '680px';
     var days = [];
-    for (var i = 0; i < 7; i++) {
+    for (var i = 0; i < daySpan; i++) {
       var d = new Date(base);
       d.setDate(d.getDate() + i);
       days.push(d);
@@ -178,7 +701,11 @@
     days.forEach(function(d) {
       var cell = document.createElement('div');
       cell.className = 'admin-cal-cell header';
-      cell.textContent = (d.getMonth()+1) + '/' + d.getDate();
+      var ds = dateStr(d);
+      var holidayLabel = getHolidayLabel(d);
+      cell.innerHTML = escapeHtml((d.getMonth()+1) + '/' + d.getDate()) +
+        (entryDate && ds === entryDate ? '<span class="entry-date-header-badge">✈ 입국일</span>' : '') +
+        (holidayLabel ? '<span class="holiday-header-badge">' + escapeHtml(holidayLabel) + '</span>' : '');
       headerRow.appendChild(cell);
     });
     grid.appendChild(headerRow);
@@ -192,7 +719,8 @@
       row.appendChild(timeCell);
       days.forEach(function(d) {
         var cell = document.createElement('div');
-        cell.className = 'admin-cal-cell drop-target';
+        var holidayLabel = getHolidayLabel(d);
+        cell.className = 'admin-cal-cell drop-target' + (holidayLabel ? ' is-holiday' : '');
         cell.dataset.date = dateStr(d);
         cell.dataset.hour = h;
         cell.dataset.key = dateStr(d) + 'T' + pad(h);
@@ -217,8 +745,13 @@
         card.draggable = true;
         card.dataset.itemId = it.id;
         card.innerHTML = '<strong>' + escapeHtml(it.service_label || it.service_code) + '</strong>' +
+          buildServiceTypeBadge(it.service_type) +
           (it.assigned_agent_name ? '<br><small>' + escapeHtml(it.assigned_agent_name) + '</small>' : '') +
-          (it.notes ? '<br><small>' + escapeHtml(it.notes) + '</small>' : '');
+          (it.notes ? '<br><small>' + escapeHtml(it.notes) + '</small>' : '') +
+          (it.recommendation_source ? '<br><span class="meta-badge">src: ' + escapeHtml(it.recommendation_source) + '</span>' : '') +
+          (it.confidence_score !== null && it.confidence_score !== undefined ? '<span class="meta-badge">conf: ' + escapeHtml(String(it.confidence_score)) + '</span>' : '') +
+          (it.needs_admin_review ? '<span class="meta-badge">needs_review</span>' : '') +
+          (it.recommendation_reason ? '<br><small title="' + escapeHtml(it.recommendation_reason) + '">' + escapeHtml(it.recommendation_reason) + '</small>' : '');
         var editRow = document.createElement('div');
         editRow.className = 'item-edit-row';
         var sel = document.createElement('select');
@@ -247,6 +780,28 @@
         durInp.style.width = '45px';
         durInp.dataset.itemId = it.id;
         durInp.addEventListener('change', function() { var i = allItems.find(function(x) { return String(x.id) === String(this.dataset.itemId); }.bind(this)); if (i) { i.duration_minutes = parseInt(this.value, 10) || 60; if (i.starts_at && i.ends_at) { var s = new Date(i.starts_at); i.ends_at = new Date(s.getTime() + (i.duration_minutes || 60) * 60000).toISOString(); } } });
+        var dtInp = document.createElement('input');
+        dtInp.type = 'datetime-local';
+        dtInp.style.width = '150px';
+        dtInp.dataset.itemId = it.id;
+        if (it.starts_at) {
+          var dtt = new Date(it.starts_at);
+          dtInp.value = dtt.getFullYear() + '-' + pad(dtt.getMonth()+1) + '-' + pad(dtt.getDate()) + 'T' + pad(dtt.getHours()) + ':' + pad(dtt.getMinutes());
+        }
+        dtInp.addEventListener('change', function() {
+          var i = allItems.find(function(x) { return String(x.id) === String(this.dataset.itemId); }.bind(this));
+          if (!i) return;
+          if (!this.value) {
+            i.starts_at = null;
+            i.ends_at = null;
+            return;
+          }
+          var s = new Date(this.value);
+          if (isNaN(s.getTime())) return;
+          i.starts_at = s.toISOString();
+          var dur = i.duration_minutes || 60;
+          i.ends_at = new Date(s.getTime() + dur * 60000).toISOString();
+        });
         var finBtn = document.createElement('button');
         finBtn.type = 'button';
         finBtn.className = 'btn btn-outline';
@@ -257,12 +812,99 @@
         editRow.appendChild(sel);
         editRow.appendChild(notesInp);
         editRow.appendChild(durInp);
+        editRow.appendChild(dtInp);
         editRow.appendChild(finBtn);
         card.appendChild(editRow);
         card.addEventListener('dragstart', onItemDragStart);
         cell.appendChild(card);
       }
     });
+  }
+
+  function renderMonthCalendar(grid, titleEl, base) {
+    var monthStart = new Date(base.getFullYear(), base.getMonth(), 1);
+    var monthEnd = new Date(base.getFullYear(), base.getMonth() + 1, 0);
+    titleEl.textContent = monthStart.getFullYear() + '년 ' + (monthStart.getMonth()+1) + '월';
+    grid.className = 'admin-cal-grid view-month';
+    grid.innerHTML = '';
+    grid.style.gridTemplateColumns = 'repeat(7, 1fr)';
+    grid.style.minWidth = '';
+
+    var weekNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    weekNames.forEach(function(w, idx) {
+      var h = document.createElement('div');
+      h.className = 'admin-cal-cell header' + (idx >= 5 ? ' weekend-col' : '');
+      h.textContent = w;
+      grid.appendChild(h);
+    });
+
+    var firstWeekday = (monthStart.getDay() + 6) % 7;
+    for (var i = 0; i < firstWeekday; i++) {
+      var blank = document.createElement('div');
+      blank.className = 'admin-cal-cell other-month';
+      grid.appendChild(blank);
+    }
+
+    var byDate = {};
+    scheduledItems().forEach(function(it) {
+      if (!it.starts_at) return;
+      var key = dateStr(new Date(it.starts_at));
+      if (!byDate[key]) byDate[key] = [];
+      byDate[key].push(it);
+    });
+
+    var todayKey = dateStr(new Date());
+    for (var d = 1; d <= monthEnd.getDate(); d++) {
+      var dayDate = new Date(monthStart.getFullYear(), monthStart.getMonth(), d);
+      var key = dateStr(dayDate);
+      var isToday = (key === todayKey);
+      var isEntry = (entryDate && key === entryDate);
+      var isWeekend = (dayDate.getDay() === 0 || dayDate.getDay() === 6);
+      var holidayLabel = getHolidayLabel(dayDate);
+      var cell = document.createElement('div');
+      cell.className = 'admin-cal-cell drop-target' + (isToday ? ' is-today' : '') + (isWeekend ? ' is-weekend' : '') + (holidayLabel ? ' is-holiday' : '') + (isEntry ? ' is-entry' : '');
+      cell.dataset.date = key;
+      cell.dataset.hour = 9;
+      cell.style.minHeight = '96px';
+      cell.addEventListener('dragover', function(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); });
+      cell.addEventListener('dragleave', function(e) { e.currentTarget.classList.remove('drag-over'); });
+      cell.addEventListener('drop', function(e) { onDrop(e, e.currentTarget); });
+
+      var topRow = document.createElement('div');
+      topRow.style.display = 'flex';
+      topRow.style.alignItems = 'center';
+      topRow.style.gap = '4px';
+      topRow.style.flexWrap = 'wrap';
+      topRow.style.marginBottom = '2px';
+      var dayNumEl = document.createElement('div');
+      dayNumEl.className = 'day-num' + (isToday ? ' today-circle' : (holidayLabel ? ' holiday-num' : (isWeekend ? ' weekend-num' : '')));
+      dayNumEl.textContent = d;
+      topRow.appendChild(dayNumEl);
+      if (isEntry) {
+        var badge = document.createElement('span');
+        badge.className = 'entry-date-badge';
+        badge.innerHTML = '&#9992; 입국일';
+        topRow.appendChild(badge);
+      }
+      if (holidayLabel) {
+        var holidayBadge = document.createElement('span');
+        holidayBadge.className = 'holiday-badge';
+        holidayBadge.textContent = holidayLabel;
+        topRow.appendChild(holidayBadge);
+      }
+      cell.appendChild(topRow);
+
+      (byDate[key] || []).forEach(function(it) {
+        var card = document.createElement('div');
+        card.className = 'admin-cal-item' + (it.status === 'CONFIRMED' ? ' finalized' : '');
+        card.draggable = true;
+        card.dataset.itemId = it.id;
+        card.innerHTML = '<strong>' + escapeHtml(it.service_label || it.service_code) + '</strong>' + buildServiceTypeBadge(it.service_type);
+        card.addEventListener('dragstart', onItemDragStart);
+        cell.appendChild(card);
+      });
+      grid.appendChild(cell);
+    }
   }
 
   function escapeHtml(s) {
@@ -274,7 +916,10 @@
 
   var draggedItemId = null;
   function onItemDragStart(e) {
-    draggedItemId = e.target.dataset.itemId;
+    var source = e.currentTarget || e.target;
+    if (!source) return;
+    draggedItemId = source.dataset.itemId || null;
+    if (!draggedItemId) return;
     e.dataTransfer.setData('text/plain', draggedItemId);
     e.dataTransfer.effectAllowed = 'move';
   }
@@ -286,61 +931,141 @@
     if (!itemId) return;
     var dateStrVal = cell.dataset.date;
     var hour = parseInt(cell.dataset.hour, 10);
-    var start = new Date(dateStrVal + 'T' + pad(hour) + ':00:00');
+    var start = new Date(dateStrVal + 'T' + pad(hour || 9) + ':00:00');
     var item = allItems.find(function(i) { return String(i.id) === String(itemId); });
-    if (!item) return;
+    if (!item) {
+      var serviceCode = e.dataTransfer.getData('service-code') || '';
+      var serviceLabel = e.dataTransfer.getData('service-label') || serviceCode;
+      var serviceType = e.dataTransfer.getData('service-type') || 'AI_AGENT';
+      if (!serviceCode) return;
+      item = {
+        id: 'tmp-' + (tempSequence++),
+        service_code: serviceCode,
+        service_label: serviceLabel,
+        service_type: serviceType,
+        duration_minutes: 60,
+        assigned_agent_id: null,
+        notes: '',
+        status: 'SCHEDULED',
+        needs_admin_review: false,
+      };
+      allItems.push(item);
+    }
     var dur = item.duration_minutes || 60;
     var end = new Date(start.getTime() + dur * 60000);
     item.starts_at = start.toISOString();
     item.ends_at = end.toISOString();
     item.duration_minutes = dur;
     render();
+    queueAutoSave();
+  }
+
+  function buildItemsPayload() {
+    return {
+      items: allItems.map(function(it) {
+        var numericId = parseInt(it.id, 10);
+        return {
+          id: (String(it.id).indexOf('tmp-') === 0 || isNaN(numericId)) ? null : numericId,
+          service_code: it.service_code || '',
+          service_label: it.service_label || '',
+          starts_at: it.starts_at || null,
+          ends_at: it.ends_at || null,
+          duration_minutes: it.duration_minutes || 60,
+          assigned_agent_id: it.assigned_agent_id || null,
+          notes: it.notes || '',
+          status: it.status || 'SCHEDULED',
+          needs_admin_review: !!it.needs_admin_review,
+        };
+      }),
+    };
+  }
+
+  function saveSchedule(options) {
+    var opts = options || {};
+    if (scheduleSaveInFlight) {
+      if (!opts.silent) setStatus('이미 저장 중입니다...');
+      return;
+    }
+    scheduleSaveInFlight = true;
+    if (!opts.silent) setStatus('저장 중...');
+    fetch(apiBase, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken(), 'X-Requested-With': 'XMLHttpRequest' },
+      body: JSON.stringify(buildItemsPayload()),
+      credentials: 'same-origin',
+    })
+      .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+      .then(function(res) {
+        if (res.ok) {
+          setStatus(opts.successMessage || '저장됨.');
+          fetchSchedule();
+          return;
+        }
+        setStatus((res.data && res.data.error) || '저장 실패', true);
+      })
+      .catch(function(e) { setStatus('저장 실패: ' + e.message, true); })
+      .finally(function() {
+        scheduleSaveInFlight = false;
+      });
+  }
+
+  function queueAutoSave() {
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = null;
+    }
+    setStatus('일정 자동 저장 준비 중...');
+    autoSaveTimer = setTimeout(function() {
+      autoSaveTimer = null;
+      saveSchedule({ silent: true, successMessage: '드래그 일정이 자동 저장되었습니다.' });
+    }, 300);
   }
 
   function renderUnscheduled() {
     var pool = document.getElementById('unscheduledPool');
     if (!pool) return;
     pool.innerHTML = '';
+    var usedCodes = existingServiceCodes();
+
+    (paidServices || []).forEach(function(svc) {
+      var code = (svc && svc.code ? String(svc.code) : '').trim();
+      if (!code || usedCodes[code]) return;
+      var label = (svc && svc.label ? String(svc.label) : code);
+      var card = document.createElement('div');
+      card.className = 'unscheduled-item template-card';
+      card.draggable = true;
+      card.dataset.serviceCode = code;
+      card.dataset.serviceLabel = label;
+      card.innerHTML = '<strong>' + escapeHtml(label) + '</strong>' + buildServiceTypeBadge(svc.service_type);
+      card.addEventListener('dragstart', function(e) {
+        e.dataTransfer.setData('service-code', code);
+        e.dataTransfer.setData('service-label', label);
+        e.dataTransfer.setData('service-type', svc.service_type || '');
+        e.dataTransfer.effectAllowed = 'copy';
+      });
+      pool.appendChild(card);
+    });
+
     unscheduledItems().forEach(function(it) {
       var div = document.createElement('div');
       div.className = 'unscheduled-item';
       div.draggable = true;
       div.dataset.itemId = it.id;
-      div.textContent = (it.service_label || it.service_code) + (it.notes ? ' — ' + it.notes : '');
+      div.innerHTML = '<strong>' + escapeHtml(it.service_label || it.service_code) + '</strong>' + buildServiceTypeBadge(it.service_type) + (it.notes ? '<div>' + escapeHtml(it.notes) + '</div>' : '');
+      if (it.recommendation_source || it.confidence_score !== null) {
+        var meta = document.createElement('div');
+        meta.style.fontSize = '0.72rem';
+        meta.style.color = '#475569';
+        meta.textContent = (it.recommendation_source || 'fallback') + (it.confidence_score !== null && it.confidence_score !== undefined ? (' · ' + it.confidence_score) : '');
+        div.appendChild(meta);
+      }
       div.addEventListener('dragstart', onItemDragStart);
       pool.appendChild(div);
     });
   }
 
   document.getElementById('btnSave').addEventListener('click', function() {
-    var payload = { items: allItems.map(function(it) {
-      return {
-        id: it.id,
-        starts_at: it.starts_at || null,
-        ends_at: it.ends_at || null,
-        duration_minutes: it.duration_minutes || 60,
-        assigned_agent_id: it.assigned_agent_id || null,
-        notes: it.notes || '',
-        status: it.status || 'SCHEDULED',
-      };
-    }) };
-    setStatus('저장 중...');
-    fetch(apiBase, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken(), 'X-Requested-With': 'XMLHttpRequest' },
-      body: JSON.stringify(payload),
-      credentials: 'same-origin',
-    })
-      .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
-      .then(function(res) {
-        if (res.ok) {
-          setStatus('저장됨.');
-          fetchSchedule();
-        } else {
-          setStatus(res.data.error || '저장 실패', true);
-        }
-      })
-      .catch(function(e) { setStatus('저장 실패: ' + e.message, true); });
+    saveSchedule({ silent: false, successMessage: '저장됨.' });
   });
 
   function postAction(url, btnId) {
@@ -374,6 +1099,30 @@
   document.getElementById('btnRequestAvailability').addEventListener('click', function() {
     postAction('/admin/review/' + submissionId + '/schedule/request-availability/', 'btnRequestAvailability');
   });
+  document.getElementById('btnSendLsa').addEventListener('click', function() {
+    var ids = selectedLsaAgentIds();
+    if (!ids.length) {
+      setStatus('동일 주(State)에 해당하는 LSA 발송 대상 Agent가 없습니다.', true);
+      return;
+    }
+    setStatus('동일 주 후보 Agent 전체에 LSA 배치 발송 중...');
+    fetch('/admin/review/' + submissionId + '/schedule/send-lsa/', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken(), 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_ids: ids }),
+      credentials: 'same-origin',
+    })
+      .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+      .then(function(res) {
+        if (res.ok && res.data.ok) {
+          setStatus(res.data.message || 'LSA 발송 완료');
+          fetchSchedule();
+        } else {
+          setStatus((res.data && (res.data.error || res.data.message)) || 'LSA 발송 실패', true);
+        }
+      })
+      .catch(function(e) { setStatus('LSA 발송 오류: ' + e.message, true); });
+  });
   document.getElementById('btnFinalize').addEventListener('click', function() {
     if (!confirm('일정을 확정하고 고객 달력에 반영합니다. 계속할까요?')) return;
     postAction('/admin/review/' + submissionId + '/schedule/finalize/', 'btnFinalize');
@@ -382,7 +1131,63 @@
   if (!plan && !allItems.length) {
     setStatus('초안이 없습니다. "ML 초안 생성"을 누르세요.');
   }
+  document.getElementById('btnViewDay').addEventListener('click', function() { viewMode = 'day'; fetchSchedule(); });
+  document.getElementById('btnViewWeek').addEventListener('click', function() { viewMode = 'week'; fetchSchedule(); });
+  document.getElementById('btnViewMonth').addEventListener('click', function() { viewMode = 'month'; fetchSchedule(); });
+  document.getElementById('btnPrevPeriod').addEventListener('click', function() {
+    var base = anchorDate ? new Date(anchorDate + 'T00:00:00') : new Date();
+    if (viewMode === 'day') {
+      base.setDate(base.getDate() - 1);
+    } else if (viewMode === 'week') {
+      base.setDate(base.getDate() - 7);
+    } else {
+      base.setMonth(base.getMonth() - 1);
+    }
+    anchorDate = dateStr(base);
+    fetchSchedule();
+  });
+  document.getElementById('btnNextPeriod').addEventListener('click', function() {
+    var base = anchorDate ? new Date(anchorDate + 'T00:00:00') : new Date();
+    if (viewMode === 'day') {
+      base.setDate(base.getDate() + 1);
+    } else if (viewMode === 'week') {
+      base.setDate(base.getDate() + 7);
+    } else {
+      base.setMonth(base.getMonth() + 1);
+    }
+    anchorDate = dateStr(base);
+    fetchSchedule();
+  });
+  document.getElementById('btnTodayPeriod').addEventListener('click', function() {
+    anchorDate = dateStr(new Date());
+    fetchSchedule();
+  });
+  document.getElementById('btnSearchApply').addEventListener('click', function() {
+    var qEl = document.getElementById('calendarSearch');
+    var anchorEl = document.getElementById('calendarAnchorDate');
+    searchQuery = (qEl && qEl.value ? qEl.value : '').trim();
+    anchorDate = (anchorEl && anchorEl.value ? anchorEl.value : anchorDate);
+    fetchSchedule();
+  });
+  document.getElementById('btnSearchClear').addEventListener('click', function() {
+    searchQuery = '';
+    var qEl = document.getElementById('calendarSearch');
+    if (qEl) qEl.value = '';
+    fetchSchedule();
+  });
+  document.getElementById('btnCloseAgentDetail').addEventListener('click', function() { closeBackdrop('lsaAgentDetailModal'); });
+  document.getElementById('btnCloseLsaPreview').addEventListener('click', function() { closeBackdrop('lsaPreviewModal'); });
+  ['lsaAgentDetailModal', 'lsaPreviewModal'].forEach(function(id) {
+    var backdrop = document.getElementById(id);
+    if (!backdrop) return;
+    backdrop.addEventListener('click', function(e) {
+      if (e.target === backdrop) closeBackdrop(id);
+    });
+  });
+  renderLsaCandidates();
   fetchSchedule();
 })();
 </script>
 {% endblock %}
+
+{% block ad_carousel %}{% endblock %}

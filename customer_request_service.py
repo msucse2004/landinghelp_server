@@ -176,14 +176,17 @@ def analyze_customer_request(ctx: RequestContext) -> Any:
     )
     policy = classification.policy
 
-    if ctx.channel == "customer_quote_revision":
-        selected_primary_page = (getattr(classification, "selected_primary_page", "") or "").strip()
-        if not getattr(policy, "target_section_ids", None) and selected_primary_page:
-            inferred_section_ids = _infer_target_section_ids_from_primary_page(selected_primary_page)
-            if inferred_section_ids:
-                policy = replace(policy, target_section_ids=inferred_section_ids)
-                classification.policy = policy
+    selected_primary_page = (getattr(classification, "selected_primary_page", "") or "").strip()
+    if not getattr(policy, "target_section_ids", None) and selected_primary_page:
+        inferred_section_ids = _infer_target_section_ids_from_primary_page(selected_primary_page)
+        if inferred_section_ids:
+            policy = replace(policy, target_section_ids=inferred_section_ids)
+            classification.policy = policy
 
+    policy = _apply_reopen_request_lock_message(ctx, policy)
+    classification.policy = policy
+
+    if ctx.channel == "customer_quote_revision":
         if analysis and (not (policy.customer_facing_summary or "").strip()):
             quote_policy = _policy_from_quote_analysis(analysis, ctx)
             if quote_policy and (quote_policy.customer_facing_summary or "").strip():
@@ -192,6 +195,87 @@ def analyze_customer_request(ctx: RequestContext) -> Any:
 
     ctx.policy_result = policy
     return classification
+
+
+def _apply_reopen_request_lock_message(ctx: RequestContext, policy: Any) -> Any:
+    """
+    견적 release 이후 Agent/Schedule 연동이 시작된 상태에서의 설문 재수정 요청은
+    자동 reopen 제안 대신 정중 안내 문구(REPLY_ONLY)로 응답한다.
+    """
+    from customer_request_policy import Intent, RecommendedAction, ExecutionMode, HumanReviewTarget
+
+    if not policy or getattr(policy, "detected_intent", None) != Intent.SURVEY_REOPEN_REQUEST:
+        return policy
+    if not _has_quote_released_and_schedule_lock(ctx):
+        return policy
+
+    return replace(
+        policy,
+        recommended_action=RecommendedAction.REPLY_WITH_INFORMATION,
+        execution_mode=ExecutionMode.REPLY_ONLY,
+        human_review_target=HumanReviewTarget.none,
+        customer_facing_summary=(
+            "요청 주셔서 감사합니다. 현재는 견적 송부 이후 Agent 배정 및 일정 조율이 함께 진행 중이라 "
+            "설문을 다시 여는 것이 어려운 점 양해 부탁드립니다. "
+            "필요하신 변경사항은 이 메시지로 남겨주시면 담당자가 확인 후 가능한 방법을 정중히 안내드리겠습니다."
+        ),
+        internal_reasoning_summary="quote_released_with_schedule_lock",
+        should_create_action_offer=False,
+        target_section_ids=(),
+    )
+
+
+def _has_quote_released_and_schedule_lock(ctx: RequestContext) -> bool:
+    """
+    견적 송부 이후이고, Agent/Schedule 연동이 시작되어 설문 재오픈이 어려운 상태인지 판단.
+    """
+    sub = getattr(ctx, "submission", None)
+    if not sub:
+        return False
+
+    try:
+        from survey.models import SurveySubmission
+        if getattr(sub, "status", None) in (
+            SurveySubmission.Status.AGENT_ASSIGNMENT,
+            SurveySubmission.Status.SERVICE_IN_PROGRESS,
+        ):
+            return True
+    except Exception:
+        pass
+
+    try:
+        from survey.models import SurveySubmission
+        from settlement.models import SettlementQuote
+        released_quote_exists = SettlementQuote.objects.filter(
+            submission=sub,
+            status__in=(SettlementQuote.Status.FINAL_SENT, SettlementQuote.Status.PAID),
+        ).exists()
+        if not released_quote_exists:
+            return False
+        if getattr(sub, "status", None) == SurveySubmission.Status.AWAITING_PAYMENT:
+            return True
+    except Exception:
+        return False
+
+    try:
+        from settlement.models import ServiceSchedulePlan, AgentAppointmentRequest
+
+        has_schedule_plan = ServiceSchedulePlan.objects.filter(
+            submission=sub,
+            status__in=(
+                ServiceSchedulePlan.Status.REVIEWING,
+                ServiceSchedulePlan.Status.FINALIZED,
+                ServiceSchedulePlan.Status.SENT,
+                ServiceSchedulePlan.Status.ACTIVE,
+            ),
+        ).exists()
+        has_agent_appointments = AgentAppointmentRequest.objects.filter(
+            customer=sub.user,
+            status__in=("PENDING", "CONFIRMED"),
+        ).exists()
+        return bool(has_schedule_plan or has_agent_appointments)
+    except Exception:
+        return False
 
 
 def _infer_target_section_ids_from_primary_page(selected_primary_page: str) -> Tuple[int, ...]:
@@ -758,10 +842,7 @@ def _can_execute_offer(ctx: RequestContext, action_key: str) -> bool:
     if action_key == "reopen_survey" and sub:
         if getattr(sub, "can_customer_edit", lambda: False)():
             return False
-        return getattr(sub, "status", None) in (
-            SurveySubmission.Status.SUBMITTED,
-            SurveySubmission.Status.AWAITING_PAYMENT,
-        )
+        return getattr(sub, "status", None) == SurveySubmission.Status.SUBMITTED
     if action_key == "resume_survey" and sub:
         # REVISION_REQUESTED 상태에서만 재노출 허용
         return getattr(sub, "status", None) == SurveySubmission.Status.REVISION_REQUESTED
@@ -874,6 +955,29 @@ def _execute_survey_reopen(offer: Any, user: Any) -> Tuple[bool, Optional[str]]:
     sub.revision_requested_at = now
     sub.revision_requested_message = "고객이 버튼을 눌러 설문 수정을 요청했습니다."
     sub.save(update_fields=["status", "revision_requested_at", "revision_requested_message", "updated_at"])
+
+    action_payload = getattr(offer, "action_payload", None)
+    target_section_ids = []
+    if isinstance(action_payload, dict):
+        raw_ids = action_payload.get("target_section_ids") or []
+        if isinstance(raw_ids, list):
+            target_section_ids = [int(v) for v in raw_ids if str(v).isdigit()]
+    if not target_section_ids:
+        analysis = getattr(offer, "analysis", None)
+        route_candidates = getattr(analysis, "route_candidates", None)
+        if isinstance(route_candidates, dict):
+            selected_primary_page = (route_candidates.get("selected_primary_page") or "").strip()
+            inferred_ids = _infer_target_section_ids_from_primary_page(selected_primary_page)
+            if inferred_ids:
+                target_section_ids = list(inferred_ids)
+    if target_section_ids:
+        _create_section_requests_for_submission(
+            sub,
+            tuple(target_section_ids),
+            requested_by=user,
+            message="고객 요청 문맥에 따라 우선 수정할 항목",
+        )
+
     SurveySubmission.objects.filter(pk=sub.pk).update(revision_count=F("revision_count") + 1)
     sub.refresh_from_db(fields=["revision_count"])
 

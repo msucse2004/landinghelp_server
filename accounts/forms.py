@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from translations.utils import DisplayKey
-from .models import User
+from .models import User, format_phone_number
 
 # 사이트/선호 언어 드롭다운용 (User.PREFERRED_LANGUAGE_CHOICES와 동일 포맷). CSV key로 조회.
 LANGUAGE_CHOICES = [
@@ -58,6 +58,11 @@ class SignUpForm(UserCreationForm):
         label=DisplayKey('생년월일'),  # 생년월일
         widget=forms.DateInput(attrs={'type': 'date'}),
     )
+    phone = forms.CharField(
+        required=False,
+        label=DisplayKey('휴대폰 번호'),  # 휴대폰 번호
+        max_length=30,
+    )
     gender = forms.ChoiceField(
         choices=[
             ('', DisplayKey('선택하세요')),
@@ -75,6 +80,10 @@ class SignUpForm(UserCreationForm):
         initial='ko',
     )
 
+    def clean_phone(self):
+        phone = self.cleaned_data.get('phone', '')
+        return format_phone_number(phone.strip()) if phone else ''
+
     class Meta:
         model = User
-        fields = ('role', 'first_name', 'birth_date', 'gender', 'preferred_language', 'username', 'email', 'password1', 'password2')
+        fields = ('role', 'first_name', 'birth_date', 'phone', 'gender', 'preferred_language', 'username', 'email', 'password1', 'password2')

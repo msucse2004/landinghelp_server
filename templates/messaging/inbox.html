@@ -147,16 +147,30 @@
   var API_BASE = '/api/messaging';
   var FEEDBACK_ICON_UP = '{% static "img/feedback/thumb-up.svg" %}';
   var FEEDBACK_ICON_DOWN = '{% static "img/feedback/thumb-down.svg" %}';
-  var csrfEl = document.querySelector('[name=csrfmiddlewaretoken]');
-  var csrf = csrfEl ? csrfEl.value : '';
+  function getCsrfToken() {
+    var csrfEl = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (csrfEl && csrfEl.value) return csrfEl.value;
+    var match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  }
+
+  function withCsrf(headers) {
+    var merged = headers ? Object.assign({}, headers) : {};
+    var token = getCsrfToken();
+    if (token) merged['X-CSRFToken'] = token;
+    return merged;
+  }
+
   function getHeaders(method) {
-    var h = { 'Accept': 'application/json', 'X-CSRFToken': csrf };
+    var h = withCsrf({ 'Accept': 'application/json' });
     if (method === 'POST') h['Content-Type'] = 'application/json';
     return h;
   }
   var currentConvId = null;
   var currentUserId = {{ user.id|default:0 }};
   var currentSurveyEditUrl = null;
+  var currentReopenProposalId = null;
+  var currentReopenOfferId = null;
   var currentQuoteViewUrl = null;
   var currentQuotePayUrl = null;
   var _messagePage = 1;
@@ -207,13 +221,56 @@
   }
   function escapeHtml(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+  function normalizeEnglishSentenceCase(text) {
+    var src = String(text || '').trim();
+    if (!src) return '';
+    var parts = src.split(/([.!?]+\s*)/);
+    var out = '';
+    for (var i = 0; i < parts.length; i += 2) {
+      var sentence = parts[i] || '';
+      var punct = parts[i + 1] || '';
+      var trimmed = sentence.trim();
+      if (!trimmed) {
+        out += sentence + punct;
+        continue;
+      }
+      var lowered = trimmed.toLowerCase();
+      lowered = lowered.charAt(0).toUpperCase() + lowered.slice(1);
+      out += lowered + punct;
+      if (i + 2 < parts.length) out += ' ';
+    }
+    return out.replace(/\s{2,}/g, ' ').trim();
+  }
+
+  function isSurveyReopenedNotice(line1, line2) {
+    var merged = normalizeForCompare((line1 || '') + ' ' + (line2 || ''));
+    return merged.indexOf(normalizeForCompare('설문이 다시 열렸습니다')) >= 0
+      || merged.indexOf('the survey has reopened') >= 0;
+  }
+
+  function isSurveyEditGuideNotice(line1, line2) {
+    var merged = normalizeForCompare((line1 || '') + ' ' + (line2 || ''));
+    return merged.indexOf(normalizeForCompare('서비스를 변경하려면 설문을 다시 수정할 수 있어요')) >= 0
+      || merged.indexOf(normalizeForCompare("아래 '설문 수정하기' 버튼")) >= 0
+      || merged.indexOf("if you want to change your service, you can edit the survey again") >= 0
+      || merged.indexOf("please click the 'edit survey' button below") >= 0;
+  }
+
+  function shouldRenderOfferAsCard(o) {
+    if (!o) return false;
+    if (!(o.status === 'PENDING' && o.can_execute && (o.button_label || o.button_action_key))) return false;
+    var key = String(o.button_action_key || '').toLowerCase();
+    if (key === 'reopen_survey') return false;
+    return true;
+  }
+
+
   function renderActionCards(detail) {
     var el = document.getElementById('inboxActionCards');
     if (!el || window.VIEWER_IS_STAFF) return;
     el.innerHTML = '';
     el.style.display = 'none';
-    return;
-    var offers = (detail && detail.action_offers) || [];
+    var offers = ((detail && detail.action_offers) || []).filter(function(o) { return shouldRenderOfferAsCard(o); });
     var reviewStatus = (detail && detail.review_status) || {};
     var html = [];
     if (reviewStatus.has_review && reviewStatus.message) {
@@ -225,7 +282,7 @@
       var bt = o.status === 'EXECUTED' ? (t('completed') || '처리 완료') : (o.status === 'EXPIRED' ? (t('expired') || '만료') : (t('pending') || '대기'));
       var ti = (o.title || '').trim() || (t('action_offer') || '안내');
       var bd = (o.body || '').trim();
-      var showBtn = o.status === 'PENDING' && o.can_execute && (o.button_label || o.button_action_key);
+      var showBtn = shouldRenderOfferAsCard(o);
       var btnHtml = '';
       if (showBtn && isProposal) {
         btnHtml = '<div class="action-card-btn">' +
@@ -254,7 +311,7 @@
           var declineBtn = card ? card.querySelector('.btn-decline-proposal') : null;
           btn.disabled = true;
           if (declineBtn) declineBtn.disabled = true;
-          fetch('/api/settlement/proposal/' + pid + '/confirm/', { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' }, body: '{}' })
+          fetch('/api/settlement/proposal/' + pid + '/confirm/', { method: 'POST', credentials: 'same-origin', headers: withCsrf({ 'Content-Type': 'application/json' }), body: '{}' })
             .then(function(r) { return r.json(); })
             .then(function(res) {
               if (res.ok) { if (redirectUrl) window.location.href = redirectUrl; else selectConversation(currentConvId); }
@@ -271,7 +328,7 @@
           var confirmBtn = card ? card.querySelector('.btn-confirm-proposal') : null;
           btn.disabled = true;
           if (confirmBtn) confirmBtn.disabled = true;
-          fetch('/api/settlement/proposal/' + pid + '/decline/', { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' }, body: '{}' })
+          fetch('/api/settlement/proposal/' + pid + '/decline/', { method: 'POST', credentials: 'same-origin', headers: withCsrf({ 'Content-Type': 'application/json' }), body: '{}' })
             .then(function(r) { return r.json(); })
             .then(function(res) {
               if (res.ok) { selectConversation(currentConvId); }
@@ -282,7 +339,7 @@
       });
       el.querySelectorAll('.btn-confirm-proposal[data-proposal-id]').forEach(function(btn) {
         var pid = btn.getAttribute('data-proposal-id');
-        if (pid) fetch('/api/settlement/proposal/' + pid + '/shown/', { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' }, body: '{}' }).catch(function(){});
+        if (pid) fetch('/api/settlement/proposal/' + pid + '/shown/', { method: 'POST', credentials: 'same-origin', headers: withCsrf({ 'Content-Type': 'application/json' }), body: '{}' }).catch(function(){});
       });
       el.querySelectorAll('.btn-execute-offer').forEach(function(btn) {
         btn.addEventListener('click', function() {
@@ -290,7 +347,7 @@
           var redirectUrl = btn.getAttribute('data-redirect-url') || '';
           if (!offerId || btn.disabled) return;
           btn.disabled = true;
-          fetch('/api/settlement/action-offer/' + offerId + '/execute/', { method: 'POST', body: new FormData(), credentials: 'same-origin', headers: { 'X-CSRFToken': csrf } })
+          fetch('/api/settlement/action-offer/' + offerId + '/execute/', { method: 'POST', body: new FormData(), credentials: 'same-origin', headers: withCsrf() })
             .then(function(r) { return r.json(); })
             .then(function(res) {
               if (res.ok) { if (redirectUrl) window.location.href = redirectUrl; else selectConversation(currentConvId); }
@@ -317,6 +374,8 @@
     var pref = (m.viewer_preferred_language || window.VIEWER_PREFERRED_LANGUAGE || 'en');
     var line1 = (m.body_preferred != null ? m.body_preferred : m.body) || '';
     var line2 = (m.body_en != null ? m.body_en : '') || '';
+    if (line2) line2 = normalizeEnglishSentenceCase(line2);
+    if (pref === 'en' && line1) line1 = normalizeEnglishSentenceCase(line1);
     var resumeUrlPattern = /((?:https?:\/\/[^\s]+)?\/settlement\/survey\/\?resume=1[^\s]*)/i;
     var line1Match = line1.match(resumeUrlPattern);
     var line2Match = line2.match(resumeUrlPattern);
@@ -335,12 +394,16 @@
       if (twoLines) parts.push('<div class="msg-body-en" style="margin-top:0.35rem;font-size:0.9em;opacity:0.9;">' + escapeHtml(line2).replace(/\n/g, '<br>') + '</div>');
       parts.push('</div>');
     }
-    if (resumeUrl && !window.VIEWER_IS_STAFF) {
-      var href = resumeUrl;
-      if (href.indexOf('http://') !== 0 && href.indexOf('https://') !== 0) {
-        href = href.charAt(0) === '/' ? href : ('/' + href);
+    if (!window.VIEWER_IS_STAFF && currentSurveyEditUrl && isSurveyReopenedNotice(line1, line2)) {
+      parts.push('<div class="msg-inline-action"><a href="' + escapeHtml(currentSurveyEditUrl) + '" class="btn-inline-edit">' + escapeHtml(t('edit_survey') || '설문 수정하기') + '</a></div>');
+    } else if (!window.VIEWER_IS_STAFF && isSurveyEditGuideNotice(line1, line2)) {
+      if (currentSurveyEditUrl) {
+        parts.push('<div class="msg-inline-action"><a href="' + escapeHtml(currentSurveyEditUrl) + '" class="btn-inline-edit">' + escapeHtml(t('edit_survey') || '설문 수정하기') + '</a></div>');
+      } else if (currentReopenProposalId) {
+        parts.push('<div class="msg-inline-action"><button type="button" class="btn-inline-edit btn-confirm-proposal" data-proposal-id="' + escapeHtml(String(currentReopenProposalId)) + '" data-redirect-url="' + escapeHtml(currentSurveyEditUrl || '') + '">' + escapeHtml(t('edit_survey') || '설문 수정하기') + '</button></div>');
+      } else if (currentReopenOfferId) {
+        parts.push('<div class="msg-inline-action"><button type="button" class="btn-inline-edit btn-execute-offer" data-offer-id="' + escapeHtml(String(currentReopenOfferId)) + '" data-redirect-url="' + escapeHtml(currentSurveyEditUrl || '') + '">' + escapeHtml(t('edit_survey') || '설문 수정하기') + '</button></div>');
       }
-      parts.push('<div class="msg-inline-action"><a href="' + escapeHtml(href) + '" class="btn-inline-edit">' + escapeHtml(t('edit_survey') || '설문 수정하기') + '</a></div>');
     }
     return parts.length ? parts.join('') : '<div class="msg-body-text">' + escapeHtml(line1 || '') + '</div>';
   }
@@ -381,14 +444,9 @@
     var meta = (m.sender_username || '') + ' · ' + (m.created_at ? m.created_at.replace('T', ' ').slice(0, 16) : '');
     var readIcon = (m.sender_id === currentUserId && m.read_by_others !== undefined)
       ? readStatusIcon(m.read_by_others) : '';
-    var inlineEditBtn = '';
-    if (m.feedback_enabled && !window.VIEWER_IS_STAFF && currentSurveyEditUrl) {
-      inlineEditBtn = '<div class="msg-inline-action"><a href="' + escapeHtml(currentSurveyEditUrl) + '" class="btn-inline-edit">' + escapeHtml(t('edit_survey') || '설문 수정하기') + '</a></div>';
-    }
     var quoteInlineBtns = quoteInlineActionsHtml(m);
     return '<div class="inbox-msg ' + cls + '">' +
       '<div>' + messageBodyHtml(m) + '</div>' +
-      inlineEditBtn +
       quoteInlineBtns +
       '<div class="msg-meta">' + meta + readIcon + '</div>' +
       messageFeedbackHtml(m) +
@@ -409,15 +467,27 @@
 
   function renderTimeline(box, msgs, offers) {
     var combined = [];
+    var reqToMessageCreatedAt = {};
     (msgs || []).forEach(function(m) { combined.push({ type: 'message', data: m }); });
+    (msgs || []).forEach(function(m) {
+      var reqId = (m && m.feedback_request_id) ? String(m.feedback_request_id) : '';
+      if (!reqId) return;
+      var t = (m && m.created_at) ? String(m.created_at) : '';
+      if (!t) return;
+      if (!reqToMessageCreatedAt[reqId] || reqToMessageCreatedAt[reqId] < t) {
+        reqToMessageCreatedAt[reqId] = t;
+      }
+    });
     (offers || []).forEach(function(o) {
-      if (o && o.status === 'PENDING' && o.can_execute && (o.button_label || o.button_action_key)) {
-        combined.push({ type: 'action_offer', data: o });
+      if (shouldRenderOfferAsCard(o)) {
+        var reqId = String((o && o.request_id) || '');
+        var anchorTime = (reqId && reqToMessageCreatedAt[reqId]) ? reqToMessageCreatedAt[reqId] : (o.created_at || '');
+        combined.push({ type: 'action_offer', data: o, anchor_created_at: anchorTime });
       }
     });
     combined.sort(function(a, b) {
-      var aTime = a.data.created_at || '';
-      var bTime = b.data.created_at || '';
+      var aTime = (a.type === 'action_offer' ? a.anchor_created_at : a.data.created_at) || '';
+      var bTime = (b.type === 'action_offer' ? b.anchor_created_at : b.data.created_at) || '';
       var timeCompare = aTime.localeCompare(bTime);
       if (timeCompare !== 0) return timeCompare;
       if (a.type === b.type) return 0;
@@ -433,7 +503,7 @@
       var bt = o.status === 'EXECUTED' ? (t('completed') || '처리 완료') : (o.status === 'EXPIRED' ? (t('expired') || '만료') : (t('pending') || '대기'));
       var ti = (o.title || '').trim() || (t('action_offer') || '안내');
       var bd = (o.body || '').trim();
-      var showBtn = o.status === 'PENDING' && o.can_execute && (o.button_label || o.button_action_key);
+      var showBtn = shouldRenderOfferAsCard(o);
       var btnHtml = '';
       if (showBtn && o.proposal_id) {
         btnHtml = '<div class="action-card-btn">' +
@@ -514,7 +584,7 @@
       fetch('/api/settlement/proposal/' + proposalId + '/confirm/', {
         method: 'POST',
         credentials: 'same-origin',
-        headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' },
+        headers: withCsrf({ 'Content-Type': 'application/json' }),
         body: '{}'
       })
         .then(function(r) { return r.json(); })
@@ -547,7 +617,7 @@
       fetch('/api/settlement/proposal/' + declineProposalId + '/decline/', {
         method: 'POST',
         credentials: 'same-origin',
-        headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' },
+        headers: withCsrf({ 'Content-Type': 'application/json' }),
         body: '{}'
       })
         .then(function(r) { return r.json(); })
@@ -578,7 +648,7 @@
         method: 'POST',
         body: new FormData(),
         credentials: 'same-origin',
-        headers: { 'X-CSRFToken': csrf }
+        headers: withCsrf()
       })
         .then(function(r) { return r.json(); })
         .then(function(res) {
@@ -673,6 +743,8 @@
     currentConvId = convId;
     currentAppointmentId = null;
     currentSurveyEditUrl = null;
+    currentReopenProposalId = null;
+    currentReopenOfferId = null;
     currentQuoteViewUrl = null;
     currentQuotePayUrl = null;
     _messagePage = 1;
@@ -756,12 +828,7 @@
           showBottom = true;
         }
         if (!window.VIEWER_IS_STAFF && detail.show_survey_edit_button && detail.survey_edit_url) {
-          var editLink = document.getElementById('inboxSurveyEditLink');
-          editLink.href = detail.survey_edit_url;
-          editLink.textContent = t('edit_survey') || '설문 수정하기';
-          document.getElementById('inboxSurveyEditActions').style.display = 'flex';
           currentSurveyEditUrl = detail.survey_edit_url;
-          showBottom = true;
         }
         if (!window.VIEWER_IS_STAFF && detail.show_quote_actions && detail.quote_view_url) {
           currentQuoteViewUrl = detail.quote_view_url;
@@ -773,6 +840,13 @@
 
         var msgs = data.messages || [];
         var offers = (detail && detail.action_offers) || [];
+        var pendingReopen = offers.find(function(o) {
+          return o && o.status === 'PENDING' && o.can_execute && String(o.button_action_key || '').toLowerCase() === 'reopen_survey';
+        }) || null;
+        if (pendingReopen) {
+          currentReopenProposalId = pendingReopen.proposal_id || null;
+          currentReopenOfferId = pendingReopen.proposal_id ? null : (pendingReopen.id || null);
+        }
         _loadedMessages = dedupeMessagesById(msgs);
         _loadedOffers = offers;
         _messagePage = Number(data.page || 1);
@@ -829,7 +903,7 @@
     btn.disabled = true;
     fetch('/api/settlement/appointment/' + currentAppointmentId + '/accept/', {
       method: 'POST',
-      headers: { 'X-CSRFToken': csrf, 'Accept': 'application/json' },
+      headers: withCsrf({ 'Accept': 'application/json' }),
       body: new FormData(),
       credentials: 'same-origin',
     })
@@ -935,10 +1009,10 @@
       var fd = new FormData();
       fd.append('image', file);
       fd.append('body', document.getElementById('inboxMessageInput').value.trim());
-      fd.append('csrfmiddlewaretoken', csrf);
+      fd.append('csrfmiddlewaretoken', getCsrfToken());
       var xhr = new XMLHttpRequest();
       xhr.open('POST', API_BASE + '/conversations/' + currentConvId + '/messages/');
-      xhr.setRequestHeader('X-CSRFToken', csrf);
+      xhr.setRequestHeader('X-CSRFToken', getCsrfToken());
       xhr.onload = function() {
         if (xhr.status !== 201) {
           try { var err = JSON.parse(xhr.responseText); alert(err.error || t('send_failed')); } catch(e) { alert(t('send_failed')); }

@@ -867,9 +867,25 @@ def api_conversation_detail(request, conversation_id):
         ):
             payload['show_survey_edit_button'] = True
             try:
-                payload['survey_edit_url'] = reverse('survey:survey_start') + '?resume=1'
+                base_url = reverse('survey:survey_start')
             except Exception:
-                payload['survey_edit_url'] = '/settlement/survey/?resume=1'
+                base_url = '/settlement/survey/'
+            survey_url_params = 'resume=1'
+            try:
+                from messaging.models import CustomerActionProposal
+                latest_proposal = (
+                    CustomerActionProposal.objects
+                    .filter(conversation=conv, action_code='reopen_survey')
+                    .select_related('analysis')
+                    .order_by('-created_at')
+                    .first()
+                )
+                rid = latest_proposal and getattr(latest_proposal.analysis, 'request_id', None)
+                if rid:
+                    survey_url_params += '&request_id=' + rid + '&from=suggestion'
+            except Exception:
+                pass
+            payload['survey_edit_url'] = base_url + '?' + survey_url_params
         # 고객: 송부된 견적(FINAL_SENT)이 있을 때 메시지 창에서 견적서 보기·결제하기 버튼 노출
         if (
             not getattr(user, 'is_staff', False)

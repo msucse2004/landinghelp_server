@@ -125,9 +125,10 @@ class SettlementQuoteAndSubmissionFlowTests(TestCase):
         self.assertEqual(self.quote.status, SettlementQuote.Status.FINAL_SENT)
         self.assertEqual(self.submission.status, SurveySubmission.Status.AWAITING_PAYMENT)
 
+    @patch('settlement.scheduling_engine.ensure_submission_schedule_draft', return_value=(None, False))
     @patch('settlement.post_payment.ensure_plan_service_tasks')
     @patch('settlement.post_payment.build_initial_schedule_from_quote', return_value={'2026-01-01': []})
-    def test_process_quote_payment_sets_submission_agent_assignment(self, mock_build, mock_ensure):
+    def test_process_quote_payment_sets_submission_agent_assignment(self, mock_build, mock_ensure, mock_auto_draft):
         self.quote.status = SettlementQuote.Status.FINAL_SENT
         self.quote.save(update_fields=['status'])
         self.submission.status = SurveySubmission.Status.AWAITING_PAYMENT
@@ -138,6 +139,7 @@ class SettlementQuoteAndSubmissionFlowTests(TestCase):
         self.submission.refresh_from_db()
         self.assertEqual(quote.status, SettlementQuote.Status.PAID)
         self.assertEqual(self.submission.status, SurveySubmission.Status.AGENT_ASSIGNMENT)
+        mock_auto_draft.assert_called_once_with(self.submission, actor=self.user)
 
 
 class QuoteChangeRequestReopenEligibilityTests(TestCase):

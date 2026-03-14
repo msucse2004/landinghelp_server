@@ -63,6 +63,16 @@
   .change-request-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem 1.5rem; align-items: start; }
   @media (max-width: 768px) { .change-request-grid { grid-template-columns: 1fr; } }
   .confidence-low { color: #b91c1c; font-weight: 600; }
+  .accordion-toggle { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; background: transparent; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .accordion-toggle-icon { color: var(--color-muted); transition: transform 0.2s ease; }
+  .accordion-card.is-collapsed .accordion-toggle-icon { transform: rotate(-90deg); }
+  .accordion-body { margin-top: 0.2rem; }
+  .accordion-card.is-collapsed .accordion-body { display: none; }
+  .customer-input-card .card-head .accordion-toggle { font-weight: 600; color: #334155; }
+  .inline-schedule-panel { margin-top: 0.75rem; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; background: #fff; }
+  .inline-schedule-header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--color-border); background: #f8fafc; }
+  .inline-schedule-frame { width: 100%; min-height: 1400px; border: 0; display: block; background: #fff; }
+  @media (max-width: 768px) { .inline-schedule-frame { min-height: 980px; } }
 </style>
 
 {% if messages %}
@@ -93,8 +103,8 @@
 </div>
 
 {% if needs_admin_decision %}
-<div class="card needs-decision">
-  <strong>{% trans "Admin 조치 필요" %}</strong>
+<div class="card needs-decision accordion-card" data-card-id="needs-admin-decision" data-accordion-header=".needs-decision-title">
+  <strong class="needs-decision-title">{% trans "Admin 조치 필요" %}</strong>
   <ul>
     {% for msg in needs_admin_decision %}
     <li>{{ msg }}</li>
@@ -104,7 +114,7 @@
 {% endif %}
 
 <!-- 설문 수정 허용 상태 (Admin initiated reopen) -->
-<div class="card review-card">
+<div class="card review-card accordion-card" data-card-id="reopen-status" data-accordion-header="h2">
   <h2>{% trans "설문 수정 허용 상태" %}</h2>
   <div class="row"><span class="label">{% trans "제출 상태" %}</span><span class="value">{{ reopen_status.submission_status_display|default:reopen_status.submission_status|default:"—" }}</span></div>
   <div class="row"><span class="label">{% trans "최신 견적 상태" %}</span><span class="value">{{ reopen_status.latest_quote_status|default:"—" }}</span></div>
@@ -127,7 +137,7 @@
 <section class="customer-input-section" aria-labelledby="customer-input-heading">
   <h2 id="customer-input-heading">{% trans "고객이 입력한 내용" %}</h2>
   {% if latest_customer_revision %}
-  <div class="customer-input-card" style="border-left:4px solid #3b82f6;">
+  <div class="customer-input-card accordion-card" data-card-id="customer-revision" data-accordion-header=".card-head" style="border-left:4px solid #3b82f6;">
     <div class="card-head">{% trans "마지막 견적 수정 내용" %}</div>
     <div class="card-body">
       <div class="answer-grid">
@@ -152,7 +162,7 @@
   </div>
   {% endif %}
   {% for section in customer_answers_by_section %}
-  <div class="customer-input-card">
+  <div class="customer-input-card accordion-card" data-card-id="customer-section-{{ forloop.counter }}" data-accordion-header=".card-head">
     <div class="card-head">{{ section.section_title }}</div>
     <div class="card-body">
       <div class="answer-grid">
@@ -172,7 +182,7 @@
 
 <!-- 2. 자동 체크 (간단 표) -->
 {% if submission_readiness and submission_readiness.checks %}
-<div class="card review-card">
+<div class="card review-card accordion-card" data-card-id="submission-checks" data-accordion-header="h2">
   <h2>{% trans "자동 체크" %}</h2>
   <table>
     <thead>
@@ -191,7 +201,7 @@
 {% endif %}
 
 <!-- 3. 요청 요약 (정규화된 값, 한눈에) -->
-<div class="card review-card">
+<div class="card review-card accordion-card" data-card-id="request-summary" data-accordion-header="h2">
   <h2>{% trans "요청 요약" %} ({% trans "정규화" %})</h2>
   <div class="row"><span class="label">{% trans "지역" %}</span><span class="value">{{ request_summary.region|default:"—" }}</span></div>
   <div class="row"><span class="label">{% trans "입국/이주 예정일" %}</span><span class="value">{{ request_summary.entry_date|default:"—" }}</span></div>
@@ -216,7 +226,7 @@
 
 <!-- 고객 수정 요청 분석 (LLM 해석 결과 + 추천 액션) -->
 {% if latest_change_request %}
-<section class="card review-card change-request-analysis-card" aria-labelledby="change-request-analysis-heading">
+<section class="card review-card change-request-analysis-card accordion-card" data-card-id="change-request-analysis" data-accordion-header="h2" aria-labelledby="change-request-analysis-heading">
   <h2 id="change-request-analysis-heading">{% trans "고객 수정 요청 분석" %}</h2>
   <p class="change-request-notice" style="font-size:0.85rem; color:#64748b; margin-bottom:1rem; padding:0.5rem 0.75rem; background:#f1f5f9; border-radius:6px;">
     <strong>{% trans "참고 정보입니다. 자동 확정되지 않습니다." %}</strong> {% trans "Admin이 확인 후 조치를 선택하세요." %}
@@ -281,7 +291,7 @@
 
 <!-- 재견적 흐름 추적: 설문 수정 이력 + 견적 이력 + 반영된 변경 요청 -->
 {% if quote_trail or submission_revision_info.revision_count %}
-<div class="card review-card">
+<div class="card review-card accordion-card" data-card-id="revision-trail" data-accordion-header="h2">
   <h2>{% trans "재견적 흐름" %}</h2>
   {% if submission_revision_info.revision_count or submission_revision_info.reopened_at %}
   <div class="row"><span class="label">{% trans "설문 수정 횟수" %}</span><span class="value">{{ submission_revision_info.revision_count|default:0 }}</span></div>
@@ -311,7 +321,7 @@
 {% endif %}
 
 <!-- 견적서 (공식 형식, USD, 가격 수정 가능) -->
-<div class="card review-card quotation-card" id="quotation-card">
+<div class="card review-card quotation-card accordion-card" id="quotation-card" data-card-id="quotation-card" data-accordion-header="h2">
   <h2>{% trans "견적서" %} (Quotation)
     {% if service_mismatch.has_mismatch %}
     <span class="badge badge-warning" style="margin-left:0.5rem;">{% trans "설문-견적 서비스 불일치" %}</span>
@@ -423,7 +433,7 @@
 </div>
 
 <!-- 워크플로우 상태 -->
-<div class="card review-card">
+<div class="card review-card accordion-card" data-card-id="workflow-status" data-accordion-header="h2">
   <h2>{% trans "워크플로우 상태" %}</h2>
   <div class="row"><span class="label">{% trans "상태" %}</span><span class="value">{{ workflow_status.label }}</span></div>
   {% if submission.status == 'REVISION_REQUESTED' %}
@@ -444,7 +454,7 @@
 </div>
 
 <!-- 결제 요약 -->
-<div class="card review-card">
+<div class="card review-card accordion-card" data-card-id="payment-summary" data-accordion-header="h2">
   <h2>{% trans "결제 요약" %}</h2>
   {% if payment_summary %}
   <div class="row"><span class="label">{% trans "견적 상태" %}</span><span class="value">{{ payment_summary.status_label }}</span></div>
@@ -460,8 +470,27 @@
   {% endif %}
 </div>
 
+<!-- 결제 완료 후: 검토 화면 내 일정 편집 카드 -->
+{% if schedule_lsa_prep.can_prepare %}
+<div class="card review-card accordion-card" data-card-id="schedule-lsa-prep" data-accordion-header="h2">
+  <h2>{% trans "일정 편집 워크스페이스" %}</h2>
+  <p class="text-muted" style="font-size:0.9rem; margin-bottom:0.6rem;">
+    {% trans "검토 화면을 벗어나지 않고 미배정 서비스, 네비게이션, 달력, LSA 후보/응답을 한 번에 확인·수정합니다." %}
+  </p>
+  <div id="inlineSchedulePanel" class="inline-schedule-panel" aria-hidden="false">
+    <iframe
+      id="inlineScheduleFrame"
+      class="inline-schedule-frame"
+      title="{% trans '일정 편집' %}"
+      loading="lazy"
+      referrerpolicy="same-origin"
+      src="{% url 'app_submission_review_schedule' submission.id %}?embed=1"></iframe>
+  </div>
+</div>
+{% endif %}
+
 <!-- 일정 준비도 및 필요 작업 (결제 후) -->
-<div class="card review-card">
+<div class="card review-card accordion-card" data-card-id="scheduling-readiness" data-accordion-header="h2">
   <h2>{% trans "일정 준비도" %} (결제 후)</h2>
   {% if scheduling_summary %}
   {% if scheduling_summary.has_plan %}
@@ -499,7 +528,7 @@
 
 <!-- Admin 검토 조치: 더 필요한 정보 요청 (SUBMITTED일 때만 표시) -->
 {% if submission.status == 'SUBMITTED' %}
-<div class="card review-card" style="border-left: 4px solid #3b82f6;">
+<div class="card review-card accordion-card" data-card-id="request-more-info" data-accordion-header="h2" style="border-left: 4px solid #3b82f6;">
   <h2>{% trans "고객에게 더 필요한 정보 요청" %}</h2>
   <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 0;">{% trans "정보가 부족하거나 수정이 필요하면 아래 중 하나를 사용하세요. 고객에게 앱 메시지함과 이메일(설정 시)으로 안내가 전송됩니다." %}</p>
 </div>
@@ -507,7 +536,7 @@
 
 <!-- 조치: 카드별 수정 요청 (구조화된 재입력) -->
 {% if submission.status == 'SUBMITTED' and available_sections %}
-<div class="card review-card">
+<div class="card review-card accordion-card" data-card-id="section-update-request" data-accordion-header="h2">
   <h2>{% trans "카드별 수정 요청" %}</h2>
   <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 0.75rem;">{% trans "수정이 필요한 카드만 선택하면, 고객은 해당 카드만 다시 입력합니다. 메시지보다 구조화된 재입력이 우선입니다." %}</p>
   {% if pending_section_requests %}
@@ -534,7 +563,7 @@
 
 <!-- 조치: 고객에게 수정 요청 (전체 메시지) -->
 {% if submission.status == 'SUBMITTED' %}
-<div class="card review-card">
+<div class="card review-card accordion-card" data-card-id="full-revision-request" data-accordion-header="h2">
   <h2>{% trans "고객에게 수정 요청" %} ({% trans "전체 메시지" %})</h2>
   <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 0.5rem;">{% trans "특정 카드가 아니라 전체적인 보완이 필요할 때 사용합니다. 메시지를 입력해 보내면 고객은 설문 전체를 다시 열어 수정·재제출할 수 있습니다." %}</p>
   <form action="{% url 'app_submission_review_request_revision' submission_id=submission.id %}" method="post">
@@ -547,4 +576,55 @@
   </form>
 </div>
 {% endif %}
+<script>
+  (function () {
+    const defaultExpanded = new Set([
+      {% for cid in default_expanded_card_ids %}
+      '{{ cid }}',
+      {% endfor %}
+    ]);
+
+    function setupAccordion(card) {
+      if (!card || card.dataset.accordionReady === '1') return;
+      const headerSelector = card.dataset.accordionHeader || 'h2';
+      const header = card.querySelector(headerSelector);
+      if (!header) return;
+
+      const body = document.createElement('div');
+      body.className = 'accordion-body';
+
+      let sibling = header.nextSibling;
+      while (sibling) {
+        const next = sibling.nextSibling;
+        body.appendChild(sibling);
+        sibling = next;
+      }
+      header.insertAdjacentElement('afterend', body);
+
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'accordion-toggle';
+      toggle.innerHTML = '<span class="accordion-toggle-label"></span><span class="accordion-toggle-icon" aria-hidden="true">▾</span>';
+      toggle.querySelector('.accordion-toggle-label').innerHTML = header.innerHTML;
+      header.innerHTML = '';
+      header.appendChild(toggle);
+
+      const cardId = card.dataset.cardId || '';
+      const expanded = defaultExpanded.has(cardId);
+      toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      if (!expanded) {
+        card.classList.add('is-collapsed');
+      }
+
+      toggle.addEventListener('click', function () {
+        const isCollapsed = card.classList.toggle('is-collapsed');
+        toggle.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+      });
+
+      card.dataset.accordionReady = '1';
+    }
+
+    document.querySelectorAll('.accordion-card').forEach(setupAccordion);
+  })();
+</script>
 {% endblock %}

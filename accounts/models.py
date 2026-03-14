@@ -1,8 +1,21 @@
 # accounts: 인증/역할(app authentication & role)
+import re
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from translations.utils import DisplayKey
+
+
+def format_phone_number(phone: str) -> str:
+    """한국 휴대폰 번호를 010-XXXX-XXXX 형식으로 정규화. 형식 불명 번호는 원문 반환."""
+    if not phone:
+        return phone
+    digits = re.sub(r'\D', '', phone)
+    if len(digits) == 11 and digits.startswith('01'):
+        return f'{digits[:3]}-{digits[3:7]}-{digits[7:]}'
+    if len(digits) == 10 and digits.startswith('01'):
+        return f'{digits[:3]}-{digits[3:6]}-{digits[6:]}'
+    return phone
 
 
 class AgentRating(models.Model):
@@ -75,6 +88,13 @@ class User(AbstractUser):
         PENDING = 'PENDING', '대기'
         SUSPENDED = 'SUSPENDED', '정지'
 
+    class AgentLevel(models.TextChoices):
+        BRONZE = 'BRONZE', 'Bronze'
+        SILVER = 'SILVER', 'Silver'
+        GOLD = 'GOLD', 'Gold'
+        DIAMOND = 'DIAMOND', 'Diamond'
+        PLATINUM = 'PLATINUM', 'Platinum'
+
     role = models.CharField(
         max_length=20,
         choices=Role.choices,
@@ -86,6 +106,12 @@ class User(AbstractUser):
         default=Status.ACTIVE,
     )
     birth_date = models.DateField(null=True, blank=True, verbose_name=DisplayKey('생년월일'))  # 생년월일
+    phone = models.CharField(
+        max_length=30,
+        blank=True,
+        default='',
+        verbose_name=DisplayKey('휴대폰 번호'),  # 휴대폰 번호
+    )
 
     class Gender(models.TextChoices):
         M = 'M', '남성'
@@ -138,6 +164,54 @@ class User(AbstractUser):
         verbose_name=DisplayKey('Accept rate (수락률)'),  # Accept rate (수락률)
         help_text=DisplayKey('에이전트 전체 약속 수락률. 예: 0.85 = 85%. 비워두면 서비스별 통계에서 계산해 표시.'),
     )
+    agent_level = models.CharField(
+        max_length=20,
+        choices=AgentLevel.choices,
+        default=AgentLevel.BRONZE,
+        db_index=True,
+        verbose_name=DisplayKey('Agent 레벨'),
+        help_text=DisplayKey('Bronze/Silver/Gold/Diamond/Platinum 레벨'),
+    )
+    agent_level_score = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name=DisplayKey('Agent 레벨 점수'),
+        help_text=DisplayKey('완료건수/별점/수락률 기반 계산 점수(0~100 권장)'),
+    )
+    agent_completed_service_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name=DisplayKey('완료 서비스 건수(스냅샷)'),
+        help_text=DisplayKey('레벨 계산 시점 기준 완료 서비스 건수'),
+    )
+    agent_rating_avg_snapshot = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name=DisplayKey('평점 평균(스냅샷)'),
+        help_text=DisplayKey('레벨 계산 시점 기준 평균 별점(1~5)'),
+    )
+    agent_accept_rate_snapshot = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name=DisplayKey('수락률(스냅샷)'),
+        help_text=DisplayKey('레벨 계산 시점 기준 수락률(0~1 권장)'),
+    )
+    agent_level_constraints = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name=DisplayKey('레벨 기반 제약(초안)'),
+        help_text=DisplayKey('향후 레벨별 제약 룰을 저장하기 위한 구조화 필드'),
+    )
+    agent_level_last_evaluated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=DisplayKey('레벨 평가 시각'),
+    )
 
     class Meta:
         verbose_name = DisplayKey('사용자')  # 사용자
@@ -155,6 +229,21 @@ class User(AbstractUser):
         from django.db.models import Avg, Count
         result = self.ratings_received.aggregate(avg=Avg('score'), count=Count('id'))
         return {'avg': result['avg'], 'count': result['count'] or 0}
+
+    def is_agent_level_at_least(self, level: str) -> bool:
+        if self.role != self.Role.AGENT:
+            return False
+        order = [
+            self.AgentLevel.BRONZE,
+            self.AgentLevel.SILVER,
+            self.AgentLevel.GOLD,
+            self.AgentLevel.DIAMOND,
+            self.AgentLevel.PLATINUM,
+        ]
+        try:
+            return order.index(self.agent_level or self.AgentLevel.BRONZE) >= order.index(level)
+        except ValueError:
+            return False
 
 
 class AgentForRating(User):

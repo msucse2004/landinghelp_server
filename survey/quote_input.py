@@ -24,6 +24,17 @@ QUOTE_MAPPING_KEYS = (
 )
 
 
+def _as_code_list(value):
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str):
+        raw = value.strip()
+        return [raw] if raw else []
+    return [str(value).strip()] if str(value).strip() else []
+
+
 def _normalize_value(value, value_type):
     """quote_value_type에 따라 값을 정규화."""
     if value is None:
@@ -113,9 +124,9 @@ def get_quote_input_data(submission):
 
     # service_codes: requested_required_services + requested_optional_services 병합 (문항 매핑 없어도)
     if getattr(submission, 'requested_required_services', None):
-        out['service_codes'] = list(set(out['service_codes']) | set(submission.requested_required_services))
+        out['service_codes'] = list(set(out['service_codes']) | set(_as_code_list(submission.requested_required_services)))
     if getattr(submission, 'requested_optional_services', None):
-        out['service_codes'] = list(set(out['service_codes']) | set(submission.requested_optional_services))
+        out['service_codes'] = list(set(out['service_codes']) | set(_as_code_list(submission.requested_optional_services)))
 
     # region: settlement_state + settlement_city 조합 (기존 region 키 미설정 시)
     if out.get('region') is None and (out.get('settlement_state') or out.get('settlement_city')):

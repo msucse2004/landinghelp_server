@@ -66,6 +66,10 @@
             <input type="email" name="email" id="id_email" value="{{ form.email.value|default:'' }}" required autocomplete="email">
           </div>
           <div class="form-group">
+            <label for="id_phone" data-i18n-key="휴대폰 번호">{% trans "휴대폰 번호" %}</label>
+            <input type="tel" name="phone" id="id_phone" value="{{ form.phone.value|default:'' }}" autocomplete="tel" placeholder="+1 234 567 8900">
+          </div>
+          <div class="form-group">
             <label for="id_password1" data-i18n-key="비밀번호">{% trans "비밀번호" %}</label>
             <input type="password" name="password1" id="id_password1" required autocomplete="new-password">
           </div>

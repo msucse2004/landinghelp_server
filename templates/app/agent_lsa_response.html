@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "LSA 일정 응답" %} – LifeAI US{% endblock %}
+{% block content %}
+<style>
+  .lsa-response-page { max-width: 960px; margin: 0 auto; }
+  .lsa-table { width: 100%; border-collapse: collapse; margin-top: 0.75rem; }
+  .lsa-table th, .lsa-table td { border: 1px solid var(--color-border); padding: 0.5rem; font-size: 0.88rem; vertical-align: top; }
+  .lsa-table th { background: #f1f5f9; }
+  .lsa-note { width: 100%; min-height: 72px; }
+  .cell-actions select, .cell-actions input { width: 100%; margin-bottom: 0.25rem; }
+</style>
+<div class="container lsa-response-page">
+  <div class="card">
+    <h1 style="margin-top:0;">{% trans "LSA 일정 제안 응답" %}</h1>
+    {% if error == 'invalid_link' %}
+      <p class="text-danger">{% trans "유효하지 않은 링크입니다." %}</p>
+    {% elif error == 'forbidden' %}
+      <p class="text-danger">{% trans "요청 대상 Agent만 접근할 수 있습니다." %}</p>
+    {% else %}
+      <p class="text-muted" style="font-size:0.9rem;">{% trans "제안 일정을 검토하고 서비스별로 수락/변경 제안/불가를 선택해 주세요." %}</p>
+      <label style="display:block; margin-top:0.5rem;">{% trans "전체 응답" %}</label>
+      <select id="overallDecision" style="max-width:280px;">
+        <option value="ACCEPT_AS_IS">{% trans "제안 일정 그대로 수락" %}</option>
+        <option value="PARTIAL">{% trans "일부 수락/일부 조정" %}</option>
+        <option value="DECLINE">{% trans "전체 거절" %}</option>
+      </select>
+
+      <table class="lsa-table" id="lsaTable">
+        <thead>
+          <tr>
+            <th>{% trans "서비스" %}</th>
+            <th>{% trans "제안 일정" %}</th>
+            <th>{% trans "응답" %}</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <label style="display:block; margin-top:0.75rem;">{% trans "메모" %}</label>
+      <textarea id="overallNote" class="lsa-note"></textarea>
+
+      <div style="margin-top:0.75rem;">
+        <button type="button" id="btnSubmit" class="btn btn-primary">{% trans "응답 제출" %}</button>
+        <span id="respStatus" style="margin-left:0.5rem; font-size:0.9rem; color:var(--color-muted);"></span>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if not error %}
+<form style="display:none;" id="tokenForm">{% csrf_token %}<input type="hidden" name="token" value="{{ request.GET.token|default:'' }}"></form>
+<script>
+(function() {
+  var proposed = {{ proposed_schedule_json|safe }};
+  var existing = {{ existing_response_json|safe }};
+  var tableBody = document.querySelector('#lsaTable tbody');
+  var statusEl = document.getElementById('respStatus');
+  var decisionEl = document.getElementById('overallDecision');
+  var noteEl = document.getElementById('overallNote');
+
+  if (existing && existing.decision) decisionEl.value = existing.decision;
+  if (existing && existing.note) noteEl.value = existing.note;
+
+  function pad(n){return n<10?'0'+n:n;}
+  function toLocalInputVal(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function escapeHtml(s){ var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+  function findExistingItem(p) {
+    if (!existing || !existing.items) return null;
+    for (var i=0;i<existing.items.length;i++) {
+      var it = existing.items[i];
+      if ((it.service_code||'') === (p.service_code||'') && (it.proposed_starts_at||'') === (p.starts_at||'')) return it;
+    }
+    return null;
+  }
+
+  function renderRows() {
+    tableBody.innerHTML = '';
+    (proposed || []).forEach(function(p, idx) {
+      var ex = findExistingItem(p) || {};
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td><strong>' + escapeHtml(p.service_label || p.service_code) + '</strong><br><small>' + escapeHtml(p.service_code || '') + '</small></td>' +
+        '<td><small>' + escapeHtml((p.starts_at||'') + ' ~ ' + (p.ends_at||'')) + '</small></td>' +
+        '<td class="cell-actions">' +
+        '<select data-k="action"><option value="ACCEPT">수락</option><option value="SUGGEST_CHANGE">변경 제안</option><option value="UNAVAILABLE">불가</option></select>' +
+        '<input type="datetime-local" data-k="suggested_starts_at" />' +
+        '<input type="datetime-local" data-k="suggested_ends_at" />' +
+        '<input type="text" data-k="note" placeholder="항목 메모(선택)" />' +
+        '</td>';
+      tr.dataset.serviceCode = p.service_code || '';
+      tr.dataset.serviceLabel = p.service_label || '';
+      tr.dataset.proposedStartsAt = p.starts_at || '';
+      tr.dataset.proposedEndsAt = p.ends_at || '';
+
+      var sel = tr.querySelector('select[data-k="action"]');
+      sel.value = ex.action || 'ACCEPT';
+      tr.querySelector('input[data-k="suggested_starts_at"]').value = toLocalInputVal(ex.suggested_starts_at);
+      tr.querySelector('input[data-k="suggested_ends_at"]').value = toLocalInputVal(ex.suggested_ends_at);
+      tr.querySelector('input[data-k="note"]').value = ex.note || '';
+
+      tableBody.appendChild(tr);
+    });
+  }
+
+  function buildPayloadItems() {
+    var rows = tableBody.querySelectorAll('tr');
+    var out = [];
+    rows.forEach(function(tr) {
+      var action = tr.querySelector('select[data-k="action"]').value || 'ACCEPT';
+      var s = tr.querySelector('input[data-k="suggested_starts_at"]').value;
+      var e = tr.querySelector('input[data-k="suggested_ends_at"]').value;
+      out.push({
+        service_code: tr.dataset.serviceCode,
+        service_label: tr.dataset.serviceLabel,
+        proposed_starts_at: tr.dataset.proposedStartsAt,
+        proposed_ends_at: tr.dataset.proposedEndsAt,
+        action: action,
+        suggested_starts_at: s ? new Date(s).toISOString() : null,
+        suggested_ends_at: e ? new Date(e).toISOString() : null,
+        note: tr.querySelector('input[data-k="note"]').value || '',
+      });
+    });
+    return out;
+  }
+
+  document.getElementById('btnSubmit').addEventListener('click', function() {
+    var token = document.querySelector('#tokenForm input[name="token"]').value;
+    var csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    statusEl.textContent = '제출 중...';
+    fetch(window.location.pathname + 'submit/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest' },
+      body: JSON.stringify({
+        token: token,
+        decision: decisionEl.value,
+        note: noteEl.value,
+        items: buildPayloadItems(),
+      }),
+      credentials: 'same-origin',
+    })
+      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
+      .then(function(res){
+        if (res.ok && res.data.ok) {
+          statusEl.textContent = '응답이 저장되었습니다.';
+          statusEl.style.color = 'var(--color-muted)';
+        } else {
+          statusEl.textContent = (res.data && res.data.error) || '응답 저장 실패';
+          statusEl.style.color = '#b91c1c';
+        }
+      })
+      .catch(function(e){ statusEl.textContent = '오류: ' + e.message; statusEl.style.color = '#b91c1c'; });
+  });
+
+  renderRows();
+})();
+</script>
+{% endif %}
+{% endblock %}

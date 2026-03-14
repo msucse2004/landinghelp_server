@@ -429,6 +429,15 @@ class ServiceSchedulePlan(models.Model):
         verbose_name='출처',
     )
     version = models.PositiveIntegerField(default=1, verbose_name='버전')
+    based_on = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='derived_plans',
+        verbose_name='기반 플랜',
+        help_text='Admin 조정안 버전이 어떤 이전 플랜을 기반으로 생성됐는지 추적.',
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -520,6 +529,32 @@ class ServiceScheduleItem(models.Model):
         verbose_name='출처 사유',
         help_text='ML/Admin 선택 이유 요약.',
     )
+    based_on_item = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='derived_items',
+        verbose_name='기반 항목',
+        help_text='Admin 조정안에서 원본 system draft 항목 추적용.',
+    )
+    recommendation_source = models.CharField(
+        max_length=30,
+        blank=True,
+        default='fallback',
+        verbose_name='추천 출처',
+        help_text='historical | rule_based | fallback',
+    )
+    needs_admin_review = models.BooleanField(
+        default=False,
+        verbose_name='Admin 검토 필요',
+    )
+    recommendation_metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name='추천 메타데이터',
+        help_text='confidence/evidence_type/sample_count/day_offset 등 구조화된 추천 근거.',
+    )
     notes = models.TextField(blank=True, verbose_name='메모')
     sort_order = models.PositiveIntegerField(default=0, verbose_name='정렬 순서')
 
@@ -593,6 +628,259 @@ class AgentAvailabilityWindow(models.Model):
 
     def __str__(self):
         return f'{self.agent_id} {self.starts_at}–{self.ends_at} ({self.get_status_display()})'
+
+
+class LsaSourcingBatch(models.Model):
+    """
+    Admin이 후보 Agent들에게 발송한 LSA 소싱 배치.
+    발송 시점의 스케줄/서비스/내부단가를 스냅샷으로 보존한다.
+    """
+
+    submission = models.ForeignKey(
+        'survey.SurveySubmission',
+        on_delete=models.CASCADE,
+        related_name='lsa_sourcing_batches',
+        verbose_name='설문 제출',
+    )
+    schedule_plan = models.ForeignKey(
+        ServiceSchedulePlan,
+        on_delete=models.CASCADE,
+        related_name='lsa_sourcing_batches',
+        verbose_name='기준 일정 플랜',
+    )
+    schedule_version = models.PositiveIntegerField(default=1, verbose_name='기준 일정 버전')
+    proposed_schedule_snapshot = models.JSONField(default=list, blank=True, verbose_name='제안 일정 스냅샷')
+    requested_services_snapshot = models.JSONField(default=list, blank=True, verbose_name='요청 서비스 스냅샷')
+    internal_pricing_snapshot = models.JSONField(default=list, blank=True, verbose_name='내부 단가 스냅샷')
+    selected_request = models.OneToOneField(
+        'LsaAgentRequest',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='selected_for_batch',
+        verbose_name='선정된 Agent 요청',
+    )
+    selected_at = models.DateTimeField(null=True, blank=True, verbose_name='선정 시각')
+    closed_at = models.DateTimeField(null=True, blank=True, verbose_name='배치 종료 시각')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_lsa_sourcing_batches',
+        verbose_name='생성자',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'LSA 소싱 배치'
+        verbose_name_plural = 'LSA 소싱 배치'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'LSA Batch #{self.id} (submission={self.submission_id}, plan_v={self.schedule_version})'
+
+
+class LsaAgentRequest(models.Model):
+    """
+    LSA 소싱 배치의 Agent별 발송 레코드.
+    payload_snapshot은 발송 시점 문서(JSON)를 그대로 보존한다.
+    """
+
+    class Status(models.TextChoices):
+        SENT = 'SENT', '발송됨'
+        RESPONDED = 'RESPONDED', '응답함'
+        DECLINED = 'DECLINED', '거절'
+        SELECTED = 'SELECTED', '선정됨'
+        NOT_SELECTED = 'NOT_SELECTED', '미선정'
+        CANCELLED = 'CANCELLED', '취소'
+
+    batch = models.ForeignKey(
+        LsaSourcingBatch,
+        on_delete=models.CASCADE,
+        related_name='agent_requests',
+        verbose_name='LSA 배치',
+    )
+    target_agent = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='lsa_agent_requests',
+        verbose_name='대상 Agent',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.SENT,
+        db_index=True,
+        verbose_name='상태',
+    )
+    payload_snapshot = models.JSONField(default=dict, blank=True, verbose_name='발송 payload 스냅샷')
+    sent_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(null=True, blank=True, verbose_name='응답 시각')
+
+    class Meta:
+        verbose_name = 'LSA Agent 요청'
+        verbose_name_plural = 'LSA Agent 요청'
+        ordering = ['-sent_at']
+        unique_together = [('batch', 'target_agent')]
+
+    def __str__(self):
+        return f'LSA Request #{self.id} (batch={self.batch_id}, agent={self.target_agent_id})'
+
+
+class LsaAgentResponse(models.Model):
+    """
+    Agent의 LSA 요청 응답(리비전 이력).
+    """
+
+    class Decision(models.TextChoices):
+        ACCEPT_AS_IS = 'ACCEPT_AS_IS', '제안 일정 그대로 수락'
+        PARTIAL = 'PARTIAL', '일부 수락/일부 조정'
+        DECLINE = 'DECLINE', '전체 거절'
+
+    request = models.ForeignKey(
+        LsaAgentRequest,
+        on_delete=models.CASCADE,
+        related_name='responses',
+        verbose_name='LSA Agent 요청',
+    )
+    responded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='lsa_responses',
+        verbose_name='응답 Agent',
+    )
+    decision = models.CharField(
+        max_length=20,
+        choices=Decision.choices,
+        default=Decision.ACCEPT_AS_IS,
+        db_index=True,
+        verbose_name='응답 결정',
+    )
+    note = models.TextField(blank=True, verbose_name='응답 메모')
+    revision = models.PositiveIntegerField(default=1, verbose_name='응답 리비전')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'LSA Agent 응답'
+        verbose_name_plural = 'LSA Agent 응답'
+        ordering = ['-created_at']
+        unique_together = [('request', 'revision')]
+
+    def __str__(self):
+        return f'LSA Response #{self.id} (request={self.request_id}, rev={self.revision})'
+
+
+class LsaAgentResponseItem(models.Model):
+    """
+    서비스별 응답 상세(수락/변경제안/불가).
+    """
+
+    class Action(models.TextChoices):
+        ACCEPT = 'ACCEPT', '수락'
+        SUGGEST_CHANGE = 'SUGGEST_CHANGE', '변경 제안'
+        UNAVAILABLE = 'UNAVAILABLE', '불가'
+
+    response = models.ForeignKey(
+        LsaAgentResponse,
+        on_delete=models.CASCADE,
+        related_name='items',
+        verbose_name='LSA 응답',
+    )
+    service_code = models.CharField(max_length=50, blank=True, verbose_name='서비스 코드')
+    service_label = models.CharField(max_length=200, blank=True, verbose_name='서비스 표시명')
+    proposed_starts_at = models.DateTimeField(null=True, blank=True, verbose_name='제안 시작 시각')
+    proposed_ends_at = models.DateTimeField(null=True, blank=True, verbose_name='제안 종료 시각')
+    action = models.CharField(
+        max_length=20,
+        choices=Action.choices,
+        default=Action.ACCEPT,
+        verbose_name='서비스별 응답',
+    )
+    suggested_starts_at = models.DateTimeField(null=True, blank=True, verbose_name='제안 변경 시작 시각')
+    suggested_ends_at = models.DateTimeField(null=True, blank=True, verbose_name='제안 변경 종료 시각')
+    note = models.TextField(blank=True, verbose_name='항목 메모')
+
+    class Meta:
+        verbose_name = 'LSA Agent 응답 항목'
+        verbose_name_plural = 'LSA Agent 응답 항목'
+        ordering = ['id']
+
+    def __str__(self):
+        return f'LSA Response Item #{self.id} ({self.service_code})'
+
+
+class LsaAgentContract(models.Model):
+    """
+    LSA 배치에서 Admin이 최종 선정한 Agent 계약 레코드.
+    배치당 정확히 1건만 허용한다.
+    """
+
+    batch = models.OneToOneField(
+        LsaSourcingBatch,
+        on_delete=models.CASCADE,
+        related_name='contract',
+        verbose_name='LSA 배치',
+    )
+    submission = models.ForeignKey(
+        'survey.SurveySubmission',
+        on_delete=models.CASCADE,
+        related_name='lsa_agent_contracts',
+        verbose_name='설문 제출',
+    )
+    schedule_plan = models.ForeignKey(
+        ServiceSchedulePlan,
+        on_delete=models.CASCADE,
+        related_name='lsa_agent_contracts',
+        verbose_name='일정 플랜',
+    )
+    selected_request = models.ForeignKey(
+        LsaAgentRequest,
+        on_delete=models.PROTECT,
+        related_name='contracts',
+        verbose_name='선정 요청',
+    )
+    selected_response = models.ForeignKey(
+        LsaAgentResponse,
+        on_delete=models.PROTECT,
+        related_name='contracts',
+        null=True,
+        blank=True,
+        verbose_name='선정 응답',
+    )
+    execution_schedule_plan = models.OneToOneField(
+        ServiceSchedulePlan,
+        on_delete=models.PROTECT,
+        related_name='execution_contract',
+        null=True,
+        blank=True,
+        verbose_name='최종 실행 일정 플랜',
+    )
+    selected_agent = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='selected_lsa_contracts',
+        verbose_name='선정 Agent',
+    )
+    selected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_lsa_contracts',
+        verbose_name='선정 Admin',
+    )
+    selection_note = models.TextField(blank=True, verbose_name='선정 메모')
+    audit_payload = models.JSONField(default=dict, blank=True, verbose_name='감사 추적 payload')
+    selected_at = models.DateTimeField(auto_now_add=True, verbose_name='선정 시각')
+
+    class Meta:
+        verbose_name = 'LSA Agent 계약'
+        verbose_name_plural = 'LSA Agent 계약'
+        ordering = ['-selected_at']
+
+    def __str__(self):
+        return f'LSA Contract #{self.id} (batch={self.batch_id}, agent={self.selected_agent_id})'
 
 
 # --- 견적 변경 요청: 구조화 요청 + LLM 해석 + 실행 로그 (hard delete 없이 상태/이력 중심) ---

@@ -95,6 +95,20 @@ def process_quote_payment(user, quote_id=None):
     )
     ensure_plan_service_tasks(plan, quote)
 
+    # --- Admin 일정 편집용 ML 초안 자동 생성 ---
+    if quote.submission_id:
+        try:
+            from .scheduling_engine import ensure_submission_schedule_draft
+
+            ensure_submission_schedule_draft(quote.submission, actor=user)
+        except Exception as e:
+            logger.warning(
+                'Quote %s payment completed but automatic schedule draft generation failed: %s',
+                quote.id,
+                e,
+                exc_info=True,
+            )
+
     # --- 구독 tier: 결제 시 스탠다드 이상 유지 ---
     from billing.models import Plan, Subscription
     active_sub = (

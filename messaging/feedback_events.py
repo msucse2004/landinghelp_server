@@ -285,6 +285,8 @@ def log_feedback_clicked(
     - corrected_here: 여기서 수정함
     - used_other_page: 다른 페이지에서 수정함
     - could_not_find: 찾지 못함
+    - thumbs_up: 도움됨
+    - thumbs_down: 도움 안 됨
     """
     if value not in [v for v, _ in CustomerRequestFeedbackEvent.FeedbackValue.choices]:
         logger.warning("feedback_events: invalid feedback value=%s", value)

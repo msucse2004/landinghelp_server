@@ -7,9 +7,9 @@
   <p class="text-muted">{% trans "고객이 제출한 설문을 검토하고 견적·조치를 진행하세요. 최신 순으로 표시됩니다. (DRAFT 제외)" %}</p>
   <p style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
     <a href="{% url 'app_admin_dashboard' %}" class="btn btn-outline">← {% trans "관리자 대시보드" %}</a>
-    <form action="{% url 'app_reset_survey_messaging_test' %}" method="post" class="inline-form" onsubmit="return confirm('{% trans "대화·설문 제출 데이터를 모두 삭제합니다. 견적서 테스트를 새로 진행할 수 있습니다. 계속할까요?" %}');">
+    <form action="{% url 'app_reset_survey_messaging_test' %}" method="post" class="inline-form" onsubmit="return confirm('{% trans "대화·설문 제출·학습 데이터를 모두 삭제합니다. 견적서 테스트를 새로 진행할 수 있습니다. 계속할까요?" %}');">
       {% csrf_token %}
-      <button type="submit" class="btn btn-secondary" style="background: #dc2626; color: #fff; border-color: #dc2626;">{% trans "테스트 리셋 (대화·설문 제출 초기화)" %}</button>
+      <button type="submit" class="btn btn-secondary" style="background: #dc2626; color: #fff; border-color: #dc2626;">{% trans "테스트 리셋 (대화·설문·학습 데이터 초기화)" %}</button>
     </form>
   </p>
 </div>
@@ -34,8 +34,13 @@
         <td style="padding: 0.5rem 0.75rem;">{{ sub.email }}{% if sub.user %} ({{ sub.user.username }}){% endif %}</td>
         <td style="padding: 0.5rem 0.75rem;">{{ sub.get_status_display }}</td>
         <td style="padding: 0.5rem 0.75rem;">{{ sub.updated_at|date:"Y-m-d H:i" }}</td>
-        <td style="padding: 0.5rem 0.75rem;">
+        <td style="padding: 0.5rem 0.75rem; display:flex; gap:0.35rem; align-items:center;">
           <a href="{% url 'app_submission_review' submission_id=sub.id %}" class="btn btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.9rem;">{% trans "검토" %}</a>
+          <form action="{% url 'app_reset_survey_messaging_test' %}" method="post" class="inline-form" onsubmit="return confirm('{% trans "이 고객(해당 제출 기준) 데이터만 리셋합니다. 계속할까요?" %}');" style="display:inline;">
+            {% csrf_token %}
+            <input type="hidden" name="submission_id" value="{{ sub.id }}">
+            <button type="submit" class="btn btn-outline" style="padding: 0.35rem 0.6rem; font-size: 0.85rem; border-color:#f59e0b; color:#b45309;">{% trans "이 고객만 리셋" %}</button>
+          </form>
         </td>
       </tr>
       {% endfor %}

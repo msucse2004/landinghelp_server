@@ -106,9 +106,7 @@
       {% if sections_need_update_titles %}
       <p style="margin: 0.5rem 0 0;"><strong>{% trans "수정할 카드" %}:</strong> {{ sections_need_update_titles|join:", " }}</p>
       {% endif %}
-      {% if locked_section_titles %}
-      <p style="margin: 0.35rem 0 0; color: var(--color-muted); font-size: 0.9rem;">{% trans "이번에는 수정하지 않습니다 (잠김)" %}: {{ locked_section_titles|join:", " }}</p>
-      {% endif %}
+      <p style="margin: 0.35rem 0 0; color: var(--color-muted); font-size: 0.9rem;">{% trans "다른 카드도 함께 수정할 수 있습니다." %}</p>
     </div>
     {% if request_id %}
     <div class="revision-feedback-wrap" id="revision-feedback-wrap" data-request-id="{{ request_id }}" data-page-key="{{ revision_feedback_page_key|default:'' }}" data-feedback-url="{% url 'survey:survey_revision_feedback' %}">
@@ -325,7 +323,7 @@
 
       {% if on_delivery_step %}
       <input type="hidden" id="id_requested_required_services_json" value="{{ selected_required_services|json_dumps }}">
-      <div id="survey-agent-selection-root">{% include 'survey/_agent_selection_fragment.html' %}</div>
+      <input type="hidden" name="preferred_agent_id" id="id_preferred_agent_id" value="{{ preferred_agent_id|default:'' }}">
       {% endif %}
 
       <div class="survey-actions">
@@ -463,7 +461,6 @@
 
   function toggleAgentWrapVisibility() {
     var wrap = document.getElementById('survey-agent-selection-wrap');
-    if (!wrap) return;
     var modeEl = form.querySelector('input[name="service_delivery_mode"]:checked');
     var mode = modeEl ? String(modeEl.value) : '';
     var shouldShow = false;
@@ -477,7 +474,13 @@
       var pref = form.querySelector('input[name="service_delivery_preference"]:checked');
       if (pref && String(pref.value) === 'agent_direct') shouldShow = true;
     }
-    wrap.style.setProperty('display', shouldShow ? 'block' : 'none', 'important');
+    var preferredAgentInput = document.getElementById('id_preferred_agent_id');
+    if (preferredAgentInput) {
+      preferredAgentInput.value = shouldShow ? 'admin_assign' : '';
+    }
+    if (wrap) {
+      wrap.style.setProperty('display', 'none', 'important');
+    }
   }
   form.addEventListener('change', function(e) {
     var t = e.target;

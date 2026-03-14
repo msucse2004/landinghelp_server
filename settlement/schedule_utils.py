@@ -44,7 +44,7 @@ def get_schedule_for_display(user_or_plan):
             .first()
         )
         if schedule_plan:
-            return plan_to_legacy_schedule(schedule_plan)
+            return plan_to_legacy_schedule(schedule_plan, customer_safe=True)
 
     # 기존: UserSettlementPlan.service_schedule JSON
     if plan and getattr(plan, 'service_schedule', None) and isinstance(plan.service_schedule, dict):
@@ -52,7 +52,7 @@ def get_schedule_for_display(user_or_plan):
     return {}
 
 
-def plan_to_legacy_schedule(service_schedule_plan):
+def plan_to_legacy_schedule(service_schedule_plan, customer_safe=False):
     """
     ServiceSchedulePlan + items 를 기존 달력 형식 dict로 변환.
     반환: {"YYYY-MM-DD": [{"code", "label", "service_type", "agent_id", "agent_name", ...}, ...], ...}
@@ -84,16 +84,18 @@ def plan_to_legacy_schedule(service_schedule_plan):
             entry['starts_at'] = it.starts_at.isoformat()
         if it.ends_at:
             entry['ends_at'] = it.ends_at.isoformat()
-        if it.notes:
+        if (not customer_safe) and it.notes:
             entry['notes'] = (it.notes or '')[:1000]
-        if it.location_text:
+        if (not customer_safe) and it.location_text:
             entry['location_text'] = (it.location_text or '')[:500]
-        if it.assigned_agent_id:
+        if it.assigned_agent_id and not customer_safe:
             entry['agent_id'] = it.assigned_agent_id
             if it.assigned_agent:
                 entry['agent_name'] = (it.assigned_agent.get_full_name() or it.assigned_agent.username or '')
             else:
                 entry['agent_name'] = ''
+        elif it.assigned_agent and customer_safe:
+            entry['agent_name'] = (it.assigned_agent.get_full_name() or it.assigned_agent.username or '')
         if date_key not in out:
             out[date_key] = []
         out[date_key].append(entry)
@@ -219,6 +221,7 @@ def serialize_schedule_items_for_calendar(schedule_plan):
     )
     out = []
     for it in items:
+        rec_meta = it.recommendation_metadata if isinstance(it.recommendation_metadata, dict) else {}
         out.append({
             'id': it.id,
             'service_code': it.service_code,
@@ -230,6 +233,16 @@ def serialize_schedule_items_for_calendar(schedule_plan):
             'assigned_agent_name': (it.assigned_agent.get_full_name() or it.assigned_agent.username) if it.assigned_agent else None,
             'status': it.status,
             'notes': it.notes or '',
+            'confidence_score': float(it.source_score) if it.source_score is not None else None,
+            'recommendation_reason': it.source_reason or '',
+            'recommendation_source': it.recommendation_source or 'fallback',
+            'evidence_type': rec_meta.get('evidence_type') or None,
+            'similar_historical_sample_count': rec_meta.get('similar_historical_sample_count'),
+            'suggested_day_offset_from_entry': rec_meta.get('suggested_day_offset_from_entry'),
+            'remaining_days_band': rec_meta.get('remaining_days_band'),
+            'remaining_days_value': rec_meta.get('remaining_days_value'),
+            'recommendation_metadata': rec_meta,
+            'needs_admin_review': bool(it.needs_admin_review),
             'sort_order': it.sort_order,
         })
     return out

@@ -152,31 +152,35 @@ def _normalize_display_latin(text: str) -> str:
 
 
 def normalize_english_display(text: str) -> str:
-    """영어 표기 규칙. 단어·문장 첫 글자 대문자 (Title Case + 문장 경계 첫 글자 대문자)."""
+    """영어 표기 규칙. 문장/구 모두 첫 단어 첫 글자만 대문자(Sentence case)."""
     return normalize_english_for_translation(text)
 
 
 def normalize_english_for_translation(text: str) -> str:
     """
-    영어 번역 DB 저장용 정규화: 단어의 첫 글자·문장의 첫 글자 대문자.
+    영어 번역 DB 저장용 정규화: 문장/구 모두 첫 단어 첫 글자만 대문자.
     - 문장(. ! ? 뒤)이 여러 개면 각 문장 첫 글자 대문자.
-    - 단어별(공백·슬래시 구분) 첫 글자 대문자 (Title Case).
+    - 각 문장의 나머지 문자는 소문자 기준으로 정리.
     """
     if not text or not isinstance(text, str):
         return text
     s = text.strip()
     if not s:
         return s
-    # 문장 경계(. ! ? 뒤 공백)로 나누어 각 조각에 Title Case 적용 → 문장 첫 글자 + 단어 첫 글자 모두 대문자
+    # 문장 경계(. ! ? 뒤 공백)로 나누어 각 조각을 sentence case로 정규화
     parts = re.split(r'(?<=[.!?])\s+', s)
     result = []
     for part in parts:
         part = part.strip()
         if not part:
             continue
-        part = _normalize_title_case_latin(part)
+        part = part.lower()
+        part = part[0].upper() + part[1:] if len(part) > 1 else part.upper()
         result.append(part)
-    return ' '.join(result) if result else _normalize_title_case_latin(s)
+    if result:
+        return ' '.join(result)
+    s = s.lower()
+    return s[0].upper() + s[1:] if len(s) > 1 else s.upper()
 
 
 def _normalize_display_cjk(text: str) -> str:

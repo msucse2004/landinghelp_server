@@ -252,6 +252,7 @@ def admin_dashboard(request):
 
 @login_required
 def agent_dashboard(request):
+    from settlement.models import ServiceScheduleItem, ServiceSchedulePlan
     from translations.utils import get_display_text
     lang = get_request_language(request)
     agent_i18n = {
@@ -261,10 +262,24 @@ def agent_dashboard(request):
         'agent_calendar': get_display_text('고객 예약 달력', lang),
         'message_inbox': get_display_text('메시지 함', lang),
         'view_content': get_display_text('컨텐츠 보기', lang),
+        'execution_schedule': get_display_text('실행 일정', lang) or '실행 일정',
+        'execution_empty': get_display_text('배정된 실행 일정이 없습니다.', lang) or '배정된 실행 일정이 없습니다.',
     }
+
+    execution_items = list(
+        ServiceScheduleItem.objects.filter(
+            assigned_agent=request.user,
+            schedule_plan__status=ServiceSchedulePlan.Status.ACTIVE,
+            status__in=(ServiceScheduleItem.ItemStatus.SCHEDULED, ServiceScheduleItem.ItemStatus.CONFIRMED),
+        )
+        .select_related('schedule_plan__submission', 'schedule_plan__customer')
+        .order_by('starts_at', 'id')[:100]
+    )
+
     return render(request, 'app/agent_dashboard.html', {
         'tier_label': get_user_grade_display(request.user, lang),
         'agent_i18n': agent_i18n,
+        'execution_items': execution_items,
     })
 
 
@@ -369,7 +384,7 @@ def agent_appointment_calendar(request):
 
 @login_required
 def customer_dashboard(request):
-    from settlement.models import UserSettlementPlan, AgentAppointmentRequest
+    from settlement.models import UserSettlementPlan, AgentAppointmentRequest, ServiceSchedulePlan
     from settlement.constants import get_service_label
     from billing.utils import get_user_free_agent_services
     from translations.utils import get_display_text, get_request_language
@@ -379,6 +394,23 @@ def customer_dashboard(request):
     user_plan = None
     plan_schedule_json = '{}'
     schedule_data = {}
+    current_submission_status = None
+    has_any_schedule_plan = False
+    has_released_schedule_plan = False
+    try:
+        from survey.models import SurveySubmission
+        latest_submission = SurveySubmission.objects.filter(user=request.user).exclude(
+            status=SurveySubmission.Status.DRAFT
+        ).order_by('-submitted_at').first()
+        current_submission_status = getattr(latest_submission, 'status', None)
+    except Exception:
+        latest_submission = None
+    if request.user.is_authenticated:
+        plan_qs = ServiceSchedulePlan.objects.filter(customer=request.user)
+        has_any_schedule_plan = plan_qs.exists()
+        has_released_schedule_plan = plan_qs.filter(
+            status__in=(ServiceSchedulePlan.Status.SENT, ServiceSchedulePlan.Status.ACTIVE)
+        ).exists()
     try:
         plan = request.user.settlement_plan
         user_plan = plan
@@ -387,7 +419,8 @@ def customer_dashboard(request):
             get_paid_service_codes_for_user,
             filter_schedule_to_paid_services,
         )
-        schedule_data = get_schedule_for_display(plan) or {}
+        if has_released_schedule_plan:
+            schedule_data = get_schedule_for_display(plan) or {}
         paid_codes = get_paid_service_codes_for_user(request.user)
         if paid_codes and isinstance(schedule_data, dict):
             schedule_data = filter_schedule_to_paid_services(schedule_data, paid_codes)
@@ -533,7 +566,20 @@ def customer_dashboard(request):
         pass
 
     schedule_has_items = bool(user_plan and isinstance(schedule_data, dict) and schedule_data)
+    has_submitted_survey = False
+    try:
+        from survey.models import SurveySubmission
+        has_submitted_survey = SurveySubmission.objects.filter(user=request.user).exclude(
+            status=SurveySubmission.Status.DRAFT
+        ).exists()
+    except Exception:
+        pass
+
+    show_customer_calendar = bool(
+        user_plan and has_submitted_survey and has_released_schedule_plan and schedule_has_items
+    )
     dashboard_i18n['schedule_empty'] = get_display_text('아직 확정된 일정이 없습니다.', lang)
+    dashboard_i18n['schedule_waiting_admin'] = get_display_text('관리자가 일정을 확정하면 캘린더가 표시됩니다.', lang) or '관리자가 일정을 확정하면 캘린더가 표시됩니다.'
     dashboard_i18n['assistant_link'] = get_display_text('AI 어시스턴트', lang)
     dashboard_i18n['rateable_title'] = get_display_text('완료된 서비스 평가', lang)
     dashboard_i18n['rateable_desc'] = get_display_text('서비스가 완료된 Agent에 대해 별점과 한줄평을 남겨 주세요.', lang)
@@ -563,6 +609,7 @@ def customer_dashboard(request):
         'user_plan': user_plan,
         'plan_schedule_json': plan_schedule_json,
         'schedule_has_items': schedule_has_items,
+        'show_customer_calendar': show_customer_calendar,
         'free_agent_services': free_agent_services_display,
         'pending_appointments': pending_appointments,
         'dashboard_calendar_i18n': dashboard_calendar_i18n,
@@ -611,17 +658,138 @@ def submission_review_list(request):
 @user_passes_test(_staff_required, login_url='/login/')
 def reset_survey_and_messaging_for_test(request):
     """
-    Staff 전용: 견적서/설문 테스트를 위해 대화 DB와 설문 제출 DB를 전부 삭제.
+    Staff 전용 테스트 리셋.
+
+    - submission_id 미지정: 전체 리셋
+    - submission_id 지정: 해당 제출건과 같은 고객 범위만 리셋(안전 모드)
+
     - messaging: MessageRead, MessageTranslation, Message, ConversationParticipant, Conversation
     - survey: SurveySubmission (CASCADE로 견적·변경요청·이벤트·카드별요청 등 함께 삭제)
+    - settlement schedule: UserSettlementPlan/PlanServiceTask, ServiceSchedulePlan/Item, AgentAppointmentRequest
     """
-    from messaging.models import MessageRead, MessageTranslation, Message, ConversationParticipant, Conversation
+    from messaging.models import (
+        MessageRead, MessageTranslation, Message, ConversationParticipant, Conversation,
+        CustomerActionFeedbackLog,
+        CustomerRequestFeedbackEvent,
+        CustomerRequestLearningSummary,
+        CustomerRequestManualLabelRevision,
+        PageKeyFeedbackScore,
+    )
     from survey.models import SurveySubmission
+    from settlement.models import (
+        UserSettlementPlan,
+        PlanServiceTask,
+        ServiceSchedulePlan,
+        ServiceScheduleItem,
+        AgentAppointmentRequest,
+    )
     from django.contrib import messages
+    from django.db.models import Q
 
-    # 삭제 순서: 메시지 읽음/번역 → 메시지 → 참여자 → 대화 → 설문 제출(CASCADE로 견적·변경요청 등 제거)
+    scoped_submission_id = (request.POST.get('submission_id') or '').strip()
+    is_scoped_reset = bool(scoped_submission_id)
+
+    def _safe_count(delete_result):
+        return delete_result[0] if isinstance(delete_result, tuple) and delete_result else 0
+
+    if is_scoped_reset:
+        try:
+            submission = SurveySubmission.objects.select_related('user').get(id=int(scoped_submission_id))
+        except (SurveySubmission.DoesNotExist, ValueError, TypeError):
+            messages.error(request, '대상 설문 제출을 찾을 수 없습니다.')
+            return redirect('app_submission_review_list')
+
+        target_user_id = submission.user_id
+        target_email = (submission.email or '').strip()
+
+        if target_user_id:
+            target_submissions_qs = SurveySubmission.objects.filter(user_id=target_user_id)
+            target_appointments_qs = AgentAppointmentRequest.objects.filter(customer_id=target_user_id)
+            target_schedule_plans_qs = ServiceSchedulePlan.objects.filter(customer_id=target_user_id)
+            target_user_plans_qs = UserSettlementPlan.objects.filter(user_id=target_user_id)
+            target_conversations_qs = Conversation.objects.filter(
+                Q(survey_submission_id__in=target_submissions_qs.values('id')) |
+                Q(participants__user_id=target_user_id)
+            ).distinct()
+        else:
+            target_submissions_qs = SurveySubmission.objects.filter(user__isnull=True, email__iexact=target_email)
+            target_appointments_qs = AgentAppointmentRequest.objects.filter(customer__isnull=True, customer_email__iexact=target_email)
+            target_schedule_plans_qs = ServiceSchedulePlan.objects.filter(submission_id__in=target_submissions_qs.values('id'))
+            target_user_plans_qs = UserSettlementPlan.objects.none()
+            target_conversations_qs = Conversation.objects.filter(
+                survey_submission_id__in=target_submissions_qs.values('id')
+            )
+
+        appointment_ids = list(target_appointments_qs.values_list('id', flat=True))
+        if appointment_ids:
+            target_conversations_qs = Conversation.objects.filter(
+                Q(id__in=target_conversations_qs.values('id')) |
+                Q(appointment_id__in=appointment_ids)
+            ).distinct()
+
+        conv_ids = list(target_conversations_qs.values_list('id', flat=True))
+        msg_ids = list(Message.objects.filter(conversation_id__in=conv_ids).values_list('id', flat=True)) if conv_ids else []
+
+        # 학습 관련 데이터 스코프 쿼리
+        if target_user_id:
+            target_feedback_events_qs = CustomerRequestFeedbackEvent.objects.filter(user_id=target_user_id)
+        else:
+            target_feedback_events_qs = CustomerRequestFeedbackEvent.objects.filter(
+                survey_submission_id__in=target_submissions_qs.values('id')
+            )
+        target_request_ids = list(target_feedback_events_qs.values_list('request_id', flat=True).distinct())
+
+        deleted = {}
+        try:
+            # 학습 데이터 (CustomerRequestLearningSummary → CASCADE CustomerRequestManualLabelRevision)
+            deleted['learning_summary'] = _safe_count(
+                CustomerRequestLearningSummary.objects.filter(request_id__in=target_request_ids).delete()
+            ) if target_request_ids else 0
+            deleted['request_feedback_event'] = _safe_count(target_feedback_events_qs.delete())
+
+            deleted['message_read'] = _safe_count(MessageRead.objects.filter(message_id__in=msg_ids).delete()) if msg_ids else 0
+            deleted['message_translation'] = _safe_count(MessageTranslation.objects.filter(message_id__in=msg_ids).delete()) if msg_ids else 0
+            deleted['message'] = _safe_count(Message.objects.filter(id__in=msg_ids).delete()) if msg_ids else 0
+            deleted['conversation_participant'] = _safe_count(ConversationParticipant.objects.filter(conversation_id__in=conv_ids).delete()) if conv_ids else 0
+            deleted['conversation'] = _safe_count(Conversation.objects.filter(id__in=conv_ids).delete()) if conv_ids else 0
+
+            deleted['agent_appointment_request'] = _safe_count(target_appointments_qs.delete())
+            deleted['service_schedule_item'] = _safe_count(ServiceScheduleItem.objects.filter(schedule_plan_id__in=target_schedule_plans_qs.values('id')).delete())
+            deleted['service_schedule_plan'] = _safe_count(target_schedule_plans_qs.delete())
+            deleted['plan_service_task'] = _safe_count(PlanServiceTask.objects.filter(plan_id__in=target_user_plans_qs.values('id')).delete())
+            deleted['user_settlement_plan'] = _safe_count(target_user_plans_qs.delete())
+
+            deleted['survey_submission'] = _safe_count(target_submissions_qs.delete())
+        except Exception as e:
+            messages.error(request, f'선택 리셋 중 오류: {e}')
+            return redirect('app_submission_review_list')
+
+        total = sum(deleted.values())
+        target_label = submission.user.username if submission.user_id else (target_email or f'#{submission.id}')
+        messages.success(
+            request,
+            f'선택 리셋 완료({target_label}): 설문 제출 {deleted.get("survey_submission", 0)}건, '
+            f'고객 플랜 {deleted.get("user_settlement_plan", 0)}건, 약속 {deleted.get("agent_appointment_request", 0)}건, '
+            f'대화 {deleted.get("conversation", 0)}건, 학습 요약 {deleted.get("learning_summary", 0)}건 등 총 {total}건 삭제됨.'
+        )
+        return redirect('app_submission_review_list')
+
+    # 삭제 순서: 학습 데이터 → 메시지 도메인 → 스케줄 도메인 → 설문 제출(CASCADE로 견적·변경요청 등 제거)
     deleted = {}
     try:
+        # 학습/피드백 관련 데이터
+        # CustomerRequestManualLabelRevision 은 CustomerRequestLearningSummary 삭제 시 CASCADE
+        ls = CustomerRequestLearningSummary.objects.all().delete()
+        deleted['learning_summary'] = ls[0]
+        pks = PageKeyFeedbackScore.objects.all().delete()
+        deleted['page_key_feedback_score'] = pks[0]
+        crfe = CustomerRequestFeedbackEvent.objects.all().delete()
+        deleted['request_feedback_event'] = crfe[0]
+        # CustomerActionFeedbackLog 은 CustomerActionProposal → CustomerRequestIntentAnalysis → Conversation CASCADE로 처리되나
+        # 명시적 삭제로 정확한 카운트 확보
+        cafl = CustomerActionFeedbackLog.objects.all().delete()
+        deleted['action_feedback_log'] = cafl[0]
+
         r = MessageRead.objects.all().delete()
         deleted['message_read'] = r[0]
         t = MessageTranslation.objects.all().delete()
@@ -632,6 +800,18 @@ def reset_survey_and_messaging_for_test(request):
         deleted['conversation_participant'] = p[0]
         c = Conversation.objects.all().delete()
         deleted['conversation'] = c[0]
+
+        a = AgentAppointmentRequest.objects.all().delete()
+        deleted['agent_appointment_request'] = a[0]
+        si = ServiceScheduleItem.objects.all().delete()
+        deleted['service_schedule_item'] = si[0]
+        sp = ServiceSchedulePlan.objects.all().delete()
+        deleted['service_schedule_plan'] = sp[0]
+        pt = PlanServiceTask.objects.all().delete()
+        deleted['plan_service_task'] = pt[0]
+        up = UserSettlementPlan.objects.all().delete()
+        deleted['user_settlement_plan'] = up[0]
+
         s = SurveySubmission.objects.all().delete()
         deleted['survey_submission'] = s[0]
     except Exception as e:
@@ -641,7 +821,10 @@ def reset_survey_and_messaging_for_test(request):
     total = sum(deleted.values())
     messages.success(
         request,
-        f'테스트 리셋 완료: 대화 {deleted.get("conversation", 0)}건, 설문 제출 {deleted.get("survey_submission", 0)}건 등 총 {total}건 삭제됨. '
+        f'테스트 리셋 완료: 대화 {deleted.get("conversation", 0)}건, 설문 제출 {deleted.get("survey_submission", 0)}건, '
+        f'학습 요약 {deleted.get("learning_summary", 0)}건, 피드백 이벤트 {deleted.get("request_feedback_event", 0)}건, '
+        f'페이지 피드백 점수 {deleted.get("page_key_feedback_score", 0)}건, 액션 로그 {deleted.get("action_feedback_log", 0)}건, '
+        f'고객 플랜 {deleted.get("user_settlement_plan", 0)}건, 약속 {deleted.get("agent_appointment_request", 0)}건 등 총 {total}건 삭제됨. '
         '새로 설문을 작성하고 견적서 플로우를 테스트할 수 있습니다.'
     )
     return redirect('app_submission_review_list')
@@ -1169,6 +1352,135 @@ def submission_review(request, submission_id):
         (quote_draft or payment_quote)
         and submission.status in (SurveySubmission.Status.SUBMITTED, SurveySubmission.Status.AWAITING_PAYMENT)
     )
+
+    agent_direct_service_codes = []
+    delivery_target_codes = list(dict.fromkeys(
+        list(request_summary.get('service_codes') or [])
+        + list(request_summary.get('add_on_codes') or [])
+        + list(service_mismatch.get('survey_codes') or [])
+        + list(service_mismatch.get('quote_codes') or [])
+    ))
+    for code in delivery_target_codes:
+        delivery_key = (per_service.get(code) or bulk_preference or '').strip()
+        if delivery_key == 'agent_direct' and code not in agent_direct_service_codes:
+            agent_direct_service_codes.append(code)
+
+    has_paid_quote = bool(payment_quote and payment_quote.status == SettlementQuote.Status.PAID)
+    has_agent_direct_services = bool(agent_direct_service_codes)
+    can_prepare_schedule_lsa = bool(has_paid_quote and has_agent_direct_services)
+
+    candidate_agents = []
+    import re
+    from django.contrib.auth import get_user_model
+    from django.db.models import Avg, Count
+    from settlement.models import SettlementService
+    from settlement.forms import US_STATES
+
+    User = get_user_model()
+    desired_service_ids = set(
+        SettlementService.objects.filter(code__in=agent_direct_service_codes)
+        .values_list('id', flat=True)
+    )
+    state_name_to_code = {
+        str(name or '').strip().upper(): str(code or '').strip().upper()
+        for code, name in (US_STATES or []) if code
+    }
+    known_state_codes = set(state_name_to_code.values())
+    raw_region = str(
+        request_summary.get('region')
+        or answers.get('region')
+        or answers.get('state')
+        or ''
+    ).strip()
+    region_upper = raw_region.upper()
+    region_code = ''
+    if region_upper in known_state_codes:
+        region_code = region_upper
+    elif region_upper in state_name_to_code:
+        region_code = state_name_to_code[region_upper]
+    else:
+        region_tokens = [t for t in re.split(r'[^A-Z]+', region_upper) if t]
+        for token in region_tokens:
+            if token in known_state_codes:
+                region_code = token
+                break
+        if not region_code:
+            for state_name, code in state_name_to_code.items():
+                if state_name and state_name in region_upper:
+                    region_code = code
+                    break
+
+    if region_code:
+        agent_queryset = User.objects.filter(
+            role=User.Role.AGENT,
+            status=User.Status.ACTIVE,
+        ).annotate(
+            _rating_avg=Avg('ratings_received__score'),
+            _rating_count=Count('ratings_received'),
+        ).order_by('username')[:200]
+    else:
+        agent_queryset = []
+
+    for agent in agent_queryset:
+        raw_agent_services = getattr(agent, 'agent_services', None) or []
+        agent_service_ids = set()
+        for service_id in raw_agent_services:
+            try:
+                agent_service_ids.add(int(service_id))
+            except (TypeError, ValueError):
+                continue
+        service_match_count = len(desired_service_ids.intersection(agent_service_ids)) if desired_service_ids else 0
+        raw_agent_states = getattr(agent, 'agent_states', None) or []
+        agent_state_codes = {str(s or '').strip().upper() for s in raw_agent_states if str(s or '').strip()}
+        region_match = bool(region_code and region_code in agent_state_codes)
+        if region_code and not region_match:
+            continue
+
+        rating_avg = float(agent._rating_avg) if agent._rating_avg is not None else 0.0
+        rating_count = int(agent._rating_count or 0)
+        recommendation_score = (
+            (service_match_count * 100)
+            + (20 if region_match else 0)
+            + rating_avg
+            + min(rating_count, 20) / 100.0
+        )
+        candidate_agents.append({
+            'id': agent.id,
+            'name': (agent.get_full_name() or agent.username or agent.email or '').strip(),
+            'email': agent.email,
+            'service_match_count': service_match_count,
+            'region_match': region_match,
+            'rating_avg': rating_avg,
+            'rating_count': rating_count,
+            'recommendation_score': round(recommendation_score, 3),
+        })
+
+    candidate_agents.sort(
+        key=lambda row: (
+            row.get('recommendation_score', 0),
+            row.get('service_match_count', 0),
+            1 if row.get('region_match') else 0,
+            row.get('rating_avg', 0),
+            row.get('rating_count', 0),
+        ),
+        reverse=True,
+    )
+    candidate_agents = candidate_agents[:20]
+
+    schedule_lsa_prep = {
+        'has_paid_quote': has_paid_quote,
+        'has_agent_direct_services': has_agent_direct_services,
+        'can_prepare': can_prepare_schedule_lsa,
+        'entry_date': request_summary.get('entry_date') or '',
+        'region': raw_region,
+        'region_code': region_code,
+        'same_state_agent_missing': bool(can_prepare_schedule_lsa and not candidate_agents),
+        'agent_direct_services': [
+            {'code': code, 'label': get_service_label(code) or code}
+            for code in agent_direct_service_codes
+        ],
+        'candidate_agents': candidate_agents,
+    }
     # 설문 재제출 후: change request가 IN_REVIEW이면 Admin에게 새 견적 작성·송부 안내
     if (
         submission.status == SurveySubmission.Status.SUBMITTED
@@ -1209,6 +1521,29 @@ def submission_review(request, submission_id):
         'reopened_at': getattr(submission, 'reopened_at', None),
     }
 
+    default_expanded_card_ids = ['customer-revision', 'customer-section-1']
+    if needs_admin_decision:
+        default_expanded_card_ids.append('needs-admin-decision')
+    if latest_change_request:
+        default_expanded_card_ids.append('change-request-analysis')
+    readiness_key = (submission_readiness or {}).get('readiness')
+    if readiness_key in ('needs_admin_pricing',):
+        default_expanded_card_ids.append('quotation-card')
+    if readiness_key in ('waiting_on_customer',) or submission.status == SurveySubmission.Status.REVISION_REQUESTED:
+        default_expanded_card_ids.append('workflow-status')
+    if service_mismatch.get('has_mismatch') or needs_quote_review:
+        default_expanded_card_ids.append('quotation-card')
+    if can_prepare_schedule_lsa:
+        default_expanded_card_ids.append('schedule-lsa-prep')
+    if submission.status == SurveySubmission.Status.SUBMITTED:
+        default_expanded_card_ids.extend(['request-summary', 'section-update-request'])
+    if payment_summary and payment_summary.get('superseded'):
+        default_expanded_card_ids.append('payment-summary')
+    if scheduling_summary and scheduling_summary.get('has_plan'):
+        default_expanded_card_ids.append('scheduling-readiness')
+
+    default_expanded_card_ids = list(dict.fromkeys([c for c in default_expanded_card_ids if c]))
+
     return render(request, 'app/submission_review.html', {
         'submission': submission,
         'customer_summary': customer_summary,
@@ -1237,6 +1572,8 @@ def submission_review(request, submission_id):
         'quote_trail': quote_trail,
         'submission_revision_info': submission_revision_info,
         'service_mismatch': service_mismatch,
+        'schedule_lsa_prep': schedule_lsa_prep,
+        'default_expanded_card_ids': default_expanded_card_ids,
     })
 
 

@@ -5,12 +5,12 @@ from django.db.models import Avg, Count, Q
 from django.utils.html import format_html
 from translations.utils import DisplayKey
 from billing.utils import get_user_tier, get_user_grade_display
-from .models import User, AgentRating, AgentForRating
+from .models import User, AgentRating, AgentForRating, format_phone_number
 
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ('username', 'email', 'role', 'tier_display', 'accept_rate_display', 'agent_rating_display', 'status', 'is_active')
+    list_display = ('username', 'email', 'role', 'agent_level_display', 'tier_display', 'accept_rate_display', 'agent_rating_display', 'status', 'is_active')
     list_filter = ('role', 'status', 'is_active')
     search_fields = ('username', 'email')
     ordering = ('-date_joined',)
@@ -27,6 +27,15 @@ class UserAdmin(BaseUserAdmin):
         out = get_user_grade_display(obj)
         return str(out) if out is not None else '-'
     tier_display.short_description = '등급(요금제)'
+
+    def agent_level_display(self, obj):
+        if not obj or obj.role != User.Role.AGENT:
+            return '-'
+        base = obj.get_agent_level_display() if getattr(obj, 'agent_level', None) else User.AgentLevel.BRONZE
+        if obj.agent_level_score is not None:
+            return f'{base} ({float(obj.agent_level_score):.1f})'
+        return base
+    agent_level_display.short_description = 'Agent 레벨'
 
     def accept_rate_display(self, obj):
         if not obj or obj.role != User.Role.AGENT:
@@ -62,10 +71,34 @@ class UserAdmin(BaseUserAdmin):
     agent_rating_display.short_description = '에이전트 별점'
 
     def get_fieldsets(self, request, obj=None):
-        base = list(BaseUserAdmin.fieldsets) + [
+        base = []
+        for name, opts in BaseUserAdmin.fieldsets:
+            fields = opts.get('fields', ())
+            if 'first_name' in fields or 'email' in fields:
+                # Personal info 섹션에 성별·생년월일·전화번호 추가
+                existing_fields = list(fields)
+                extra = [f for f in ('birth_date', 'gender', 'phone') if f not in existing_fields]
+                base.append((name, {**opts, 'fields': tuple(existing_fields) + tuple(extra)}))
+            else:
+                base.append((name, opts))
+        base += [
             (None, {'fields': ('role', 'status', 'preferred_language')}),
             ('에이전트 정보', {
-                'fields': ('profile_image', 'accept_rate', 'agent_services', 'agent_states', 'agent_cities', 'agent_cities_by_state'),
+                'fields': (
+                    'profile_image',
+                    'accept_rate',
+                    'agent_level',
+                    'agent_level_score',
+                    'agent_completed_service_count',
+                    'agent_rating_avg_snapshot',
+                    'agent_accept_rate_snapshot',
+                    'agent_level_last_evaluated_at',
+                    'agent_level_constraints',
+                    'agent_services',
+                    'agent_states',
+                    'agent_cities',
+                    'agent_cities_by_state',
+                ),
                 'classes': ('collapse',),
             }),
         ]
@@ -75,6 +108,11 @@ class UserAdmin(BaseUserAdmin):
                 'description': '이 에이전트의 서비스별 약속 요청·수락 통계입니다.',
             }))
         return base
+
+    def save_model(self, request, obj, form, change):
+        if obj.phone:
+            obj.phone = format_phone_number(obj.phone.strip())
+        super().save_model(request, obj, form, change)
 
     def get_readonly_fields(self, request, obj=None):
         ro = list(super().get_readonly_fields(request, obj))
@@ -132,7 +170,7 @@ class UserAdmin(BaseUserAdmin):
 
     fieldsets = BaseUserAdmin.fieldsets + (
         (None, {'fields': ('role', 'status')}),
-        ('에이전트 정보', {'fields': ('profile_image', 'accept_rate', 'agent_services', 'agent_states', 'agent_cities', 'agent_cities_by_state'), 'classes': ('collapse',)}),
+        ('에이전트 정보', {'fields': ('profile_image', 'accept_rate', 'agent_level', 'agent_level_score', 'agent_completed_service_count', 'agent_rating_avg_snapshot', 'agent_accept_rate_snapshot', 'agent_level_last_evaluated_at', 'agent_level_constraints', 'agent_services', 'agent_states', 'agent_cities', 'agent_cities_by_state'), 'classes': ('collapse',)}),
     )
     add_fieldsets = BaseUserAdmin.add_fieldsets + (
         (None, {'fields': ('role', 'status')}),

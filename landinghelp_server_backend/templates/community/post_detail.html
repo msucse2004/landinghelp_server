@@ -1,0 +1,17 @@
+{% extends "community/base_community.html" %}
+{% block title %}{{ post.title }} – LifeAI US{% endblock %}
+{% block content %}
+<div class="card">
+  <div style="margin-bottom: 1rem;">
+    <a href="{% url 'community:board_list' area.slug %}">← 목록</a>
+  </div>
+  <h1 style="margin: 0 0 0.5rem;">{{ post.title }}</h1>
+  <div class="text-muted" style="font-size: 0.9rem; margin-bottom: 1rem;">
+    {{ post.author_name|default:post.author.username|default:"-" }} · {{ post.created_at|date:"Y-m-d H:i" }} · 조회 {{ post.view_count }} · ♥ {{ post.like_count }}
+  </div>
+  {% if post.thumbnail %}
+  <p><img src="{{ post.thumbnail.url }}" alt="" style="max-width: 100%; border-radius: var(--radius);"></p>
+  {% endif %}
+  <div class="body" style="white-space: pre-wrap;">{{ post.content }}</div>
+</div>
+{% endblock %}

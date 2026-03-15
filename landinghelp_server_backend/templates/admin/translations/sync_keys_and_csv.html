@@ -1,0 +1,23 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p>다음 두 단계를 한 번에 실행합니다.</p>
+<ol>
+  <li><strong>키 동기화</strong>: 코드·템플릿·DB에서 번역 키를 수집해 StaticTranslation에 없는 키를 생성합니다.</li>
+  <li><strong>CSV 반영</strong>: 프로젝트 루트의 <code>static_translations_all.csv</code>를 읽어 번역 값을 채웁니다.</li>
+</ol>
+{% if csv_exists %}
+  <p>CSV 경로: <code>{{ csv_path }}</code> (파일 있음)</p>
+{% else %}
+  <p style="color: #856404;">CSV 경로: <code>{{ csv_path }}</code> — 파일이 없으면 키 동기화만 실행됩니다.</p>
+{% endif %}
+<form method="post" action="">
+  {% csrf_token %}
+  <p>
+    <input type="submit" value="실행">
+  </p>
+</form>
+<p><a href="{% url 'admin:translations_statictranslation_changelist' %}">고정 번역 목록으로 돌아가기</a></p>
+{% endblock %}

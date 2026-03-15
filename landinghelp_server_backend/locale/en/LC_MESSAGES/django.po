@@ -1,0 +1,206 @@
+# English
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: en\n"
+
+msgid "로그아웃"
+msgstr "Log out"
+
+msgid "로그인"
+msgstr "Log in"
+
+msgid "회원가입"
+msgstr "Sign up"
+
+msgid "플랜"
+msgstr "Plan"
+
+msgid "메시지 함"
+msgstr "Messages"
+
+msgid "정착서비스"
+msgstr "Settlement Services"
+
+msgid "기업서비스"
+msgstr "Corporate Services"
+
+msgid "지역 게시판"
+msgstr "Community"
+
+msgid "관리"
+msgstr "Admin"
+
+msgid "새 메시지가 도착했습니다"
+msgstr "You have new messages"
+
+msgid "닫기"
+msgstr "Close"
+
+msgid "메시지함으로 이동"
+msgstr "Go to Messages"
+
+msgid "읽지 않은 메시지 %(count)s건이 있습니다. 메시지함에서 확인하세요."
+msgstr "You have %(count)s unread message(s). Check your inbox."
+
+msgid "기본 정보부터 시작하세요"
+msgstr "Start with the basics"
+
+msgid "소개 캐러셀"
+msgstr "Intro carousel"
+
+msgid "내 정착 플랜"
+msgstr "My settlement plan"
+
+msgid "예상 Checkout"
+msgstr "Estimated checkout"
+
+msgid "원"
+msgstr " KRW"
+
+msgid "입국 예정"
+msgstr "Entry date"
+
+msgid "저장된 일정이 있습니다"
+msgstr "You have a saved schedule"
+
+msgid "정착 플랜 수정"
+msgstr "Edit settlement plan"
+
+msgid "일"
+msgstr "Sun"
+
+msgid "월"
+msgstr "Mon"
+
+msgid "화"
+msgstr "Tue"
+
+msgid "수"
+msgstr "Wed"
+
+msgid "목"
+msgstr "Thu"
+
+msgid "금"
+msgstr "Fri"
+
+msgid "토"
+msgstr "Sat"
+
+msgid "아이디와 비밀번호를 확인해주세요."
+msgstr "Please check your username and password."
+
+msgid "아이디"
+msgstr "Username"
+
+msgid "비밀번호"
+msgstr "Password"
+
+msgid "아이디 찾기"
+msgstr "Find username"
+
+msgid "비밀번호 찾기"
+msgstr "Reset password"
+
+msgid "정착 서비스 소개"
+msgstr "Introduction to settlement services"
+
+msgid "정착 플랜"
+msgstr "Settlement plans"
+
+msgid "고객 후기"
+msgstr "Customer reviews"
+
+msgid "셀프 정착 비용 예상"
+msgstr "Self-settlement cost estimate"
+
+msgid "현재 등급"
+msgstr "Current tier"
+
+msgid "기본 메뉴얼을 참고하여 직접 진행할 수 있는 서비스를 제공합니다."
+msgstr "We provide services you can do yourself using the basic manual."
+
+msgid "에서 메뉴얼을 확인하세요."
+msgstr " for the manual."
+
+msgid "AI 추천 및 에이전트 도움을 원하시면 상위 요금제로 업그레이드하세요."
+msgstr "Upgrade to a higher plan for AI recommendations and agent support."
+
+msgid "무료 Agent 서비스"
+msgstr "Free agent services"
+
+msgid "모든 항목에 에이전트가 도움을 드립니다."
+msgstr "An agent assists with all items."
+
+msgid "필요 시 에이전트의 도움을 받을 수 있으며, 패키지 또는 단일 항목으로 계약 가능합니다."
+msgstr "Agent support is available when needed; you can contract by package or single item."
+
+msgid "예상 Checkout 합계"
+msgstr "Estimated checkout total"
+
+msgid "서비스별 Customer 가격 기준"
+msgstr "Per-service customer pricing"
+
+msgid "이주 정보"
+msgstr "Settlement info"
+
+msgid "이주할 State"
+msgstr "State"
+
+msgid "도시"
+msgstr "City"
+
+msgid "입국/이주 예정일"
+msgstr "Entry/settlement date"
+
+msgid "AI 서비스 추천 / 스케줄 생성"
+msgstr "AI service recommendations / schedule"
+
+msgid "서비스 선택"
+msgstr "Service selection"
+
+msgid "일정 달력"
+msgstr "Schedule calendar"
+
+msgid "이전"
+msgstr "Prev"
+
+msgid "다음"
+msgstr "Next"
+
+msgid "년"
+msgstr " "
+
+msgid "월"
+msgstr " "
+
+msgid "가능한 Agent"
+msgstr "Available agents"
+
+msgid "Agent 신청 항목 · 과금"
+msgstr "Agent items & billing"
+
+msgid "확인"
+msgstr "OK"
+
+msgid "희망 일자"
+msgstr "Preferred date"
+
+msgid "희망 시간대"
+msgstr "Preferred time"
+
+msgid "이름"
+msgstr "Name"
+
+msgid "이메일"
+msgstr "Email"
+
+msgid "메시지"
+msgstr "Message"
+
+msgid "약속 신청"
+msgstr "Request appointment"
+
+msgid "실행"
+msgstr "Run"

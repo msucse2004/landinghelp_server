@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}구독 플랜 – LifeAI US{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>구독 플랜</h1>
+  <p class="text-muted">나에게 맞는 플랜을 선택하여 구독하세요.</p>
+
+  {% if current_subscription %}
+  <p class="text-muted" style="margin-bottom:1.5rem;">현재 플랜: <strong>{{ current_subscription.plan.get_display_name }}</strong></p>
+  {% endif %}
+
+  <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:1.5rem; margin-top:1.5rem;">
+    {% for item in plan_list %}
+    {% with plan=item.plan %}
+    <div style="border:1px solid var(--color-border); border-radius:var(--radius); padding:1.5rem; background:#fff;">
+      <h2 style="margin-top:0; font-size:1.25rem;">{{ plan.get_display_name }}</h2>
+      <p class="text-muted" style="font-size:0.9rem; margin:0.5rem 0 0.5rem;">
+        {% if plan.target_role == 'CUSTOMER' %}
+          랜딩 {{ plan.features.landing_count|default:1 }}개
+        {% else %}
+          클라이언트 {{ plan.features.clients|default:10 }}명
+        {% endif %}
+      </p>
+      {% if item.free_agent_labels %}
+      <p style="font-size:0.9rem; margin:0 0 1rem; color:var(--color-primary); font-weight:500;">
+        무료 Agent 서비스: {{ item.free_agent_labels|join:", " }}
+      </p>
+      {% endif %}
+      <p style="font-size:1.5rem; font-weight:600; margin:1rem 0;">
+        {% if plan.features.price_monthly %}
+          월 {{ plan.features.price_monthly|floatformat:0 }}원
+        {% else %}
+          무료
+        {% endif %}
+      </p>
+      <a href="{% url 'billing:subscription_checkout' plan.pk %}" class="btn btn-primary" style="width:100%;">결제하기</a>
+    </div>
+    {% endwith %}
+    {% empty %}
+    <p class="text-muted">표시할 플랜이 없습니다.</p>
+    {% endfor %}
+  </div>
+
+  <p class="text-muted" style="margin-top:2rem; font-size:0.9rem;">※ 결제는 테스트 모드로 진행되며, 실제 결제 시 PG 연동이 적용됩니다.</p>
+</section>
+{% endblock %}

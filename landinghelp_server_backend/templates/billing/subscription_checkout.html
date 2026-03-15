@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}구독 결제 – {{ plan.get_display_name }} – LifeAI US{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>구독 결제</h1>
+
+  <div style="border:1px solid var(--color-border); border-radius:var(--radius); padding:1.5rem; margin:1.5rem 0; max-width:400px;">
+    <h2 style="margin-top:0; font-size:1.25rem;">{{ plan.get_display_name }}</h2>
+    <p class="text-muted" style="margin:0.5rem 0;">
+      {% if plan.target_role == 'CUSTOMER' %}
+        랜딩 {{ plan.features.landing_count|default:1 }}개
+      {% else %}
+        클라이언트 {{ plan.features.clients|default:10 }}명
+      {% endif %}
+    </p>
+    <p style="font-size:1.5rem; font-weight:600; margin:1rem 0;">
+      {% if plan.features.price_monthly %}
+        월 {{ plan.features.price_monthly|floatformat:0 }}원
+      {% else %}
+        무료
+      {% endif %}
+    </p>
+  </div>
+
+  <form method="post" style="margin-top:1.5rem;">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-primary">결제하기</button>
+    <a href="{% url 'billing:subscription_plan' %}" class="btn btn-outline" style="margin-left:0.5rem;">취소</a>
+  </form>
+
+  <p class="text-muted" style="margin-top:1.5rem; font-size:0.9rem;">※ 현재는 테스트 모드로 실제 결제 없이 구독이 즉시 활성화됩니다. 추후 PG 연동 시 결제 화면이 표시됩니다.</p>
+</section>
+{% endblock %}

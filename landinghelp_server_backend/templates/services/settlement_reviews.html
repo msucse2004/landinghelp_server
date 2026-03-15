@@ -1,0 +1,9 @@
+{% extends "services/settlement_base.html" %}
+{% block title %}{{ settlement_reviews.title|default:"고객 후기" }} – LifeAI US{% endblock %}
+{% block settlement_content %}
+<section class="card">
+  <h1>{{ settlement_reviews.title|default:"고객 후기" }}</h1>
+  <p class="text-muted">{{ settlement_reviews.subtitle|default:"정착서비스를 이용하신 고객님들의 후기입니다." }}</p>
+  <p>{{ settlement_reviews.preparing|default:"(준비 중)" }}</p>
+</section>
+{% endblock %}

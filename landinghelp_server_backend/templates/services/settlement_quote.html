@@ -1,0 +1,1647 @@
+{% extends "services/settlement_base.html" %}
+{% load static %}
+{% block title %}{{ settlement_i18n.plan_heading }} – LifeAI US{% endblock %}
+{% block extra_head %}
+<style>
+  .quote-section { margin-bottom: 2rem; }
+  .quote-section h2 { font-size: 1.1rem; margin: 0 0 1rem; color: var(--color-text); }
+  .ai-suggest-box {
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    border: 1px solid #bae6fd;
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .ai-suggest-box label { font-weight: 600; color: #0369a1; margin-bottom: 0.5rem; display: block; }
+  .ai-suggest-box .hint { font-size: 0.85rem; color: var(--color-muted); margin-top: 0.5rem; }
+  .ai-suggest-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .ai-suggest-row input {
+    flex: 1;
+    min-width: 200px;
+    padding: 0.65rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+  }
+  .ai-suggest-row button {
+    padding: 0.65rem 1rem;
+    background: var(--color-primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .ai-suggest-row button:hover { background: var(--color-primary-hover); }
+  .ai-suggest-row button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .calendar-wrap {
+    background: #fff;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 2rem;
+  }
+  .calendar-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    gap: 0.5rem;
+  }
+  .calendar-nav select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    font-size: 0.95rem;
+  }
+  .calendar-nav h3 { margin: 0; font-size: 1rem; min-width: 120px; text-align: center; }
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    font-size: 0.85rem;
+  }
+  .calendar-weekday {
+    text-align: center;
+    padding: 0.35rem;
+    color: var(--color-muted);
+    font-weight: 500;
+  }
+  .calendar-day {
+    min-height: 70px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 0.35rem;
+    background: #fafafa;
+  }
+  .calendar-day.empty { background: #f5f5f5; }
+  .calendar-day.dragover { background: #dbeafe; border-color: var(--color-primary); }
+  .calendar-day-num { font-weight: 600; margin-bottom: 0.25rem; color: var(--color-muted); }
+  .calendar-day-today .calendar-day-num { color: var(--color-primary); }
+  .calendar-day-today .calendar-today-star { color: var(--color-primary); font-size: 0.85em; margin-left: 2px; }
+  .calendar-dday { font-size: 0.7rem; color: #059669; font-weight: 600; margin-top: 2px; }
+  .calendar-day.calendar-day-entry .calendar-dday { color: #dc2626; }
+  .calendar-day-cards { display: flex; flex-direction: column; gap: 0.25rem; }
+  .calendar-card {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.4rem;
+    background: #94a3b8;
+    color: #fff;
+    border: 1px solid #64748b;
+    border-radius: 4px;
+    cursor: grab;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .calendar-card:hover { opacity: 0.9; }
+  .calendar-card:active { cursor: grabbing; }
+  .calendar-card.dragging { opacity: 0.5; }
+  /* Agent 미선택: 회색 (일정만 있음, 미과금) */
+  .calendar-card.calendar-card--no-agent { background: #94a3b8; border-color: #64748b; color: #fff; }
+  /* Agent 선택됨: 기본 녹색 (Agent support 요청됨, 과금 대상) */
+  .calendar-card.calendar-card-has-agent { background: #059669; border-color: #047857; color: #fff; }
+  /* 약속 상태별 색상 */
+  .calendar-card.calendar-card--status-pending { background: #d97706; border-color: #b45309; color: #fff; }
+  .calendar-card.calendar-card--status-payment-pending { background: #f59e0b; border-color: #d97706; color: #fff; }
+  .calendar-card.calendar-card--status-confirmed { background: #0284c7; border-color: #0369a1; color: #fff; }
+  .calendar-card.calendar-card--status-cancelled { background: #64748b; border-color: #475569; color: #cbd5e1; }
+  .calendar-card-status {
+    display: block;
+    font-size: 0.65rem;
+    color: var(--color-muted);
+    margin-top: 0.2rem;
+  }
+  .calendar-card-status:empty { display: none; }
+  .calendar-card-remove {
+    cursor: pointer;
+    opacity: 0.9;
+    padding: 0 2px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .calendar-card-remove:hover { opacity: 1; }
+  .calendar-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .calendar-card-label { cursor: pointer; }
+
+  .agent-list-panel {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #f8fafc;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    display: none;
+  }
+  .agent-list-panel.visible { display: block; }
+  .agent-list-panel h4 { margin: 0 0 0.75rem; font-size: 0.95rem; color: var(--color-text); }
+  .agent-list-panel .loading { color: var(--color-muted); font-size: 0.9rem; }
+  .agent-list-panel .empty { color: var(--color-muted); font-size: 0.9rem; }
+  .appointment-detail { background: #fff; border: 1px solid var(--color-border); border-radius: 4px; padding: 1rem; font-size: 0.9rem; }
+  .appointment-detail .detail-row { margin-bottom: 0.6rem; display: flex; gap: 0.5rem; }
+  .appointment-detail .detail-row .label { color: var(--color-muted); min-width: 5rem; flex-shrink: 0; }
+  .appointment-detail .detail-row .value { color: var(--color-text); word-break: break-word; }
+  .appointment-detail .detail-row.message .value { white-space: pre-wrap; }
+  .appointment-detail-actions { margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .appointment-detail-actions .btn { padding: 0.5rem 1rem; font-size: 0.9rem; }
+  .appointment-edit-form { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--color-border); display: none; }
+  .appointment-edit-form.visible { display: block; }
+  .appointment-edit-form .form-row { margin-bottom: 0.75rem; }
+  .appointment-edit-form label { display: block; font-size: 0.85rem; margin-bottom: 0.25rem; color: var(--color-muted); }
+  .appointment-edit-form input, .appointment-edit-form textarea { width: 100%; padding: 0.5rem; border: 1px solid var(--color-border); border-radius: var(--radius); }
+  .agent-list { list-style: none; margin: 0; padding: 0; }
+  .agent-list li {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background: #fff;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+  }
+  .agent-list li:hover { border-color: var(--color-primary); background: #f0f9ff; }
+  .agent-list .agent-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+  .agent-list .agent-info { flex: 1; min-width: 0; }
+  .agent-list .agent-name { display: block; font-weight: 600; font-size: 0.95rem; margin-bottom: 0.15rem; }
+  .agent-list .agent-rating { font-size: 0.85rem; color: var(--color-muted); }
+  .agent-list .agent-accept-rate { font-size: 0.8rem; color: #059669; margin-left: 0.35rem; }
+
+  .feedback-popup-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 1001;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .feedback-popup-overlay.visible { display: flex; }
+  .feedback-popup {
+    background: #fff;
+    border-radius: var(--radius);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    padding: 1.5rem;
+    min-width: 280px;
+    text-align: center;
+  }
+  .feedback-popup-message { margin: 0 0 1rem; white-space: pre-wrap; }
+  .feedback-popup .btn { min-width: 100px; }
+
+  .agent-popup-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .agent-popup-overlay.visible { display: flex; }
+  .agent-popup {
+    position: relative;
+    background: #fff;
+    border-radius: var(--radius);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    max-width: 420px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 1.5rem;
+  }
+  .agent-popup-header { display: flex; gap: 1rem; margin-bottom: 1rem; align-items: flex-start; }
+  .agent-popup-avatar {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+  .agent-popup-info { flex: 1; }
+  .agent-popup-name { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem; }
+  .agent-popup-rating { font-size: 0.85rem; color: var(--color-muted); margin-bottom: 0.5rem; }
+  .agent-popup-desc { font-size: 0.9rem; color: var(--color-text); line-height: 1.5; margin-bottom: 1rem; }
+  .agent-popup-desc .label { color: var(--color-muted); font-size: 0.85rem; }
+  .agent-popup-close {
+    position: absolute;
+    top: 1rem; right: 1rem;
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--color-muted);
+    padding: 0.25rem;
+  }
+  .agent-popup-close:hover { color: var(--color-text); }
+  .agent-popup-form .form-row { margin-bottom: 0.75rem; }
+  .agent-popup-form label { display: block; font-size: 0.9rem; font-weight: 500; margin-bottom: 0.25rem; }
+  .agent-popup-form input, .agent-popup-form textarea {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+  }
+  .agent-popup-form textarea { min-height: 80px; resize: vertical; }
+
+  /* 플로팅: 선택 서비스 목록·가격 */
+  .schedule-summary-float {
+    position: fixed;
+    top: 50%;
+    right: 1rem;
+    transform: translateY(-50%);
+    width: 280px;
+    max-height: 70vh;
+    background: #fff;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    z-index: 100;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  .schedule-summary-float.empty { opacity: 0; pointer-events: none; transform: translateY(-50%) translateX(1rem); }
+  .schedule-summary-float .summary-head {
+    padding: 0.75rem 1rem;
+    background: var(--color-primary);
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+  }
+  .schedule-summary-float .summary-body {
+    padding: 0.75rem 1rem;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+  }
+  .schedule-summary-float .summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.9rem;
+  }
+  .schedule-summary-float .summary-row:last-child { border-bottom: none; }
+  .schedule-summary-float .summary-row .name { flex: 1; min-width: 0; color: var(--color-text); }
+  .schedule-summary-float .summary-row .price { flex-shrink: 0; font-weight: 600; color: var(--color-primary); }
+  .schedule-summary-float .summary-total {
+    margin-top: 0.5rem;
+    padding-top: 0.75rem;
+    border-top: 2px solid var(--color-border);
+    font-weight: 700;
+    font-size: 1rem;
+    display: flex;
+    justify-content: space-between;
+  }
+  .schedule-summary-float .summary-payment-wrap { margin-top: 0.75rem; }
+  .schedule-summary-float .summary-payment-wrap .btn { width: 100%; padding: 0.65rem; font-weight: 600; }
+  .schedule-summary-float .summary-empty { color: var(--color-muted); font-size: 0.9rem; text-align: center; padding: 1rem; }
+
+  .service-category { margin-bottom: 1rem; }
+  .service-category h3 {
+    font-size: 0.95rem;
+    color: var(--color-muted);
+    margin: 0 0 0.75rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .service-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .service-card {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.6rem 1rem;
+    background: #fff;
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius);
+    cursor: grab;
+    font-size: 0.9rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    user-select: none;
+  }
+  .service-card:hover { border-color: var(--color-primary); box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15); }
+  .service-card:active { cursor: grabbing; }
+  .service-card.dragging { opacity: 0.5; }
+  .service-card.card-selected {
+    border-color: var(--color-primary);
+    background: #eff6ff;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
+  }
+  .service-card.card-in-schedule { display: none; }
+
+  .form-row { margin-bottom: 1rem; }
+  .form-row label { display: block; margin-bottom: 0.35rem; font-weight: 500; }
+  .form-row input, .form-row textarea { margin-bottom: 0; }
+  .tier-notice {
+    padding: 1rem;
+    border-radius: var(--radius);
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+  }
+  .tier-notice.tier-basic {
+    background: #fef3c7;
+    border: 1px solid #fcd34d;
+    color: #92400e;
+  }
+  .tier-notice.tier-basic a { color: var(--color-primary); font-weight: 600; }
+  .tier-notice.tier-standard, .tier-notice.tier-스탠다드 {
+    background: #dbeafe;
+    border: 1px solid #93c5fd;
+    color: #1e40af;
+  }
+  .tier-notice.tier-premium, .tier-notice.tier-프리미엄 {
+    background: #d1fae5;
+    border: 1px solid #6ee7b7;
+    color: #065f46;
+  }
+</style>
+{% endblock %}
+{% block settlement_content %}
+{{ settlement_i18n|json_script:"settlement-quote-i18n" }}
+<section class="card" data-user-logged-in="{% if user.is_authenticated %}1{% else %}0{% endif %}">
+  <h1>{{ settlement_i18n.plan_heading }}</h1>
+  <p class="text-muted">{{ tier_info.description }}</p>
+
+  {% if not tier_info.llm and not tier_info.agent_mode %}
+  <div class="quote-section tier-notice tier-basic">
+    <strong><span>{{ settlement_i18n.current_tier }}</span>: {{ tier_info.name }}</strong> — <span>{{ settlement_i18n.manual_notice }}</span>
+    <a href="{% url 'settlement_intro' %}">{{ settlement_i18n.intro_link }}</a><span>{{ settlement_i18n.manual_suffix }}</span>
+    <span>{{ settlement_i18n.upgrade_notice }}</span>
+    {% if free_agent_services %}<p style="margin:0.5rem 0 0; font-size:0.9rem;"><strong><span>{{ settlement_i18n.free_agent_services_label }}</span>:</strong> {% for code, label in free_agent_services %}{{ label }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+  </div>
+  {% else %}
+  <div class="quote-section tier-notice tier-{% if tier_info.agent_mode == 'full' %}premium{% else %}standard{% endif %}">
+    <strong><span>{{ settlement_i18n.current_tier }}</span>: {{ tier_info.name }}</strong> — {% if tier_info.agent_mode == 'full' %}<span>{{ settlement_i18n.agent_helps_all }}</span>{% else %}<span>{{ settlement_i18n.agent_helps_optional }}</span>{% endif %}
+    {% if free_agent_services %}
+    <p style="margin:0.5rem 0 0; font-size:0.9rem;"><strong><span>{{ settlement_i18n.free_agent_services_label }}</span>:</strong> {% for code, label in free_agent_services %}{{ label }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if messages %}
+  <ul class="form-errors" style="color: #059669; list-style: none;">
+    {% for m in messages %}<li>{{ m }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if saved_checkout_total and saved_checkout_total > 0 and can_show_plan_prices %}
+  <div class="quote-section" style="background: #f0fdf4; border: 1px solid #86efac; border-radius: var(--radius); padding: 1rem;">
+    <strong><span>{{ settlement_i18n.checkout_total }}</span>:</strong> ${{ saved_checkout_total|floatformat:2 }}
+    <span class="text-muted" style="font-size:0.9rem;">(<span>{{ settlement_i18n.customer_pricing_note }}</span>)</span>
+  </div>
+  {% elif not can_show_plan_prices %}
+  <div class="quote-section" style="background: #f8f9fa; border: 1px solid var(--color-border); border-radius: var(--radius); padding: 1rem;">
+    <strong><span>{{ settlement_i18n.checkout_total }}</span>:</strong> <span class="text-muted">{{ price_masked_label|default:"견적 후 공개" }}</span>
+  </div>
+  {% endif %}
+
+  {% if can_assign_agent %}
+  <div class="quote-section dedicated-agent-section" id="dedicatedAgentSection" data-can-assign="1" data-assigned-id="{% if assigned_agent %}{{ assigned_agent.id }}{% endif %}" data-assigned-name="{% if assigned_agent %}{{ assigned_agent.get_full_name|default:assigned_agent.username }}{% endif %}">
+    {% if assigned_agent %}
+    <h2>{{ settlement_i18n.dedicated_agent_assigned|default:"배정된 전담 Agent" }}</h2>
+    <p><strong>{{ assigned_agent.get_full_name|default:assigned_agent.username }}</strong></p>
+    <p class="text-muted" style="font-size:0.9rem;">{{ settlement_i18n.calendar_hint|default:"아래 결제하기를 누르면 이 Agent에게 약속이 전달됩니다." }}</p>
+    {% else %}
+    <h2>{{ settlement_i18n.dedicated_agent_title|default:"전담 Agent 선택" }}</h2>
+    <p class="text-muted" style="font-size:0.9rem; margin-bottom:0.75rem;">결제 후 가능한 Agent 1명을 선택해 전담 배정합니다. 서비스별 선택은 없습니다.</p>
+    <div id="dedicatedAgentList"></div>
+    <p class="text-muted" style="font-size:0.85rem; margin-top:0.5rem;" id="dedicatedAgentLoadHint">{{ settlement_i18n.loading|default:"로딩 중..." }}</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <form method="post" id="quoteForm">
+    {% csrf_token %}
+
+    {% if not user.is_authenticated or user.role == 'CUSTOMER' %}
+    <div class="quote-section settlement-info">
+      <h2>{{ settlement_i18n.settlement_info }}</h2>
+      <div class="form-row">
+        <label for="id_state">{{ settlement_i18n.state_label }}</label>
+        {{ form.state }}
+      </div>
+      <div class="form-row">
+        <label for="id_city">{{ settlement_i18n.city_label }}</label>
+        {{ form.city }}
+      </div>
+      <div class="form-row">
+        <label for="id_entry_date">{{ settlement_i18n.entry_date_label }}</label>
+        {{ form.entry_date }}
+      </div>
+    </div>
+
+    {% if can_use_llm %}
+    <div class="quote-section ai-suggest-box">
+      <label for="aiInput">🤖 <span>{{ settlement_i18n.ai_suggest_label }}</span></label>
+      <p class="hint">{{ settlement_i18n.ai_suggest_hint }}</p>
+      <div class="ai-suggest-row" style="flex-wrap: wrap;">
+        <input type="text" id="aiInput" placeholder="{{ settlement_i18n.ai_input_placeholder }}" autocomplete="off" style="min-width: 220px;">
+        <button type="button" id="aiSuggestBtn">{{ settlement_i18n.run }}</button>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="quote-section">
+      <h2>{{ settlement_i18n.service_selection }}</h2>
+      <p class="text-muted" style="font-size:0.9rem; margin-bottom:1rem;">{{ settlement_i18n.service_selection_hint }}</p>
+      {% for category, items in services_by_category.items %}
+      <div class="service-category">
+        <h3>{{ category }}</h3>
+        <div class="service-cards">
+          {% for code, label in items %}
+          <div class="service-card" draggable="true" data-code="{{ code }}" data-label="{{ label }}">{{ label }}</div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="quote-section">
+      <h2>{{ settlement_i18n.calendar_heading }}</h2>
+      <p class="text-muted" style="font-size:0.9rem; margin-bottom:1rem;">{{ settlement_i18n.calendar_hint }}</p>
+      <div class="calendar-wrap" id="calendarWrap">
+        <div class="calendar-nav">
+          <button type="button" id="calPrev" class="btn btn-outline" style="padding:0.4rem 0.75rem;">◀ <span>{{ settlement_i18n.prev }}</span></button>
+          <h3 id="calTitle" data-year-suffix-key="년" data-month-suffix-key="월">2025{{ settlement_i18n.year }} 2{{ settlement_i18n.month }}</h3>
+          <button type="button" id="calNext" class="btn btn-outline" style="padding:0.4rem 0.75rem;"><span>{{ settlement_i18n.next }}</span> ▶</button>
+          <select id="calMonth"></select>
+          <select id="calYear"></select>
+        </div>
+        <div class="calendar-grid" id="calendarGrid">
+          <span class="calendar-weekday">{{ settlement_i18n.sun }}</span><span class="calendar-weekday">{{ settlement_i18n.mon }}</span><span class="calendar-weekday">{{ settlement_i18n.tue }}</span><span class="calendar-weekday">{{ settlement_i18n.wed }}</span><span class="calendar-weekday">{{ settlement_i18n.thu }}</span><span class="calendar-weekday">{{ settlement_i18n.fri }}</span><span class="calendar-weekday">{{ settlement_i18n.sat }}</span>
+        </div>
+      </div>
+      {% if not can_assign_agent %}
+      <div class="agent-list-panel" id="agentListPanel">
+        <h4 id="agentListTitle">{{ settlement_i18n.available_agents }}</h4>
+        <div id="agentListContent"></div>
+      </div>
+      {% endif %}
+    </div>
+
+    <input type="hidden" name="ai_suggested" id="aiSuggested" value="0">
+    <input type="hidden" name="service_schedule" id="serviceSchedule" value="{}">
+    {{ form.name }}
+    {{ form.email }}
+  </form>
+
+  <div class="schedule-summary-float empty" id="scheduleSummaryFloat">
+    <div class="summary-head">{{ settlement_i18n.summary_heading }}</div>
+    <div class="summary-body">
+      <div class="summary-empty" id="scheduleSummaryEmpty">{{ settlement_i18n.summary_empty }}</div>
+      <div id="scheduleSummaryList" style="display:none;"></div>
+      <div id="scheduleSummaryTotal" class="summary-total" style="display:none;"></div>
+      <div id="scheduleSummaryPayment" class="summary-payment-wrap" style="display:none;"></div>
+    </div>
+  </div>
+
+  <div class="feedback-popup-overlay" id="feedbackPopupOverlay">
+    <div class="feedback-popup" id="feedbackPopup">
+      <p id="feedbackPopupMessage" class="feedback-popup-message"></p>
+      <button type="button" class="btn btn-primary" id="feedbackPopupOk">{{ settlement_i18n.ok }}</button>
+    </div>
+  </div>
+
+  <div class="agent-popup-overlay" id="agentPopupOverlay">
+    <div class="agent-popup" id="agentPopup">
+      <button type="button" class="agent-popup-close" id="agentPopupClose" aria-label="{{ settlement_i18n.close_aria }}">×</button>
+      <div class="agent-popup-header">
+        <img class="agent-popup-avatar" id="agentPopupAvatar" src="" alt="">
+        <div class="agent-popup-info">
+          <div class="agent-popup-name" id="agentPopupName"></div>
+          <div class="agent-popup-rating" id="agentPopupRating"></div>
+          <div class="agent-popup-desc" id="agentPopupDesc"></div>
+        </div>
+      </div>
+      <form class="agent-popup-form" id="agentAppointmentForm">
+        <input type="hidden" name="agent_id" id="appointmentAgentId">
+        <input type="hidden" name="service_code" id="appointmentServiceCode">
+        <div class="form-row">
+          <label for="appointmentDate">{{ settlement_i18n.preferred_date }}</label>
+          <input type="date" id="appointmentDate" name="service_date" required>
+        </div>
+        <div class="form-row">
+          <label for="appointmentTime">{{ settlement_i18n.preferred_time_label }}</label>
+          <input type="text" id="appointmentTime" name="preferred_time" placeholder="{{ settlement_i18n.placeholder_time_range }}">
+        </div>
+        <div class="form-row" id="appointmentNameRow" style="display:none;">
+          <label for="appointmentName">{{ settlement_i18n.name_label }}</label>
+          <input type="text" id="appointmentName" name="customer_name" placeholder="{{ settlement_i18n.name_label }}">
+        </div>
+        <div class="form-row" id="appointmentEmailRow" style="display:none;">
+          <label for="appointmentEmail">{{ settlement_i18n.email_label }}</label>
+          <input type="email" id="appointmentEmail" name="customer_email" placeholder="{{ settlement_i18n.email_label }}">
+        </div>
+        <div class="form-row">
+          <label for="appointmentMessage">{{ settlement_i18n.message }}</label>
+          <textarea id="appointmentMessage" name="message" placeholder="{{ settlement_i18n.placeholder_message }}"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;">{{ settlement_i18n.request_appointment }}</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<script>
+(function() {
+  var i18nEl = document.getElementById('settlement-quote-i18n');
+  var i18n = i18nEl ? JSON.parse(i18nEl.textContent) : {};
+  function t(key) { return i18n[key] != null ? i18n[key] : key; }
+
+  var schedule = {{ initial_schedule_json|safe }};
+  var servicePrices = {{ service_prices_json|default:"{}"|safe }};
+  var freeAgentServiceCodes = {{ free_agent_service_codes_json|default:"[]"|safe }};
+  var dedicatedSection = document.getElementById('dedicatedAgentSection');
+  var canAssignAgent = !!dedicatedSection;
+  var assignedAgentId = dedicatedSection ? (dedicatedSection.getAttribute('data-assigned-id') || '') : '';
+  var assignedAgentName = dedicatedSection ? (dedicatedSection.getAttribute('data-assigned-name') || '') : '';
+  var now = new Date();
+  var calYear = now.getFullYear();
+  var calMonth = now.getMonth();
+  try {
+    var saved = sessionStorage.getItem('settlement_quote_cal');
+    if (saved) {
+      var v = JSON.parse(saved);
+      if (v && typeof v.y === 'number' && typeof v.m === 'number' && v.m >= 0 && v.m <= 11 && v.y >= 2020 && v.y <= 2030) {
+        calYear = v.y;
+        calMonth = v.m;
+      }
+    }
+  } catch (e) {}
+
+  function saveCalView() {
+    try {
+      sessionStorage.setItem('settlement_quote_cal', JSON.stringify({ y: calYear, m: calMonth }));
+    } catch (e) {}
+  }
+
+  function padDate(d) {
+    var m = (d.getMonth() + 1).toString();
+    var day = d.getDate().toString();
+    return d.getFullYear() + '-' + (m.length === 1 ? '0' + m : m) + '-' + (day.length === 1 ? '0' + day : day);
+  }
+  function dateStrFromYMD(year, monthZeroBased, day) {
+    var m = (monthZeroBased + 1).toString();
+    var d = day.toString();
+    return year + '-' + (m.length === 1 ? '0' + m : m) + '-' + (d.length === 1 ? '0' + d : d);
+  }
+
+  var autoSaveTimeout = null;
+  var AUTO_SAVE_DELAY_MS = 800;
+
+  function syncFormServices() {
+    var form = document.getElementById('quoteForm');
+    if (!form) return;
+    var codes = getCodesInSchedule();
+    form.querySelectorAll('input[name="services"]').forEach(function(i) { i.remove(); });
+    codes.forEach(function(c) {
+      var inp = document.createElement('input');
+      inp.type = 'hidden';
+      inp.name = 'services';
+      inp.value = c;
+      form.appendChild(inp);
+    });
+  }
+
+  function autoSaveToServer() {
+    var section = document.querySelector('section.card');
+    if (!section || section.dataset.userLoggedIn !== '1') return;
+    var form = document.getElementById('quoteForm');
+    if (!form) return;
+    syncFormServices();
+    var formData = new FormData(form);
+    fetch(form.action || window.location.pathname, {
+      method: 'POST',
+      body: formData,
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin'
+    }).then(function(r) { return r.json(); }).catch(function() {});
+  }
+
+  function saveSchedule() {
+    var el = document.getElementById('serviceSchedule');
+    if (el) el.value = JSON.stringify(schedule);
+    if (typeof updateFloatingSummary === 'function') updateFloatingSummary();
+    var sectionEl = document.querySelector('section.card');
+    if (sectionEl && sectionEl.dataset.userLoggedIn === '1') {
+      if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
+      autoSaveTimeout = setTimeout(function() {
+        autoSaveTimeout = null;
+        autoSaveToServer();
+      }, AUTO_SAVE_DELAY_MS);
+    }
+  }
+
+  function getCodesInSchedule() {
+    var codes = [];
+    Object.keys(schedule).forEach(function(dateStr) {
+      (schedule[dateStr] || []).forEach(function(item) {
+        if (codes.indexOf(item.code) === -1) codes.push(item.code);
+      });
+    });
+    return codes;
+  }
+
+  function updateServiceCardVisibility() {
+    var codesInSchedule = getCodesInSchedule();
+    document.querySelectorAll('.service-card').forEach(function(card) {
+      var code = card.dataset.code;
+      if (codesInSchedule.indexOf(code) >= 0) {
+        card.classList.add('card-in-schedule');
+      } else {
+        card.classList.remove('card-in-schedule');
+      }
+    });
+  }
+
+  function updateFloatingSummary() {
+    var floatEl = document.getElementById('scheduleSummaryFloat');
+    var emptyEl = document.getElementById('scheduleSummaryEmpty');
+    var listEl = document.getElementById('scheduleSummaryList');
+    var totalEl = document.getElementById('scheduleSummaryTotal');
+    if (!floatEl || !listEl) return;
+    var seen = {};
+    var total = 0;
+    Object.keys(schedule).forEach(function(dateStr) {
+      (schedule[dateStr] || []).forEach(function(item) {
+        if (!item || !item.code) return;
+        var hasAgent = !!item.agent_id || (canAssignAgent && !!assignedAgentId);
+        var isUnpaid = hasAgent && (!item.appointment_id || item.appointment_status === 'CANCELLED');
+        if (!isUnpaid) return;
+        if (seen[item.code]) {
+          seen[item.code].hasAgent = true;
+          return;
+        }
+        seen[item.code] = {
+          label: item.label || item.code,
+          code: item.code,
+          hasAgent: true
+        };
+      });
+    });
+    var freeSet = (typeof freeAgentServiceCodes !== 'undefined' && Array.isArray(freeAgentServiceCodes))
+      ? new Set(freeAgentServiceCodes) : new Set();
+    var canShowPrices = i18n.can_show_plan_prices !== false;
+    var priceMaskedLabel = i18n.price_masked_label || '견적 후 공개';
+    var items = Object.keys(seen).map(function(code) {
+      var info = servicePrices[code] || { name: seen[code].label, price: 0 };
+      var name = info.name || seen[code].label;
+      var basePrice = freeSet.has(code) ? 0 : (Number(info.price) || 0);
+      var hasAgent = seen[code].hasAgent;
+      var price = hasAgent ? basePrice : basePrice;
+      if (hasAgent) total += basePrice;
+      return { name: name, price: price, hasAgent: hasAgent, _masked: info._masked || !canShowPrices };
+    });
+    if (items.length === 0 || total < 1) {
+      floatEl.classList.add('empty');
+      if (emptyEl) {
+        emptyEl.style.display = '';
+        emptyEl.textContent = t('summary_empty_alt');
+      }
+      listEl.style.display = 'none';
+      if (totalEl) totalEl.style.display = 'none';
+      var payWrap = document.getElementById('scheduleSummaryPayment');
+      if (payWrap) { payWrap.style.display = 'none'; payWrap.innerHTML = ''; }
+      return;
+    }
+    floatEl.classList.remove('empty');
+    if (emptyEl) emptyEl.style.display = 'none';
+    listEl.style.display = '';
+    function fmtUSD(n) { return '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+    var free = t('free');
+    var agentRequired = t('agent_required');
+    var totalLabel = t('total');
+    listEl.innerHTML = items.map(function(it) {
+      var priceStr;
+      if (it._masked) priceStr = priceMaskedLabel;
+      else if (it.price > 0) priceStr = fmtUSD(it.price);
+      else priceStr = free;
+      if (!it.hasAgent) priceStr += ' <span class="text-muted" style="font-size:0.8em;">(' + agentRequired + ')</span>';
+      return '<div class="summary-row"><span class="name">' + (it.name || '').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span><span class="price">' + priceStr + '</span></div>';
+    }).join('');
+    if (totalEl) {
+      totalEl.style.display = 'flex';
+      totalEl.innerHTML = '<span>' + totalLabel + '</span><span class="price">' + (canShowPrices ? fmtUSD(total) : priceMaskedLabel) + '</span>';
+    }
+    var payWrap = document.getElementById('scheduleSummaryPayment');
+    if (payWrap) {
+      if (total >= 1 && canShowPrices) {
+        payWrap.style.display = 'block';
+        payWrap.innerHTML = '<button type="button" class="btn btn-primary" id="scheduleSummaryPayBtn">' + t('pay') + ' (' + fmtUSD(total) + ')</button>';
+        var payBtn = document.getElementById('scheduleSummaryPayBtn');
+        if (payBtn) {
+          payBtn.onclick = function() {
+            if (!confirm(fmtUSD(total) + ' ' + t('confirm_pay'))) return;
+            saveSchedule();
+            var csrf = document.querySelector('input[name="csrfmiddlewaretoken"]');
+            var token = csrf ? csrf.value : '';
+            payBtn.disabled = true;
+            fetch('/api/settlement/checkout/', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token },
+              body: JSON.stringify({ schedule: schedule })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data.ok) { alert(data.message); window.location.reload(); }
+              else { alert(data.error || t('payment_failed')); }
+            })
+            .catch(function() { alert(t('request_failed')); })
+            .finally(function() { payBtn.disabled = false; });
+          };
+        }
+      } else {
+        payWrap.style.display = 'none';
+        payWrap.innerHTML = '';
+      }
+    }
+  }
+
+  function getTodayStr() {
+    var t = new Date();
+    return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+  }
+
+  function getDdayLabel(dateStr, entryDateStr) {
+    if (!entryDateStr) return '';
+    var d1 = new Date(dateStr);
+    var d2 = new Date(entryDateStr);
+    d1.setHours(0, 0, 0, 0);
+    d2.setHours(0, 0, 0, 0);
+    var diff = Math.round((d2 - d1) / (24 * 60 * 60 * 1000));
+    if (diff > 0) return 'D-' + diff + ' Day';
+    if (diff === 0) return 'D-Day';
+    return 'D+' + (-diff) + ' Day';
+  }
+
+  function assignAgentToSlot(dateStr, serviceCode, agent) {
+    if (!dateStr || !schedule[dateStr]) return;
+    var items = schedule[dateStr];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].code === serviceCode) {
+        items[i].agent_id = agent.id;
+        items[i].agent_name = agent.name || agent.username || '';
+        break;
+      }
+    }
+  }
+
+  function showAppointmentDetail(item, dateStr) {
+    var panel = document.getElementById('agentListPanel');
+    var titleEl = document.getElementById('agentListTitle');
+    var contentEl = document.getElementById('agentListContent');
+    if (!panel || !contentEl) return;
+    panel.classList.add('visible');
+    titleEl.textContent = (item.label || item.code) + ' — ' + t('appointment_detail');
+    function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    var agentName = item.agent_name || t('agent');
+    var statusLabel = item.appointment_status_label || item.appointment_status || '';
+    var preferredTime = item.appointment_preferred_time || '-';
+    var message = item.appointment_message || '-';
+    var createdAt = item.appointment_created_at || '-';
+    var appointmentId = item.appointment_id || '';
+    var isPending = item.appointment_status === 'PENDING';
+    var isConfirmed = item.appointment_status === 'CONFIRMED';
+    var conversationId = item.conversation_id || '';
+    var actionsHtml = '';
+    if (appointmentId) {
+      actionsHtml = '<div class="appointment-detail-actions">';
+      if (conversationId) {
+        actionsHtml += '<a href="/messages/?conversation=' + encodeURIComponent(conversationId) + '" class="btn btn-outline" target="_blank" rel="noopener">' + t('send_message') + '</a>';
+      }
+      if (isPending || isConfirmed) {
+        actionsHtml += '<button type="button" class="btn btn-outline" id="appointmentDetailEditBtn">' + t('edit') + '</button>';
+      }
+      actionsHtml += '<button type="button" class="btn btn-outline" id="appointmentDetailCancelBtn" style="color:#dc2626;">' + t('cancel') + '</button></div>';
+      actionsHtml += '<div class="appointment-edit-form" id="appointmentEditForm">' +
+        '<div class="form-row"><label>' + t('preferred_time') + '</label><input type="text" id="appointmentEditPreferredTime" placeholder="' + t('placeholder_time_example') + '" value="' + esc(String(item.appointment_preferred_time || '')) + '"></div>' +
+        '<div class="form-row"><label>' + t('message') + '</label><textarea id="appointmentEditMessage" rows="3" placeholder="' + t('additional_notes') + '">' + esc(String(item.appointment_message || '')) + '</textarea></div>' +
+        '<button type="button" class="btn btn-primary" id="appointmentEditSaveBtn">' + t('save') + '</button></div>';
+    }
+    contentEl.innerHTML = '<div class="appointment-detail">' +
+      '<div class="detail-row"><span class="label">' + t('service') + '</span><span class="value">' + esc(item.label || item.code) + '</span></div>' +
+      '<div class="detail-row"><span class="label">' + t('date') + '</span><span class="value">' + esc(dateStr) + '</span></div>' +
+      '<div class="detail-row"><span class="label">' + t('agent') + '</span><span class="value">' + esc(agentName) + '</span></div>' +
+      '<div class="detail-row"><span class="label">' + t('status') + '</span><span class="value">' + esc(statusLabel) + '</span></div>' +
+      '<div class="detail-row"><span class="label">' + t('preferred_time') + '</span><span class="value">' + esc(preferredTime) + '</span></div>' +
+      '<div class="detail-row message"><span class="label">' + t('message') + '</span><span class="value">' + esc(message) + '</span></div>' +
+      '<div class="detail-row"><span class="label">' + t('applied_at') + '</span><span class="value">' + esc(createdAt) + '</span></div>' +
+      actionsHtml +
+      '</div>';
+    contentEl._appointmentId = appointmentId;
+    var editBtn = document.getElementById('appointmentDetailEditBtn');
+    var cancelBtn = document.getElementById('appointmentDetailCancelBtn');
+    var editForm = document.getElementById('appointmentEditForm');
+    var editSaveBtn = document.getElementById('appointmentEditSaveBtn');
+    if (editBtn && editForm) {
+      editBtn.addEventListener('click', function() { editForm.classList.toggle('visible'); });
+    }
+    if (editSaveBtn && contentEl._appointmentId) {
+      editSaveBtn.addEventListener('click', function() {
+        var fd = new FormData();
+        fd.append('csrfmiddlewaretoken', document.querySelector('input[name="csrfmiddlewaretoken"]').value);
+        fd.append('preferred_time', (document.getElementById('appointmentEditPreferredTime') && document.getElementById('appointmentEditPreferredTime').value) || '');
+        fd.append('message', (document.getElementById('appointmentEditMessage') && document.getElementById('appointmentEditMessage').value) || '');
+        editSaveBtn.disabled = true;
+        fetch('/api/settlement/appointment/' + contentEl._appointmentId + '/update/', { method: 'POST', body: fd })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.ok) { alert(data.message); window.location.reload(); }
+            else { alert(data.error || t('edit_failed')); }
+          })
+          .catch(function() { alert(t('request_failed')); })
+          .finally(function() { editSaveBtn.disabled = false; });
+      });
+    }
+    if (cancelBtn && contentEl._appointmentId) {
+      cancelBtn.addEventListener('click', function() {
+        if (!confirm(t('confirm_cancel_appointment'))) return;
+        var fd = new FormData();
+        fd.append('csrfmiddlewaretoken', document.querySelector('input[name="csrfmiddlewaretoken"]').value);
+        cancelBtn.disabled = true;
+        fetch('/api/settlement/appointment/' + contentEl._appointmentId + '/cancel/', { method: 'POST', body: fd })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.ok) { alert(data.message); window.location.reload(); }
+            else { alert(data.error || t('cancel_failed')); }
+          })
+          .catch(function() { alert(t('request_failed')); })
+          .finally(function() { cancelBtn.disabled = false; });
+      });
+    }
+  }
+
+  function showPaymentPendingDetail(item, dateStr) {
+    var panel = document.getElementById('agentListPanel');
+    var titleEl = document.getElementById('agentListTitle');
+    var contentEl = document.getElementById('agentListContent');
+    if (!panel || !contentEl) return;
+    panel.classList.add('visible');
+    panel.dataset.serviceDate = (dateStr || '').trim();
+    titleEl.textContent = (item.label || item.code) + ' — ' + t('payment_pending');
+    function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    var agentName = item.agent_name || t('agent');
+    var preferredTime = (item.preferred_time || '').trim() || '-';
+    var message = (item.message || '').trim() || '-';
+    contentEl.innerHTML = '<div class="appointment-detail">' +
+      '<div class="detail-row"><span class="label">' + t('service') + '</span><span class="value">' + esc(item.label || item.code) + '</span></div>' +
+      '<div class="detail-row"><span class="label">' + t('date') + '</span><span class="value">' + esc(dateStr) + '</span></div>' +
+      '<div class="detail-row"><span class="label">' + t('agent') + '</span><span class="value">' + esc(agentName) + '</span></div>' +
+      '<div class="detail-row"><span class="label">' + t('status') + '</span><span class="value">' + t('payment_pending_status') + '</span></div>' +
+      '<div class="detail-row"><span class="label">' + t('preferred_time') + '</span><span class="value">' + esc(preferredTime) + '</span></div>' +
+      '<div class="detail-row message"><span class="label">' + t('message') + '</span><span class="value">' + esc(message) + '</span></div>' +
+      '<p class="hint" style="margin:0.75rem 0 0; font-size:0.9rem; color:var(--color-muted);">' + t('payment_complete_hint') + '</p>' +
+      '<button type="button" class="btn btn-primary" id="paymentPendingPayBtn" style="margin-top:0.75rem; width:100%;">' + t('pay') + '</button>' +
+      '</div>';
+    contentEl._appointmentId = '';
+    var payBtn = document.getElementById('paymentPendingPayBtn');
+    if (payBtn) {
+      payBtn.addEventListener('click', function() {
+        var payEl = document.querySelector('.schedule-summary-float:not(.empty), #scheduleSummaryFloat');
+        if (payEl) payEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+  }
+
+  function showAgentList(serviceCode, serviceLabel, dateStr) {
+    var panel = document.getElementById('agentListPanel');
+    var titleEl = document.getElementById('agentListTitle');
+    var contentEl = document.getElementById('agentListContent');
+    if (!panel || !contentEl) return;
+    var dateForSlot = (dateStr || '').trim();
+    panel.dataset.serviceDate = dateForSlot;
+    panel.classList.add('visible');
+    titleEl.textContent = serviceLabel + ' — ' + t('available_agents');
+    contentEl.innerHTML = '<p class="loading">' + t('loading') + '</p>';
+    contentEl._dateStr = dateForSlot;
+    var stateInput = document.getElementById('id_state');
+    var state = (stateInput && stateInput.value) || '';
+    var params = 'service_code=' + encodeURIComponent(serviceCode);
+    if (state) params += '&state=' + encodeURIComponent(state);
+    fetch('/api/settlement/agents/?' + params, { method: 'GET', headers: { 'Accept': 'application/json' } })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var agents = data.agents || [];
+        if (agents.length === 0) {
+          contentEl.innerHTML = '<p class="empty">' + t('no_agents') + '</p>';
+          return;
+        }
+        function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+        var noRating = t('no_rating');
+        var acceptRateLabel = t('accept_rate');
+        contentEl.innerHTML = '<ul class="agent-list">' + agents.map(function(a, idx) {
+          var rating = a.rating_count > 0 ? '★ ' + a.rating_avg + ' (' + a.rating_count + ')' : noRating;
+          var acceptRate = (a.accept_rate_display && a.accept_rate_display !== '-') ? ' ' + acceptRateLabel + ' ' + esc(a.accept_rate_display) : '';
+          var imgSrc = (a.profile_image_url && a.profile_image_url.trim()) ? esc(a.profile_image_url) : '';
+          var imgHtml = imgSrc ? '<img class="agent-avatar" src="' + imgSrc + '" alt="">' : '<span class="agent-avatar" style="display:flex;align-items:center;justify-content:center;color:var(--color-muted);font-size:1.1rem;">👤</span>';
+          return '<li data-agent-idx="' + idx + '">' + imgHtml + '<span class="agent-info"><span class="agent-name">' + esc(a.name || a.username) + '</span><span class="agent-rating">' + esc(rating) + (acceptRate ? '<span class="agent-accept-rate">' + acceptRate + '</span>' : '') + '</span></span></li>';
+        }).join('') + '</ul>';
+        contentEl._agents = agents;
+        contentEl._serviceCode = serviceCode;
+        contentEl._serviceLabel = serviceLabel;
+        var panelEl = document.getElementById('agentListPanel');
+        var slotDate = (panelEl && panelEl.dataset.serviceDate) || contentEl._dateStr || '';
+        contentEl.querySelectorAll('.agent-list li').forEach(function(li) {
+          li.addEventListener('click', function() {
+            var idx = parseInt(li.dataset.agentIdx, 10);
+            var agent = contentEl._agents[idx];
+            if (agent) {
+              var dateToUse = (slotDate || (document.getElementById('agentListPanel').dataset.serviceDate || '') || contentEl._dateStr || '').trim();
+              assignAgentToSlot(dateToUse, contentEl._serviceCode, agent);
+              saveSchedule();
+              renderCalendar();
+              showAgentPopup(agent, contentEl._serviceCode, contentEl._serviceLabel, dateToUse);
+            }
+          });
+        });
+      })
+      .catch(function() {
+        contentEl.innerHTML = '<p class="empty">' + t('agents_load_failed') + '</p>';
+      });
+  }
+
+  function showAgentPopup(agent, serviceCode, serviceLabel, serviceDateStr) {
+    var overlay = document.getElementById('agentPopupOverlay');
+    var nameEl = document.getElementById('agentPopupName');
+    var ratingEl = document.getElementById('agentPopupRating');
+    var descEl = document.getElementById('agentPopupDesc');
+    var avatarEl = document.getElementById('agentPopupAvatar');
+    var agentIdInp = document.getElementById('appointmentAgentId');
+    var serviceCodeInp = document.getElementById('appointmentServiceCode');
+    var dateInp = document.getElementById('appointmentDate');
+    var nameRow = document.getElementById('appointmentNameRow');
+    var emailRow = document.getElementById('appointmentEmailRow');
+    var nameInp = document.getElementById('appointmentName');
+    var emailInp = document.getElementById('appointmentEmail');
+
+    function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    nameEl.textContent = agent.name || agent.username;
+    var noRating = t('no_rating');
+    ratingEl.textContent = agent.rating_count > 0 ? '★ ' + agent.rating_avg + ' (' + agent.rating_count + ')' : noRating;
+    var descParts = [];
+    if (agent.states && agent.states.length) {
+      descParts.push('<span class="label">' + t('cover_region') + ':</span> ' + esc(agent.states.join(', ')));
+    }
+    if (agent.service_names && agent.service_names.length) {
+      descParts.push('<span class="label">' + t('services_offered') + ':</span> ' + esc(agent.service_names.join(', ')));
+    }
+    descEl.innerHTML = descParts.length ? descParts.join('<br>') : t('agent_desc_default');
+
+    if (agent.profile_image_url) {
+      avatarEl.src = agent.profile_image_url;
+      avatarEl.style.display = '';
+    } else {
+      avatarEl.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="#94a3b8"><circle cx="32" cy="24" r="12"/><path d="M16 56c0-8.8 7.2-16 16-16s16 7.2 16 16"/></svg>');
+      avatarEl.style.display = '';
+    }
+
+    agentIdInp.value = agent.id;
+    serviceCodeInp.value = serviceCode;
+    if (dateInp) {
+      var setDate = (serviceDateStr && (serviceDateStr = (serviceDateStr + '').trim())) ? serviceDateStr : '';
+      if (!setDate) {
+        var panel = document.getElementById('agentListPanel');
+        if (panel && panel.dataset.serviceDate) setDate = (panel.dataset.serviceDate || '').trim();
+      }
+      dateInp.value = setDate || '';
+      dateInp.setAttribute('value', setDate || '');
+    }
+
+    var section = document.querySelector('section.card');
+    var isLoggedIn = section && section.dataset.userLoggedIn === '1';
+    nameRow.style.display = isLoggedIn ? 'none' : 'block';
+    emailRow.style.display = isLoggedIn ? 'none' : 'block';
+    if (isLoggedIn) { nameInp.removeAttribute('required'); emailInp.removeAttribute('required'); }
+    else { nameInp.setAttribute('required', 'required'); emailInp.setAttribute('required', 'required'); }
+
+    overlay.classList.add('visible');
+  }
+
+  function closeAgentPopup() {
+    document.getElementById('agentPopupOverlay').classList.remove('visible');
+  }
+
+  document.getElementById('agentPopupClose').onclick = closeAgentPopup;
+  document.getElementById('agentPopupOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closeAgentPopup();
+  });
+
+  document.getElementById('agentAppointmentForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var form = this;
+    var btn = form.querySelector('button[type="submit"]');
+    var origText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = t('sending');
+    var fd = new FormData(form);
+    fd.append('csrfmiddlewaretoken', document.querySelector('input[name="csrfmiddlewaretoken"]').value);
+    fetch('/api/settlement/appointment/', { method: 'POST', body: fd })
+      .then(function(r) {
+        return r.json().then(function(data) { return { ok: r.ok, status: r.status, data: data }; });
+      })
+      .then(function(res) {
+        var data = res.data;
+        if (data && data.ok) {
+          closeAgentPopup();
+          form.reset();
+          alert(data.message || t('appointment_success'));
+          window.location.reload();
+          return;
+        }
+        if (data && data.require_payment) {
+          var dateStr = (document.getElementById('appointmentDate') && document.getElementById('appointmentDate').value) || '';
+          var serviceCode = (document.getElementById('appointmentServiceCode') && document.getElementById('appointmentServiceCode').value) || '';
+          var agentId = (document.getElementById('appointmentAgentId') && document.getElementById('appointmentAgentId').value) || '';
+          var preferredTime = (document.getElementById('appointmentTime') && document.getElementById('appointmentTime').value) || '';
+          var msg = (document.getElementById('appointmentMessage') && document.getElementById('appointmentMessage').value) || '';
+          if (dateStr && schedule[dateStr]) {
+            schedule[dateStr].forEach(function(it) {
+              if (it.code === serviceCode && String(it.agent_id) === String(agentId)) {
+                it.preferred_time = preferredTime;
+                it.message = msg;
+              }
+            });
+            saveSchedule();
+          }
+          closeAgentPopup();
+          alert(t('paid_service_notice'));
+          var payEl = document.querySelector('.floating-pay-wrap, [data-checkout-section], .checkout-section');
+          if (payEl) { payEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+          return;
+        }
+        alert((data && data.error) ? data.error : t('apply_failed'));
+      })
+      .catch(function() {
+        alert(t('network_error'));
+      })
+      .finally(function() {
+        btn.disabled = false;
+        btn.textContent = origText;
+      });
+  });
+
+  function renderCalendar() {
+    var first = new Date(calYear, calMonth, 1);
+    var last = new Date(calYear, calMonth + 1, 0);
+    var startBlank = first.getDay();
+    var daysInMonth = last.getDate();
+    var todayStr = getTodayStr();
+    var entryDateInput = document.getElementById('id_entry_date');
+    var entryDateStr = (entryDateInput && entryDateInput.value) || '';
+    var grid = document.getElementById('calendarGrid');
+    while (grid.children.length > 7) grid.removeChild(grid.lastChild);
+    for (var i = 0; i < startBlank; i++) {
+      var empty = document.createElement('div');
+      empty.className = 'calendar-day empty';
+      empty.dataset.date = '';
+      empty.innerHTML = '<span class="calendar-day-num"></span><div class="calendar-day-cards"></div>';
+      setupDropTarget(empty);
+      grid.appendChild(empty);
+    }
+    for (var d = 1; d <= daysInMonth; d++) {
+      var dateStr = dateStrFromYMD(calYear, calMonth, d);
+      var dayDiv = document.createElement('div');
+      dayDiv.className = 'calendar-day';
+      if (dateStr === todayStr) dayDiv.classList.add('calendar-day-today');
+      if (dateStr === entryDateStr) dayDiv.classList.add('calendar-day-entry');
+      dayDiv.dataset.date = dateStr;
+      var dayNumHtml = '<span class="calendar-day-num">' + d + (dateStr === todayStr ? '<span class="calendar-today-star">★</span>' : '') + '</span>';
+      var ddayLabel = getDdayLabel(dateStr, entryDateStr);
+      if (ddayLabel) dayNumHtml += '<span class="calendar-dday">' + ddayLabel + '</span>';
+      dayDiv.innerHTML = dayNumHtml + '<div class="calendar-day-cards"></div>';
+      var cardsDiv = dayDiv.querySelector('.calendar-day-cards');
+      (schedule[dateStr] || []).forEach(function(item) {
+        var effectiveItem = item;
+        if (canAssignAgent && assignedAgentId && !item.appointment_id) {
+          effectiveItem = Object.assign({}, item, { agent_id: assignedAgentId, agent_name: assignedAgentName });
+        }
+        var card = document.createElement('span');
+        var statusClass = '';
+        if (effectiveItem.appointment_status === 'PENDING') statusClass = ' calendar-card--status-pending';
+        else if (effectiveItem.appointment_status === 'CONFIRMED') statusClass = ' calendar-card--status-confirmed';
+        else if (effectiveItem.appointment_status === 'CANCELLED') statusClass = ' calendar-card--status-cancelled';
+        else if (effectiveItem.agent_id && !effectiveItem.appointment_id) statusClass = ' calendar-card--status-payment-pending';
+        card.className = 'calendar-card' + (effectiveItem.agent_id || effectiveItem.appointment_status ? ' calendar-card-has-agent' + statusClass : ' calendar-card--no-agent');
+        card.draggable = true;
+        card.dataset.code = effectiveItem.code;
+        card.dataset.label = effectiveItem.label;
+        card.dataset.date = dateStr;
+        var agentLabel = (effectiveItem.agent_id || effectiveItem.appointment_status) && effectiveItem.agent_name ? ' ✓ ' + effectiveItem.agent_name : (effectiveItem.agent_id || effectiveItem.appointment_status) ? ' ✓' : '';
+        if (effectiveItem.appointment_status === 'CANCELLED') agentLabel = ' (' + t('cancelled') + ')';
+        var labelText = effectiveItem.label + agentLabel;
+        var statusLabel = effectiveItem.appointment_status === 'CANCELLED' ? '' : (effectiveItem.appointment_status_label || (effectiveItem.agent_id && !effectiveItem.appointment_id ? t('payment_pending_status') : ''));
+        var statusHtml = statusLabel ? '<span class="calendar-card-status">' + (statusLabel.replace(/</g,'&lt;').replace(/>/g,'&gt;')) + '</span>' : '';
+        card.innerHTML = '<span class="calendar-card-remove" title="' + t('remove') + '">✕</span><span class="calendar-card-body"><span class="calendar-card-label">' + labelText + '</span>' + statusHtml + '</span>';
+        var removeBtn = card.querySelector('.calendar-card-remove');
+        var labelEl = card.querySelector('.calendar-card-label');
+        removeBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          e.preventDefault();
+          var cd = card.dataset.code, dt = card.dataset.date;
+          var appointmentId = effectiveItem.appointment_id;
+          var needCancel = appointmentId && effectiveItem.appointment_status && effectiveItem.appointment_status !== 'CANCELLED';
+          function doRemove() {
+            schedule[dt] = (schedule[dt] || []).filter(function(x) { return x.code !== cd; });
+            if (!schedule[dt].length) delete schedule[dt];
+            saveSchedule();
+            renderCalendar();
+            var panel = document.getElementById('agentListPanel');
+            if (panel) panel.classList.remove('visible');
+          }
+          if (needCancel) {
+            var fd = new FormData();
+            var csrfEl = document.querySelector('input[name="csrfmiddlewaretoken"]');
+            fd.append('csrfmiddlewaretoken', csrfEl ? csrfEl.value : '');
+            fetch('/api/settlement/appointment/' + appointmentId + '/cancel/', { method: 'POST', body: fd })
+              .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+              .then(function(res) {
+                if (res.ok) doRemove();
+                else alert(res.data.error || t('appointment_cancel_failed'));
+              })
+              .catch(function() { alert(t('appointment_cancel_request_failed')); });
+          } else {
+            doRemove();
+          }
+        });
+        labelEl.addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (card._justDragged) { card._justDragged = false; return; }
+          var cellDate = (card.dataset && card.dataset.date) || (card.closest && card.closest('.calendar-day') && card.closest('.calendar-day').dataset && card.closest('.calendar-day').dataset.date) || '';
+          if (canAssignAgent) {
+            if (effectiveItem.appointment_status && effectiveItem.appointment_status !== 'CANCELLED') showAppointmentDetail(effectiveItem, cellDate);
+            else if (assignedAgentId) showPaymentPendingDetail(effectiveItem, cellDate);
+            return;
+          }
+          if (effectiveItem.appointment_status && effectiveItem.appointment_status !== 'CANCELLED') {
+            showAppointmentDetail(effectiveItem, cellDate);
+          } else if (effectiveItem.agent_id && !effectiveItem.appointment_id) {
+            showPaymentPendingDetail(effectiveItem, cellDate);
+          } else {
+            showAgentList(effectiveItem.code, effectiveItem.label, cellDate);
+          }
+        });
+        card.addEventListener('dragstart', function(e) {
+          card._justDragged = true;
+          window._scheduleCardDragging = true;
+          window._scheduleDragFromCalendar = true;
+          var cellDate = (card.dataset && card.dataset.date) || (card.closest && card.closest('.calendar-day') && card.closest('.calendar-day').dataset && card.closest('.calendar-day').dataset.date) || '';
+          window._scheduleDragSourceDate = cellDate;
+          card.classList.add('dragging');
+          e.dataTransfer.setData('service-code', effectiveItem.code);
+          e.dataTransfer.setData('service-label', effectiveItem.label);
+          e.dataTransfer.setData('source', 'calendar');
+          e.dataTransfer.setData('source-date', cellDate);
+          e.dataTransfer.effectAllowed = 'move';
+        });
+        card.addEventListener('dragend', function() {
+          card.classList.remove('dragging');
+          window._scheduleCardDragging = false;
+          window._scheduleDragFromCalendar = null;
+          setTimeout(function() { window._scheduleDragSourceDate = ''; }, 100);
+          if (window._edgeNavTimeout) { clearTimeout(window._edgeNavTimeout); window._edgeNavTimeout = null; }
+          window._edgeNavZone = null;
+        });
+        cardsDiv.appendChild(card);
+      });
+      setupDropTarget(dayDiv);
+      grid.appendChild(dayDiv);
+    }
+    var lang = (i18n && i18n.lang) ? i18n.lang : '';
+    var calTitleEl = document.getElementById('calTitle');
+    if (calTitleEl) {
+      if (lang === 'ko' || lang === 'zh-hans' || lang === 'zh-hant') {
+        calTitleEl.textContent = calYear + t('year') + ' ' + (calMonth + 1) + t('month');
+      } else {
+        calTitleEl.textContent = (t('month_' + (calMonth + 1)) || (calMonth + 1)) + '. ' + calYear;
+      }
+    }
+    updateServiceCardVisibility();
+    updateFloatingSummary();
+    saveCalView();
+  }
+
+  function setupDropTarget(dayEl) {
+    var dateStr = dayEl.dataset.date;
+    if (!dateStr) return;
+    dayEl.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      dayEl.classList.add('dragover');
+    });
+    dayEl.addEventListener('dragleave', function() { dayEl.classList.remove('dragover'); });
+    dayEl.addEventListener('drop', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      if (window._scheduleDropInProgress) return;
+      window._scheduleDropInProgress = true;
+      var targetDay = e.currentTarget;
+      targetDay.classList.remove('dragover');
+      // [재발 방지] drop은 자식(.calendar-day-num, .calendar-day-cards)에서 발생할 수 있음.
+      // 반드시 실제 드롭된 셀의 날짜만 사용 (closest('.calendar-day')) → 예약 창 희망일자가 잘못된 날(예: 3/31)로 뜨는 버그 방지.
+      var dayCell = (e.target && e.target.closest && e.target.closest('.calendar-day')) || targetDay;
+      var dateStr = (dayCell && dayCell.dataset && dayCell.dataset.date) ? String(dayCell.dataset.date).trim() : ((targetDay && targetDay.dataset && targetDay.dataset.date) ? String(targetDay.dataset.date).trim() : '');
+      if (!dateStr) { window._scheduleDropInProgress = false; return; }
+      var code = e.dataTransfer.getData('service-code');
+      var label = e.dataTransfer.getData('service-label');
+      var fromCalendar = e.dataTransfer.getData('source') === 'calendar' || !!window._scheduleDragSourceDate;
+      var sourceDate = e.dataTransfer.getData('source-date') || window._scheduleDragSourceDate || '';
+      function done() {
+        saveSchedule();
+        renderCalendar();
+        setTimeout(function() { window._scheduleDropInProgress = false; }, 0);
+      }
+      if (!code || !label) { window._scheduleDropInProgress = false; return; }
+      if (fromCalendar && sourceDate === dateStr) {
+        renderCalendar();
+        window._scheduleDropInProgress = false;
+        return;
+      }
+      var itemToAdd = { code: code, label: label };
+      if (fromCalendar) {
+        var fromDate = (sourceDate && sourceDate !== dateStr && schedule[sourceDate] && schedule[sourceDate].some(function(x) { return x.code === code; })) ? sourceDate : null;
+        if (!fromDate) {
+          for (var k in schedule) {
+            if (k && k !== dateStr && schedule[k] && schedule[k].some(function(x) { return x.code === code; })) {
+              fromDate = k;
+              break;
+            }
+          }
+        }
+        if (fromDate) {
+          var srcList = schedule[fromDate];
+          var idx = srcList.findIndex(function(x) { return x.code === code; });
+          if (idx >= 0) {
+            itemToAdd = Object.assign({}, srcList[idx]);
+            schedule[fromDate] = srcList.slice(0, idx).concat(srcList.slice(idx + 1));
+            if (!schedule[fromDate].length) delete schedule[fromDate];
+          }
+        }
+      }
+      schedule[dateStr] = schedule[dateStr] || [];
+      if (schedule[dateStr].some(function(x) { return x.code === code; })) {
+        done();
+        return;
+      }
+      if (canAssignAgent && assignedAgentId) {
+        itemToAdd.agent_id = assignedAgentId;
+        itemToAdd.agent_name = assignedAgentName;
+      }
+      schedule[dateStr].push(itemToAdd);
+      done();
+      if (!fromCalendar && !canAssignAgent) {
+        var droppedDateStr = dateStr;
+        setTimeout(function() { showAgentList(code, label, droppedDateStr); }, 0);
+      }
+      // 위 droppedDateStr: 예약 창에 전달할 날짜를 클로저로 고정 (다른 참조로 덮어씌워지지 않도록)
+    });
+  }
+
+  document.querySelectorAll('.service-card').forEach(function(card) {
+    card.addEventListener('click', function(e) {
+      if (card._justDragged) { card._justDragged = false; return; }
+      e.preventDefault();
+      e.stopPropagation();
+      card.classList.toggle('card-selected');
+    });
+    card.addEventListener('dragstart', function(e) {
+      card._justDragged = true;
+      window._scheduleCardDragging = true;
+      window._scheduleDragFromCalendar = false;
+      card.classList.add('dragging');
+      e.dataTransfer.setData('service-code', card.dataset.code);
+      e.dataTransfer.setData('service-label', card.dataset.label);
+      e.dataTransfer.effectAllowed = 'copy';
+    });
+    card.addEventListener('dragend', function() {
+      card.classList.remove('dragging');
+      window._scheduleCardDragging = false;
+      window._scheduleDragFromCalendar = null;
+      if (window._edgeNavTimeout) { clearTimeout(window._edgeNavTimeout); window._edgeNavTimeout = null; }
+      window._edgeNavZone = null;
+    });
+  });
+
+  (function setupEdgeNav() {
+    var edgeWidth = 60;
+    var holdMs = 350;
+    document.addEventListener('dragover', function(e) {
+      if (!window._scheduleCardDragging || !window._scheduleDragFromCalendar) return;
+      var grid = document.getElementById('calendarGrid');
+      if (!grid) return;
+      var r = grid.getBoundingClientRect();
+      var x = e.clientX;
+      var inLeft = x >= r.left && x < r.left + edgeWidth;
+      var inRight = x > r.right - edgeWidth && x <= r.right;
+      if (inLeft && window._edgeNavZone !== 'left') {
+        if (window._edgeNavZone) clearTimeout(window._edgeNavTimeout);
+        window._edgeNavZone = 'left';
+        window._edgeNavTimeout = setTimeout(function() {
+          window._edgeNavTimeout = null;
+          calMonth--;
+          if (calMonth < 0) { calMonth = 11; calYear--; }
+          var ms = document.getElementById('calMonth');
+          var ys = document.getElementById('calYear');
+          if (ms) ms.value = calMonth;
+          if (ys) ys.value = calYear;
+          renderCalendar();
+        }, holdMs);
+      } else if (inRight && window._edgeNavZone !== 'right') {
+        if (window._edgeNavZone) clearTimeout(window._edgeNavTimeout);
+        window._edgeNavZone = 'right';
+        window._edgeNavTimeout = setTimeout(function() {
+          window._edgeNavTimeout = null;
+          calMonth++;
+          if (calMonth > 11) { calMonth = 0; calYear++; }
+          var ms = document.getElementById('calMonth');
+          var ys = document.getElementById('calYear');
+          if (ms) ms.value = calMonth;
+          if (ys) ys.value = calYear;
+          renderCalendar();
+        }, holdMs);
+      } else if (!inLeft && !inRight) {
+        if (window._edgeNavTimeout) { clearTimeout(window._edgeNavTimeout); window._edgeNavTimeout = null; }
+        window._edgeNavZone = null;
+      }
+    }, true);
+  })();
+
+  document.getElementById('calPrev').onclick = function() {
+    calMonth--;
+    if (calMonth < 0) { calMonth = 11; calYear--; }
+    renderCalendar();
+  };
+  document.getElementById('calNext').onclick = function() {
+    calMonth++;
+    if (calMonth > 11) { calMonth = 0; calYear++; }
+    renderCalendar();
+  };
+
+  var monthSel = document.getElementById('calMonth');
+  var yearSel = document.getElementById('calYear');
+  var lang = (i18n && i18n.lang) ? i18n.lang : '';
+  for (var y = calYear - 2; y <= calYear + 2; y++) {
+    var opt = document.createElement('option');
+    opt.value = y;
+    opt.textContent = (lang === 'ko' || lang === 'zh-hans' || lang === 'zh-hant') ? (y + t('year')) : String(y);
+    if (y === calYear) opt.selected = true;
+    yearSel.appendChild(opt);
+  }
+  for (var m = 1; m <= 12; m++) {
+    var opt = document.createElement('option');
+    opt.value = m - 1;
+    opt.textContent = (lang === 'ko' || lang === 'zh-hans' || lang === 'zh-hant') ? (m + t('month')) : (t('month_' + m) || m);
+    if (m - 1 === calMonth) opt.selected = true;
+    monthSel.appendChild(opt);
+  }
+  monthSel.onchange = function() { calMonth = parseInt(monthSel.value, 10); renderCalendar(); };
+  yearSel.onchange = function() { calYear = parseInt(yearSel.value, 10); renderCalendar(); };
+  monthSel.value = calMonth;
+  yearSel.value = calYear;
+
+  var entryDateInput = document.getElementById('id_entry_date');
+  if (entryDateInput) {
+    entryDateInput.addEventListener('change', renderCalendar);
+    entryDateInput.addEventListener('input', renderCalendar);
+  }
+
+  renderCalendar();
+
+  (function loadDedicatedAgentList() {
+    var listEl = document.getElementById('dedicatedAgentList');
+    var hintEl = document.getElementById('dedicatedAgentLoadHint');
+    if (!listEl || assignedAgentId) return;
+    fetch('/api/settlement/available-agents/', { method: 'GET', credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.agents && data.agents.length) {
+          listEl.innerHTML = data.agents.map(function(a) {
+            var name = (a.name || a.username || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return '<div class="dedicated-agent-item" style="margin-bottom:0.5rem; padding:0.5rem; border:1px solid var(--color-border); border-radius:4px;"><span>' + name + '</span> <button type="button" class="btn btn-primary btn-sm" data-agent-id="' + a.id + '" style="margin-left:0.5rem;">' + (t('assign_agent_btn') || '이 Agent로 배정') + '</button></div>';
+          }).join('');
+          listEl.querySelectorAll('button[data-agent-id]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              var id = btn.getAttribute('data-agent-id');
+              var fd = new FormData();
+              var csrf = document.querySelector('input[name="csrfmiddlewaretoken"]');
+              if (csrf) fd.append('csrfmiddlewaretoken', csrf.value);
+              fd.append('agent_id', id);
+              btn.disabled = true;
+              fetch('/api/settlement/assign-agent/', { method: 'POST', body: fd, credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(res) {
+                  if (res.ok) window.location.reload();
+                  else { alert(res.error || '배정에 실패했습니다.'); btn.disabled = false; }
+                })
+                .catch(function() { alert(t('request_failed') || '요청에 실패했습니다.'); btn.disabled = false; });
+            });
+          });
+          if (hintEl) hintEl.textContent = '';
+        } else {
+          if (hintEl) hintEl.textContent = data.error || t('no_agents');
+        }
+      })
+      .catch(function() {
+        if (hintEl) hintEl.textContent = t('agents_load_failed') || 'Agent 목록을 불러올 수 없습니다.';
+      });
+  })();
+
+  var form = document.getElementById('quoteForm');
+  var aiInput = document.getElementById('aiInput');
+  var aiBtn = document.getElementById('aiSuggestBtn');
+  var aiSuggested = document.getElementById('aiSuggested');
+  var entryDateInput = document.getElementById('id_entry_date');
+
+  function getSelectedCodes() {
+    var codes = [];
+    document.querySelectorAll('.service-card.card-selected').forEach(function(c) {
+      codes.push(c.dataset.code);
+    });
+    return codes;
+  }
+
+  function isScheduleRequest(text) {
+    var t = (text || '').toLowerCase();
+    return /스캐쥴|스케줄|짜줘|일정|배치/.test(t);
+  }
+
+  function applySuggestions(codes) {
+    document.querySelectorAll('.service-card').forEach(function(card) {
+      card.classList.toggle('card-selected', codes.indexOf(card.dataset.code) >= 0);
+    });
+    aiSuggested.value = '1';
+  }
+
+  function applyScheduleToCalendar(newSchedule, entryDateStr) {
+    Object.keys(newSchedule).forEach(function(dateStr) {
+      schedule[dateStr] = schedule[dateStr] || [];
+      (newSchedule[dateStr] || []).forEach(function(item) {
+        if (!schedule[dateStr].some(function(x) { return x.code === item.code; })) {
+          if (canAssignAgent && assignedAgentId) {
+            item = Object.assign({}, item, { agent_id: assignedAgentId, agent_name: assignedAgentName });
+          }
+          schedule[dateStr].push(item);
+        }
+      });
+    });
+    saveSchedule();
+    /* 달력 월은 사용자가 보던 월로 유지 (entryDateStr 기준으로 이동하지 않음) */
+    renderCalendar();
+  }
+
+  if (aiBtn && aiInput) {
+    aiBtn.addEventListener('click', function() {
+      var q = aiInput.value.trim();
+      var selected = getSelectedCodes();
+      var isSchedule = isScheduleRequest(q);
+
+      if (isSchedule) {
+        if (!selected.length) {
+          alert(t('schedule_select_services'));
+          return;
+        }
+        var entryDate = (entryDateInput && entryDateInput.value) || '';
+        if (!entryDate) {
+          alert(t('enter_entry_date'));
+          return;
+        }
+        aiBtn.disabled = true;
+        aiBtn.textContent = t('schedule_creating');
+        var params = 'services=' + encodeURIComponent(selected.join(',')) + '&entry_date=' + encodeURIComponent(entryDate);
+        fetch('/api/settlement/schedule/?' + params, { method: 'GET', headers: { 'Accept': 'application/json' } })
+        .then(function(r) {
+          if (r.status === 403) return r.json().then(function(d) {
+            alert(d.error || t('schedule_tier_required'));
+            return { schedule: {} };
+          });
+          return r.json();
+        })
+        .then(function(data) {
+          var sched = data.schedule || {};
+          if (Object.keys(sched).length) {
+            applyScheduleToCalendar(sched, entryDate);
+            alert(t('schedule_created'));
+          } else alert(data.error || t('schedule_failed'));
+        })
+        .catch(function() { alert(t('schedule_request_failed')); })
+        .finally(function() {
+          aiBtn.disabled = false;
+          aiBtn.textContent = t('run');
+        });
+        return;
+      }
+
+      if (!q) { alert(t('enter_services')); return; }
+      aiBtn.disabled = true;
+      aiBtn.textContent = t('recommending');
+      fetch('/api/settlement/suggest/?q=' + encodeURIComponent(q), {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      })
+      .then(function(r) {
+        if (r.status === 403) return r.json().then(function(d) {
+          alert(d.error || t('suggest_tier_required'));
+          return { suggested: [] };
+        });
+        return r.json();
+      })
+      .then(function(data) {
+        var suggested = data.suggested || [];
+        if (suggested.length) {
+          applySuggestions(suggested);
+          alert(t('suggest_done'));
+        } else if (!data.error) alert(t('no_suggest'));
+      })
+      .catch(function() { alert(t('suggest_failed')); })
+      .finally(function() {
+        aiBtn.disabled = false;
+        aiBtn.textContent = t('run');
+      });
+    });
+  }
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    saveSchedule();
+    var codes = [];
+    Object.keys(schedule).forEach(function(dateStr) {
+      (schedule[dateStr] || []).forEach(function(item) {
+        if (codes.indexOf(item.code) === -1) codes.push(item.code);
+      });
+    });
+    document.querySelectorAll('input[name="services"]').forEach(function(i) { i.remove(); });
+    codes.forEach(function(c) {
+      var inp = document.createElement('input');
+      inp.type = 'hidden';
+      inp.name = 'services';
+      inp.value = c;
+      form.appendChild(inp);
+    });
+    var formData = new FormData(form);
+    var submitBtn = form.querySelector('button[type="submit"]');
+    var origText = submitBtn ? submitBtn.textContent : '';
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = t('saving'); }
+    fetch(form.action || '', {
+      method: 'POST',
+      body: formData,
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin'
+    })
+    .then(function(r) {
+      if (r.ok) return r.json();
+      return r.json().then(function(d) { throw d; }).catch(function(d) {
+        if (d && d.message) throw d;
+        throw { message: t('save_failed') };
+      });
+    })
+    .then(function(data) {
+      var overlay = document.getElementById('feedbackPopupOverlay');
+      var msgEl = document.getElementById('feedbackPopupMessage');
+      var okBtn = document.getElementById('feedbackPopupOk');
+      if (overlay && msgEl) {
+        msgEl.textContent = data.message || t('saved');
+        overlay.classList.add('visible');
+        function closeFeedback() {
+          overlay.classList.remove('visible');
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = origText; }
+          if (data.success) window.location.reload();
+        }
+        okBtn.onclick = closeFeedback;
+        overlay.onclick = function(ev) { if (ev.target === overlay) closeFeedback(); };
+      } else {
+        alert(data.message || t('saved'));
+        if (data.success) window.location.reload();
+        else if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = origText; }
+      }
+    })
+    .catch(function(err) {
+      var message = (err && err.message) ? err.message : t('save_failed');
+      var overlay = document.getElementById('feedbackPopupOverlay');
+      var msgEl = document.getElementById('feedbackPopupMessage');
+      var okBtn = document.getElementById('feedbackPopupOk');
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = origText; }
+      if (overlay && msgEl) {
+        msgEl.textContent = message;
+        overlay.classList.add('visible');
+        okBtn.onclick = function() { overlay.classList.remove('visible'); };
+      } else {
+        alert(message);
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

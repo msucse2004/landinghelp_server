@@ -1,0 +1,5 @@
+Document Type: POWER_OF_ATTORNEY
+Submission ID: 1
+Customer Email: it_customer@test.com
+Quote ID: 1
+Quote Total: 1999

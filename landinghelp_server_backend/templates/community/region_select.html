@@ -1,0 +1,92 @@
+{% extends "community/base_community.html" %}
+{% load static %}{% load i18n %}
+{% block title %}{% trans "지역 게시판" %} – LifeAI US{% endblock %}
+{% block extra_head %}
+<style>
+  .region-page { max-width: 1100px; margin: 0 auto; }
+  .region-header {
+    text-align: center;
+    color: #fbbf24;
+    font-size: clamp(1.1rem, 2.5vw, 1.3rem);
+    margin-bottom: 2rem;
+    font-weight: 600;
+  }
+  .region-section { margin-bottom: 2.5rem; }
+  .region-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #fff;
+  }
+  .region-map-icon {
+    width: 48px;
+    height: 32px;
+    background: #374151;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+  }
+  .area-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.75rem;
+  }
+  .area-card {
+    display: block;
+    aspect-ratio: 4/3;
+    border-radius: 8px;
+    overflow: hidden;
+    text-decoration: none;
+    background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+    position: relative;
+  }
+  .area-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .area-card-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 50%);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 0.75rem;
+  }
+  .area-card-state { font-size: 0.75rem; color: #94a3b8; }
+  .area-card-city { font-size: 0.95rem; font-weight: 600; color: #fff; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="region-dark-wrap" style="background:#1f2937; margin: 0 calc(-1 * var(--space, 1.5rem)); padding: 2rem var(--space, 1.5rem); border-radius: var(--radius, 8px);">
+  <p class="region-header" data-i18n-key="자신의 거주 지역을 클릭하여 커뮤니티에 참여해보세요">{% trans "자신의 거주 지역을 클릭하여 커뮤니티에 참여해보세요" %}</p>
+
+  {% for region in regions %}
+  <div class="region-section">
+    <div class="region-title">
+      <span class="region-map-icon">{{ region.name|slice:":1" }}</span>
+      {{ region.name }}
+    </div>
+    <div class="area-grid">
+      {% for area in region.areas.all %}
+      <a href="{% url 'community:board_list' area.slug %}" class="area-card">
+        {% if area.image %}
+        <img src="{{ area.image.url }}" alt="{{ area.city_name }}">
+        {% endif %}
+        <div class="area-card-overlay">
+          <span class="area-card-state">{{ area.state_code }} {{ area.state_name|default:"" }}</span>
+          <span class="area-card-city">{{ area.city_name }}</span>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

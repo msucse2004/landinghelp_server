@@ -1,0 +1,22 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p>번역 DB(고정 번역)에서 <strong>비어 있는 언어 컬럼</strong>을 <strong>번역 파이프라인(DeepL → Ollama)</strong>으로 채웁니다.</p>
+<ul>
+  <li>이미 값이 있는 셀은 건너뜁니다.</li>
+  <li>원문은 <code>ko</code>(또는 key)를 사용하며, <code>en</code>, <code>es</code>, <code>zh_hans</code>, <code>zh_hant</code>, <code>vi</code> 중 비어 있는 것만 채웁니다.</li>
+  <li><strong>DEEPL_AUTH_KEY</strong> 환경변수(또는 settings)가 필요합니다. Ollama는 선택(미실행 시 DeepL 결과만 저장).</li>
+</ul>
+{% if not deepl_configured %}
+<p style="color: #856404; font-weight: bold;">⚠ DEEPL_AUTH_KEY가 설정되지 않았습니다. 설정 후 실행하세요.</p>
+{% endif %}
+<form method="post" action="">
+  {% csrf_token %}
+  <p>
+    <input type="submit" value="실행" {% if not deepl_configured %}disabled{% endif %}>
+  </p>
+</form>
+<p><a href="{% url 'admin:translations_statictranslation_changelist' %}">고정 번역 목록으로 돌아가기</a></p>
+{% endblock %}

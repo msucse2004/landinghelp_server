@@ -1,0 +1,620 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{{ dashboard_i18n.page_title|default:"고객 대시보드" }} – LifeAI US{% endblock %}
+{% block content %}
+<style>
+  .dashboard-calendar { margin-top: 1.5rem; }
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    font-size: 0.85rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    background: #fff;
+  }
+  .calendar-weekday { text-align: center; padding: 0.35rem; color: var(--color-muted); font-weight: 500; }
+  .calendar-day {
+    min-height: 60px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 0.35rem;
+    background: #fafafa;
+  }
+  .calendar-day-num { font-weight: 600; margin-bottom: 0.25rem; color: var(--color-muted); font-size: 0.8rem; display: block; }
+  .calendar-card {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.35rem;
+    background: var(--color-primary);
+    color: #fff;
+    border-radius: 4px;
+    margin-bottom: 0.2rem;
+  }
+  .calendar-card-status {
+    display: block;
+    font-size: 0.6rem;
+    opacity: 0.9;
+    margin-top: 0.1rem;
+  }
+  .calendar-card-agent {
+    display: block;
+    font-size: 0.6rem;
+    opacity: 0.95;
+    margin-top: 0.15rem;
+  }
+  .calendar-card.calendar-card--self-search { background: #64748b; }
+  .calendar-card.calendar-card--ai-agent { background: var(--color-primary); }
+  .calendar-card.calendar-card--in-person-agent { background: #059669; }
+  .calendar-day-today { background: #fef3c7; border-color: #f59e0b; }
+  .calendar-card-clickable { cursor: pointer; transition: opacity 0.15s; }
+  .calendar-card-clickable:hover { opacity: 0.9; }
+  .calendar-card-clickable:active { opacity: 0.85; }
+  .calendar-card--today { box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.6); }
+  .todays-services-list { margin-bottom: 0.75rem; padding: 0.5rem 0.75rem; background: #fffbeb; border: 1px solid #fcd34d; border-radius: var(--radius); font-size: 0.9rem; }
+  .todays-services-list h3 { margin: 0 0 0.35rem; font-size: 0.95rem; }
+  .todays-services-list ul { margin: 0; padding: 0; list-style: none; }
+  .todays-services-list li { margin: 0.25rem 0; }
+  .todays-services-list .service-link { display: block; padding: 0.35rem 0.5rem; border-radius: 4px; color: var(--color-primary); text-decoration: none; cursor: pointer; }
+  .todays-services-list .service-link:hover { background: rgba(0,0,0,0.05); text-decoration: underline; }
+  #serviceDetailModal .modal-box { max-width: 96%; width: 360px; max-height: 90vh; overflow-y: auto; }
+  #serviceDetailModal .detail-row { margin: 0.75rem 0; }
+  #serviceDetailModal .detail-label { font-size: 0.8rem; color: var(--color-muted); margin-bottom: 0.2rem; }
+  #serviceDetailModal .detail-value { font-size: 0.95rem; }
+  #serviceDetailModal .detail-message-link { display: inline-block; margin-top: 0.5rem; padding: 0.4rem 0.75rem; background: var(--color-primary); color: #fff; border-radius: var(--radius); text-decoration: none; font-size: 0.9rem; }
+  #serviceDetailModal .detail-message-link:hover { opacity: 0.9; color: #fff; }
+  @media (max-width: 480px) { #serviceDetailModal .modal-box { width: 100%; margin: 0.5rem; } }
+  .pending-appointments { margin-bottom: 1.5rem; }
+  .pending-appointments h3 { font-size: 1rem; margin: 0 0 0.5rem; }
+  .pending-appointments ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--color-border); border-radius: var(--radius); background: #fff; }
+  .pending-appointments li { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; padding: 0.6rem 1rem; border-bottom: 1px solid #eee; }
+  .pending-appointments li:last-child { border-bottom: none; }
+  .pending-appointments li .appointment-name { cursor: pointer; font-weight: 500; color: var(--color-primary); text-decoration: none; }
+  .pending-appointments li .appointment-name:hover { text-decoration: underline; }
+  .pending-appointments li .appointment-meta { font-size: 0.85rem; color: var(--color-muted); margin-left: 0.25rem; }
+  .pending-appointments li .appointment-actions { margin-left: auto; display: flex; gap: 0.35rem; }
+  .pending-appointments li .appointment-actions .btn { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; }
+  .modal-overlay.visible { display: flex; }
+  .modal-box { background: #fff; padding: 1.25rem; border-radius: var(--radius); min-width: 320px; max-width: 90%; }
+  .modal-box h4 { margin: 0 0 1rem; font-size: 1rem; }
+  .modal-box label { display: block; margin-top: 0.5rem; font-size: 0.9rem; }
+  .modal-box input, .modal-box textarea { width: 100%; padding: 0.4rem; margin-top: 0.2rem; box-sizing: border-box; }
+  .modal-box .modal-actions { margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end; }
+</style>
+<div class="card">
+  <h1>{{ user.username }}{{ dashboard_i18n.welcome_suffix|default:"님, 환영합니다" }}</h1>
+  <p class="text-muted">{{ dashboard_i18n.customer_account|default:"고객 계정입니다." }}</p>
+  <p><strong>{{ dashboard_i18n.my_plan|default:"내 플랜:" }}</strong> {{ tier_label }}</p>
+  {% if submission_status_label %}
+  <p class="text-muted" style="font-size:0.9rem;"><strong>{% trans "설문 상태" %}:</strong> {{ submission_status_label }}</p>
+  {% endif %}
+  {% if customer_ui_payload.current_request_status or customer_ui_payload.pending_actions or customer_ui_payload.review_status.has_review %}
+  <div class="dashboard-status-summary" style="margin-top:0.5rem; padding:0.6rem 0.9rem; background:#f8fafc; border-radius:var(--radius); font-size:0.9rem;">
+    {% if customer_ui_payload.current_request_status %}
+    <p style="margin:0 0 0.25rem;"><strong>{% trans "요청 상태" %}:</strong> {{ customer_ui_payload.current_request_status }}</p>
+    {% endif %}
+    {% if customer_ui_payload.pending_actions %}
+    <p style="margin:0 0 0.25rem;"><strong>{% trans "확인 필요" %}:</strong> {% trans "버튼을 눌러 진행할 항목이 있습니다." %} ({{ customer_ui_payload.pending_actions|length }})</p>
+    {% endif %}
+    {% if customer_ui_payload.review_status.has_review %}
+    <p style="margin:0 0 0.25rem;"><strong>{% trans "검토 중" %}:</strong> {{ customer_ui_payload.review_status.message|default:"요청이 검토 중입니다." }}</p>
+    {% endif %}
+    {% if customer_ui_payload.current_request_status and "새 견적" in customer_ui_payload.current_request_status or "견적" in customer_ui_payload.current_request_status %}
+    <p style="margin:0.5rem 0 0;"><a href="{% url 'customer_quote' %}" class="btn btn-outline" style="padding:0.3rem 0.6rem; font-size:0.85rem;">{% trans "내 견적 보기" %}</a></p>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% if free_agent_services %}
+  <p class="text-muted" style="font-size:0.9rem; margin-top:0.25rem;">
+    <strong>{{ dashboard_i18n.free_agent_services_label|default:"무료 Agent 서비스:" }}</strong> {% for code, label in free_agent_services %}{{ label }}{% if not forloop.last %}, {% endif %}{% endfor %}
+  </p>
+  {% endif %}
+
+  {% if pending_appointments %}
+  <div class="pending-appointments">
+    <h3>{{ dashboard_i18n.pending_appointments|default:"수락 대기 중인 예약" }}</h3>
+    <ul id="pendingAppointmentsList">
+      {% for app in pending_appointments %}
+      <li data-id="{{ app.id }}" data-date="{{ app.service_date }}">
+        <a href="#" class="appointment-name" data-date="{{ app.service_date }}">{{ app.service_label }}</a>
+        <span class="appointment-meta">{{ app.service_date }}{% if app.preferred_time %} · {{ app.preferred_time }}{% endif %}</span>
+        <span class="appointment-actions">
+          <button type="button" class="btn btn-outline btn-edit-appointment" data-id="{{ app.id }}" data-preferred="{{ app.preferred_time|escape }}" data-message="{{ app.message_attr }}">{{ dashboard_i18n.edit|default:"수정" }}</button>
+          <button type="button" class="btn btn-outline btn-cancel-appointment" data-id="{{ app.id }}">{{ dashboard_i18n.cancel|default:"취소" }}</button>
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div id="rateableAppointmentsWrap" class="pending-appointments" style="display: none;">
+    <h3>{{ dashboard_i18n.rateable_title|default:"완료된 서비스 평가" }}</h3>
+    <p class="text-muted" style="font-size: 0.9rem; margin: 0 0 0.5rem;">{{ dashboard_i18n.rateable_desc|default:"서비스가 완료된 Agent에 대해 별점과 한줄평을 남겨 주세요." }}</p>
+    <ul id="rateableAppointmentsList"></ul>
+  </div>
+  <div class="modal-overlay" id="rateAppointmentModal" aria-hidden="true">
+    <div class="modal-box" role="dialog" aria-labelledby="rateModalTitle">
+      <h4 id="rateModalTitle">{{ dashboard_i18n.rate_modal_title|default:"서비스 평가" }}</h4>
+      <p id="rateModalService" class="text-muted" style="font-size: 0.9rem;"></p>
+      <form id="rateAppointmentForm">
+        <input type="hidden" name="appointment_id" id="rateAppointmentId">
+        <label>
+          <span>{{ dashboard_i18n.rate_stars|default:"별점" }}</span>
+          <select name="score" id="rateScore" required style="display: block; margin-top: 0.25rem; padding: 0.35rem;">
+            <option value="">--</option>
+            <option value="5">5</option>
+            <option value="4">4</option>
+            <option value="3">3</option>
+            <option value="2">2</option>
+            <option value="1">1</option>
+          </select>
+        </label>
+        <label style="margin-top: 0.75rem;">
+          <span>{{ dashboard_i18n.rate_comment|default:"한줄평 (선택)" }}</span>
+          <textarea name="comment" id="rateComment" rows="3" maxlength="500" placeholder="{{ dashboard_i18n.rate_comment_placeholder|default:'서비스에 대한 짧은 후기를 남겨 주세요.' }}" style="width: 100%; padding: 0.4rem; margin-top: 0.25rem; box-sizing: border-box;"></textarea>
+        </label>
+        <div class="modal-actions" style="margin-top: 1rem;">
+          <button type="button" class="btn btn-outline" id="rateModalClose">{{ dashboard_i18n.cancel|default:"취소" }}</button>
+          <button type="submit" class="btn btn-primary">{{ dashboard_i18n.rate_submit|default:"제출" }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if user_plan and show_customer_calendar %}
+  <div class="dashboard-calendar">
+    <h2 style="font-size:1.1rem; margin:1rem 0 0.5rem;">{{ dashboard_i18n.my_schedule|default:"내 정착 일정" }}</h2>
+    {% if not schedule_has_items %}
+    <p class="text-muted" style="font-size:0.95rem; margin:0.5rem 0 1rem;">{{ dashboard_i18n.schedule_empty|default:"아직 확정된 일정이 없습니다." }}</p>
+    {% endif %}
+    {% if user_plan.has_agent_assignment %}
+    <p style="font-size:0.95rem; font-weight:600; margin-bottom:0.5rem;"><span>{{ dashboard_i18n.estimated_checkout|default:"예상 Checkout" }}</span>: {% if can_show_plan_prices and user_plan.checkout_total and user_plan.checkout_total > 0 %}${{ user_plan.checkout_total|floatformat:2 }}{% else %}<span class="text-muted">{{ dashboard_i18n.price_masked|default:"견적 후 공개" }}</span>{% endif %}</p>
+    {% endif %}
+    <p class="text-muted" style="font-size:0.9rem;">
+      {% if user_plan.state %}{{ user_plan.state }}{% endif %}
+      {% if user_plan.city %} {{ user_plan.city }}{% endif %}
+      {% if user_plan.entry_date %}({{ dashboard_i18n.entry_planned|default:"입국 예정" }}: {{ user_plan.entry_date|date:"Y-m-d" }}){% endif %}
+    </p>
+    <div id="todaysServicesWrap" class="todays-services-list" style="display: none;"></div>
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+      <button type="button" class="dashboard-cal-prev btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.85rem;">◀ {{ dashboard_i18n.prev|default:"이전" }}</button>
+      <strong id="dashboardCalTitle" style="font-size: 0.95rem;" data-year-suffix="{{ calendar_year_suffix|default:'' }}" data-month-suffix="{{ calendar_month_suffix|default:'' }}"></strong>
+      <button type="button" class="dashboard-cal-next btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.85rem;">{{ dashboard_i18n.next|default:"다음" }} ▶</button>
+    </div>
+    <div id="dashboardCalendarGrid" class="calendar-grid">
+      {% for w in calendar_weekdays %}<span class="calendar-weekday">{{ w }}</span>{% endfor %}
+    </div>
+    <div class="modal-overlay" id="serviceDetailModal" aria-hidden="true">
+      <div class="modal-box" role="dialog" aria-labelledby="serviceDetailTitle">
+        <h4 id="serviceDetailTitle">{{ dashboard_i18n.detail_title|default:"서비스 상세" }}</h4>
+        <div id="serviceDetailContent"></div>
+        <div class="modal-actions" style="margin-top: 1rem;">
+          <button type="button" class="btn btn-outline" id="serviceDetailClose">{{ dashboard_i18n.close|default:"닫기" }}</button>
+        </div>
+      </div>
+    </div>
+    <p style="margin-top:1rem;">
+      {% if pending_reopen_offer %}
+      <form id="form-execute-reopen-cta" action="{% url 'api_settlement_action_offer_execute' offer_id=pending_reopen_offer.id %}" method="post" style="display:inline;" data-redirect-url="{{ survey_resume_url|default:'' }}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary">{{ pending_reopen_offer.button_label }}</button>
+      </form>
+      {% elif show_reopen_survey %}
+      <a href="{{ survey_resume_url|default:'' }}" class="btn btn-primary">{{ dashboard_i18n.survey_reopen_label|default:"설문 다시 수정하기" }}</a>
+      {% else %}
+      <a href="{% url 'survey:survey_start' %}" class="btn btn-primary">{{ dashboard_i18n.survey_link|default:"설문 작성" }}</a>
+      {% endif %}
+      <a href="{% url 'customer_quote' %}" class="btn btn-outline" style="margin-left:0.5rem;">{{ dashboard_i18n.my_quote|default:"내 견적" }}</a>
+      <a href="{% url 'ai_agent:assistant_chat' %}" class="btn btn-outline" style="margin-left:0.5rem;">{{ dashboard_i18n.assistant_link|default:"AI 어시스턴트" }}</a>
+    </p>
+  </div>
+  {{ dashboard_calendar_i18n|json_script:"dashboard-calendar-i18n" }}
+  <script>
+  (function() {
+    var schedule = {{ plan_schedule_json|safe }};
+    var grid = document.getElementById('dashboardCalendarGrid');
+    var titleEl = document.getElementById('dashboardCalTitle');
+    var modalEl = document.getElementById('serviceDetailModal');
+    var detailContent = document.getElementById('serviceDetailContent');
+    var todaysWrap = document.getElementById('todaysServicesWrap');
+    if (!grid || !titleEl) return;
+    var i18nEl = document.getElementById('dashboard-calendar-i18n');
+    var calI18n = i18nEl ? (function(){ try { return JSON.parse(i18nEl.textContent); } catch(e){ return {}; } })() : {};
+    var calLang = (calI18n && calI18n.lang) ? calI18n.lang : '';
+    function t(key) { return (calI18n && calI18n[key] != null) ? calI18n[key] : key; }
+    var today = new Date();
+    var calYear = today.getFullYear();
+    var calMonth = today.getMonth();
+    function padDate(y, m, d) {
+      m = (m + 1).toString();
+      d = d.toString();
+      return y + '-' + (m.length === 1 ? '0' + m : m) + '-' + (d.length === 1 ? '0' + d : d);
+    }
+    var todayStr = padDate(today.getFullYear(), today.getMonth(), today.getDate());
+    function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function formatTime(startsAt, endsAt) {
+      if (!startsAt) return t('no_time') || '—';
+      try {
+        var s = typeof startsAt === 'string' ? new Date(startsAt) : startsAt;
+        var startStr = s.getHours() + ':' + (s.getMinutes() < 10 ? '0' : '') + s.getMinutes();
+        if (endsAt) {
+          var e = typeof endsAt === 'string' ? new Date(endsAt) : endsAt;
+          var endStr = e.getHours() + ':' + (e.getMinutes() < 10 ? '0' : '') + e.getMinutes();
+          return startStr + ' – ' + endStr;
+        }
+        return startStr;
+      } catch (err) { return t('no_time') || '—'; }
+    }
+    function typeLabel(st) {
+      if (st === 'SELF_SEARCH') return t('type_self_search') || '직접 진행';
+      if (st === 'IN_PERSON_AGENT') return t('type_in_person') || 'Agent 대면';
+      return t('type_ai') || 'AI 지원';
+    }
+    function openModal(item, dateStr) {
+      if (!detailContent || !modalEl) return;
+      var label = (item && item.label) ? item.label : (item && item.code) ? item.code : '';
+      var st = (item && item.service_type) ? String(item.service_type) : 'AI_AGENT';
+      var timeStr = formatTime(item.starts_at, item.ends_at);
+      var agentName = (item && item.agent_name) ? item.agent_name : '';
+      var location = (item && item.location_text) ? item.location_text : '';
+      var notes = (item && item.notes) ? item.notes : '';
+      var showMessageLink = !!(item && (item.agent_id || item.conversation_id));
+      var msgUrl = (item && item.conversation_id) ? ('/messages/?c=' + item.conversation_id) : '/messages/';
+      var html = '<div class="detail-row"><span class="detail-label">' + esc(t('detail_service_name')) + '</span><div class="detail-value">' + esc(label) + '</div></div>';
+      html += '<div class="detail-row"><span class="detail-label">' + esc(t('detail_time')) + '</span><div class="detail-value">' + esc(timeStr) + '</div></div>';
+      html += '<div class="detail-row"><span class="detail-label">' + esc(t('detail_type')) + '</span><div class="detail-value">' + esc(typeLabel(st)) + '</div></div>';
+      if (agentName) html += '<div class="detail-row"><span class="detail-label">' + esc(t('detail_agent')) + '</span><div class="detail-value">' + esc(agentName) + '</div></div>';
+      html += '<div class="detail-row"><span class="detail-label">' + esc(t('detail_location')) + '</span><div class="detail-value">' + (location ? esc(location) : (t('no_location') || '—')) + '</div></div>';
+      html += '<div class="detail-row"><span class="detail-label">' + esc(t('detail_notes')) + '</span><div class="detail-value">' + (notes ? esc(notes) : (t('no_notes') || '—')) + '</div></div>';
+      if (showMessageLink) html += '<a href="' + esc(msgUrl) + '" class="detail-message-link">' + esc(t('detail_message_shortcut')) + '</a>';
+      detailContent.innerHTML = html;
+      modalEl.classList.add('visible');
+      modalEl.setAttribute('aria-hidden', 'false');
+    }
+    function closeModal() {
+      if (modalEl) { modalEl.classList.remove('visible'); modalEl.setAttribute('aria-hidden', 'true'); }
+    }
+    function renderTodaysList() {
+      if (!todaysWrap) return;
+      if (calYear !== today.getFullYear() || calMonth !== today.getMonth()) {
+        todaysWrap.style.display = 'none';
+        return;
+      }
+      var items = schedule[todayStr];
+      if (!Array.isArray(items) || items.length === 0) {
+        todaysWrap.style.display = 'none';
+        return;
+      }
+      todaysWrap.innerHTML = '<h3>' + esc(t('todays_services')) + '</h3><ul id="todaysServicesList"></ul>';
+      var ul = document.getElementById('todaysServicesList');
+      if (ul) {
+        items.forEach(function(item, idx) {
+          var label = (item && item.label) ? item.label : (item && item.code) ? item.code : '';
+          if (label) {
+            var li = document.createElement('li');
+            var a = document.createElement('a');
+            a.href = '#';
+            a.className = 'service-link';
+            a.textContent = label;
+            a.addEventListener('click', function(e) { e.preventDefault(); openModal(item, todayStr); });
+            li.appendChild(a);
+            ul.appendChild(li);
+          }
+        });
+      }
+      todaysWrap.style.display = 'block';
+    }
+    function render() {
+      var first = new Date(calYear, calMonth, 1);
+      var last = new Date(calYear, calMonth + 1, 0);
+      var startBlank = first.getDay();
+      var daysInMonth = last.getDate();
+      if (calLang === 'ko' || calLang === 'zh-hans' || calLang === 'zh-hant') {
+        var yearSuffix = titleEl.getAttribute('data-year-suffix') || t('year') || '년';
+        var monthSuffix = titleEl.getAttribute('data-month-suffix') || t('month') || '월';
+        titleEl.textContent = calYear + yearSuffix + ' ' + (calMonth + 1) + monthSuffix;
+      } else {
+        titleEl.textContent = (t('month_' + (calMonth + 1)) || (calMonth + 1)) + ' ' + calYear;
+      }
+      while (grid.children.length > 7) grid.removeChild(grid.lastChild);
+      for (var i = 0; i < startBlank; i++) {
+        var empty = document.createElement('div');
+        empty.className = 'calendar-day';
+        empty.style.background = '#f8fafc';
+        grid.appendChild(empty);
+      }
+      for (var d = 1; d <= daysInMonth; d++) {
+        var dateStr = padDate(calYear, calMonth, d);
+        var items = schedule[dateStr] || [];
+        var cell = document.createElement('div');
+        cell.className = 'calendar-day' + (dateStr === todayStr ? ' calendar-day-today' : '');
+        cell.innerHTML = '<span class="calendar-day-num">' + d + '</span>';
+        if (Array.isArray(items)) {
+          items.forEach(function(item, idx) {
+            var label = (item && item.label) ? item.label : (item && item.code) ? item.code : '';
+            if (label) {
+              var st = (item && item.service_type) ? String(item.service_type) : 'AI_AGENT';
+              var typeClass = 'calendar-card--' + st.toLowerCase().replace('_', '-');
+              var todayClass = (dateStr === todayStr) ? ' calendar-card--today' : '';
+              var statusLabel = (item && item.appointment_status_label) ? item.appointment_status_label : '';
+              var agentName = (item && item.agent_name) ? item.agent_name : '';
+              var agentHtml = (st === 'IN_PERSON_AGENT' && agentName) ? '<span class="calendar-card-agent">' + esc(agentName) + '</span>' : '';
+              cell.innerHTML += '<div class="calendar-card calendar-card-clickable ' + typeClass + todayClass + '" data-date="' + esc(dateStr) + '" data-index="' + idx + '">' + esc(label) + (statusLabel ? '<span class="calendar-card-status">' + esc(statusLabel) + '</span>' : '') + agentHtml + '</div>';
+            }
+          });
+        }
+        grid.appendChild(cell);
+      }
+      renderTodaysList();
+    }
+    render();
+    grid.addEventListener('click', function(e) {
+      var card = e.target && e.target.closest ? e.target.closest('.calendar-card-clickable') : null;
+      if (!card) return;
+      var dateStr = card.getAttribute('data-date');
+      var idx = parseInt(card.getAttribute('data-index'), 10);
+      if (isNaN(idx)) return;
+      var items = schedule[dateStr];
+      var item = items && items[idx];
+      if (item) openModal(item, dateStr);
+    });
+    if (document.getElementById('serviceDetailClose')) document.getElementById('serviceDetailClose').addEventListener('click', closeModal);
+    if (modalEl) modalEl.addEventListener('click', function(e) { if (e.target === modalEl) closeModal(); });
+    window.addEventListener('i18n-applied', render);
+    document.querySelector('.dashboard-cal-prev').addEventListener('click', function() {
+      calMonth--;
+      if (calMonth < 0) { calMonth = 11; calYear--; }
+      render();
+    });
+    document.querySelector('.dashboard-cal-next').addEventListener('click', function() {
+      calMonth++;
+      if (calMonth > 11) { calMonth = 0; calYear++; }
+      render();
+    });
+    window.customerCalendarGoToDate = function(dateStr) {
+      if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
+      var parts = dateStr.split('-');
+      calYear = parseInt(parts[0], 10);
+      calMonth = parseInt(parts[1], 10) - 1;
+      render();
+    };
+  })();
+  </script>
+  {% elif user_plan %}
+  <div style="margin-top: 1rem; padding: 1rem; border: 1px solid var(--color-border); border-radius: var(--radius); background: #f8fafc;">
+    <p class="text-muted" style="margin: 0; font-size: 0.95rem;">{{ dashboard_i18n.schedule_waiting_admin|default:"관리자가 일정을 확정하면 캘린더가 표시됩니다." }}</p>
+    <p style="margin-top: 1rem;">
+      {% if pending_reopen_offer %}
+      <form id="form-execute-reopen-cta" action="{% url 'api_settlement_action_offer_execute' offer_id=pending_reopen_offer.id %}" method="post" style="display:inline;" data-redirect-url="{{ survey_resume_url|default:'' }}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary">{{ pending_reopen_offer.button_label }}</button>
+      </form>
+      {% elif show_reopen_survey %}
+      <a href="{{ survey_resume_url|default:'' }}" class="btn btn-primary">{{ dashboard_i18n.survey_reopen_label|default:"설문 다시 수정하기" }}</a>
+      {% else %}
+      <a href="{% url 'survey:survey_start' %}" class="btn btn-primary">{{ dashboard_i18n.survey_link|default:"설문 작성" }}</a>
+      {% endif %}
+      <a href="{% url 'customer_quote' %}" class="btn btn-outline" style="margin-left:0.5rem;">{{ dashboard_i18n.my_quote|default:"내 견적" }}</a>
+      <a href="{% url 'ai_agent:assistant_chat' %}" class="btn btn-outline" style="margin-left:0.5rem;">{{ dashboard_i18n.assistant_link|default:"AI 어시스턴트" }}</a>
+    </p>
+  </div>
+  {% else %}
+  <div style="margin-top: 1rem; padding: 1rem; border: 1px solid var(--color-border); border-radius: var(--radius); background: #f8fafc;">
+    <p style="margin: 0 0 0.75rem; font-weight: 600;">{% if pending_reopen_offer %}{% trans "관리자가 설문 수정을 허용했습니다. 아래 버튼을 눌러 설문 수정을 시작하세요." %}{% elif show_reopen_survey %}{% trans "관리자가 수정 요청을 승인했습니다. 설문을 수정해 주세요." %}{% else %}{{ dashboard_i18n.survey_title|default:"서비스 이용을 위해 설문을 작성해 주세요" }}{% endif %}</p>
+    <p style="margin: 0 0 0.75rem; font-size: 0.95rem; color: var(--color-muted);">{% if pending_reopen_offer %}{% trans "버튼을 누르면 설문 수정 화면으로 이동합니다." %}{% elif show_reopen_survey %}{% trans "설문을 다시 제출하면 관리자가 수정된 내용을 검토한 뒤 새 견적을 보내드립니다." %}{% else %}{{ dashboard_i18n.survey_desc|default:"설문 제출 후 견적을 받으실 수 있습니다." }}{% endif %}</p>
+    {% if pending_reopen_offer %}
+    <form id="form-execute-reopen-cta-alt" action="{% url 'api_settlement_action_offer_execute' offer_id=pending_reopen_offer.id %}" method="post" style="display:inline;" data-redirect-url="{{ survey_resume_url|default:'' }}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary">{{ pending_reopen_offer.button_label }}</button>
+    </form>
+    {% elif show_reopen_survey %}
+    <a href="{{ survey_resume_url|default:'' }}" class="btn btn-primary">{{ dashboard_i18n.survey_reopen_label|default:"설문 다시 수정하기" }}</a>
+    {% else %}
+    <a href="{% url 'survey:survey_start' %}" class="btn btn-primary">{{ dashboard_i18n.survey_link|default:"설문 작성하기" }}</a>
+    {% endif %}
+    <a href="{% url 'customer_quote' %}" class="btn btn-outline" style="margin-left:0.5rem;">{{ dashboard_i18n.my_quote|default:"내 견적" }}</a>
+    <a href="{% url 'content:list' %}" class="btn btn-outline" style="margin-left:0.5rem;">{{ dashboard_i18n.view_content|default:"컨텐츠 보기" }}</a>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+(function() {
+  var wrap = document.getElementById('rateableAppointmentsWrap');
+  var listEl = document.getElementById('rateableAppointmentsList');
+  var modal = document.getElementById('rateModalClose');
+  if (!wrap || !listEl) return;
+  var modalOverlay = document.getElementById('rateAppointmentModal');
+  var modalService = document.getElementById('rateModalService');
+  var form = document.getElementById('rateAppointmentForm');
+  var idInput = document.getElementById('rateAppointmentId');
+  var csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+  var csrfToken = csrf ? csrf.value : '';
+
+  function loadRateable() {
+    fetch('/api/settlement/rateable-appointments/', { credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.ok || !data.items || data.items.length === 0) {
+          wrap.style.display = 'none';
+          return;
+        }
+        wrap.style.display = 'block';
+        listEl.innerHTML = '';
+        data.items.forEach(function(it) {
+          var li = document.createElement('li');
+          li.innerHTML = '<span class="appointment-name">' + (it.service_label || it.service_code || '') + '</span>' +
+            '<span class="appointment-meta">' + (it.service_date || '') + (it.agent_name ? ' · ' + it.agent_name : '') + '</span>' +
+            '<span class="appointment-actions"><button type="button" class="btn btn-outline btn-rate-appointment" data-id="' + it.id + '" data-label="' + (it.service_label || '').replace(/"/g, '&quot;') + '" data-agent="' + (it.agent_name || '').replace(/"/g, '&quot;') + '">' + (document.documentElement.lang === 'en' ? 'Rate' : '평가하기') + '</button></span>';
+          listEl.appendChild(li);
+        });
+        listEl.querySelectorAll('.btn-rate-appointment').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            idInput.value = btn.getAttribute('data-id');
+            modalService.textContent = (btn.getAttribute('data-label') || '') + (btn.getAttribute('data-agent') ? ' · ' + btn.getAttribute('data-agent') : '');
+            if (form) form.reset();
+            idInput.value = btn.getAttribute('data-id');
+            if (modalOverlay) { modalOverlay.classList.add('visible'); modalOverlay.setAttribute('aria-hidden', 'false'); }
+          });
+        });
+      })
+      .catch(function() { wrap.style.display = 'none'; });
+  }
+  loadRateable();
+
+  if (document.getElementById('rateModalClose')) {
+    document.getElementById('rateModalClose').addEventListener('click', function() {
+      if (modalOverlay) { modalOverlay.classList.remove('visible'); modalOverlay.setAttribute('aria-hidden', 'true'); }
+    });
+  }
+  if (modalOverlay) {
+    modalOverlay.addEventListener('click', function(e) { if (e.target === modalOverlay) { modalOverlay.classList.remove('visible'); modalOverlay.setAttribute('aria-hidden', 'true'); } });
+  }
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      var id = idInput.value;
+      var score = document.getElementById('rateScore') && document.getElementById('rateScore').value;
+      var comment = document.getElementById('rateComment') && document.getElementById('rateComment').value;
+      if (!id || !score) return;
+      var fd = new FormData();
+      fd.append('csrfmiddlewaretoken', csrfToken);
+      fd.append('score', score);
+      fd.append('comment', (comment || '').trim());
+      fetch('/api/settlement/appointment/' + id + '/rate/', {
+        method: 'POST',
+        body: fd,
+        headers: { 'X-CSRFToken': csrfToken },
+        credentials: 'same-origin',
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.ok) {
+            if (modalOverlay) { modalOverlay.classList.remove('visible'); modalOverlay.setAttribute('aria-hidden', 'true'); }
+            loadRateable();
+            alert(data.message || (document.documentElement.lang === 'en' ? 'Thank you for your review.' : '평가가 등록되었습니다.'));
+          } else {
+            alert(data.error || (document.documentElement.lang === 'en' ? 'Failed to submit.' : '제출에 실패했습니다.'));
+          }
+        })
+        .catch(function() { alert(document.documentElement.lang === 'en' ? 'Request failed.' : '요청에 실패했습니다.'); });
+    });
+  }
+})();
+</script>
+{% if pending_appointments %}
+<div class="modal-overlay" id="editAppointmentModal">
+  <div class="modal-box">
+    <h4>{{ dashboard_i18n.edit_appointment|default:"예약 수정" }}</h4>
+    <form id="editAppointmentForm">
+      <input type="hidden" name="id" id="editAppointmentId">
+      <label><span>{{ dashboard_i18n.preferred_time|default:"희망 시간대" }}</span> <input type="text" name="preferred_time" id="editPreferredTime" placeholder="{{ dashboard_i18n.example_time|default:'예: 오전 10시' }}"></label>
+      <label><span>{{ dashboard_i18n.message|default:"메시지" }}</span> <textarea name="message" id="editMessage" rows="3" placeholder="{{ dashboard_i18n.message_placeholder|default:'에이전트에게 전달할 메시지' }}"></textarea></label>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" id="editAppointmentModalClose">{{ dashboard_i18n.cancel|default:"취소" }}</button>
+        <button type="submit" class="btn btn-primary">{{ dashboard_i18n.save|default:"저장" }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+(function() {
+  var csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+  var csrfToken = csrf ? csrf.value : '';
+  document.querySelectorAll('.appointment-name').forEach(function(a) {
+    a.addEventListener('click', function(e) {
+      e.preventDefault();
+      var dateStr = a.getAttribute('data-date');
+      if (dateStr && window.customerCalendarGoToDate) window.customerCalendarGoToDate(dateStr);
+    });
+  });
+  document.querySelectorAll('.btn-edit-appointment').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var id = btn.getAttribute('data-id');
+      var preferred = btn.getAttribute('data-preferred') || '';
+      var message = (btn.getAttribute('data-message') || '').replace(/&quot;/g, '"');
+      document.getElementById('editAppointmentId').value = id;
+      document.getElementById('editPreferredTime').value = preferred;
+      document.getElementById('editMessage').value = message;
+      document.getElementById('editAppointmentModal').classList.add('visible');
+    });
+  });
+  document.getElementById('editAppointmentModalClose').addEventListener('click', function() {
+    document.getElementById('editAppointmentModal').classList.remove('visible');
+  });
+  document.getElementById('editAppointmentModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('visible');
+  });
+  document.getElementById('editAppointmentForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var id = document.getElementById('editAppointmentId').value;
+    var fd = new FormData();
+    fd.append('csrfmiddlewaretoken', csrfToken);
+    fd.append('preferred_time', document.getElementById('editPreferredTime').value);
+    fd.append('message', document.getElementById('editMessage').value);
+    fetch('/api/settlement/appointment/' + id + '/update/', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken },
+      body: fd,
+      credentials: 'same-origin',
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.ok) {
+          alert(res.message || '수정되었습니다.');
+          document.getElementById('editAppointmentModal').classList.remove('visible');
+          window.location.reload();
+        } else alert(res.error || '수정에 실패했습니다.');
+      })
+      .catch(function() { alert('수정 요청에 실패했습니다.'); });
+  });
+  document.querySelectorAll('.btn-cancel-appointment').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      if (!confirm('이 예약 요청을 취소하시겠습니까?')) return;
+      var id = btn.getAttribute('data-id');
+      fetch('/api/settlement/appointment/' + id + '/cancel/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' },
+        body: '{}',
+        credentials: 'same-origin',
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (res.ok) {
+            alert(res.message || '취소되었습니다.');
+            window.location.reload();
+          } else alert(res.error || '취소에 실패했습니다.');
+        })
+        .catch(function() { alert('취소 요청에 실패했습니다.'); });
+    });
+  });
+})();
+</script>
+<script>
+(function() {
+  var forms = document.querySelectorAll('#form-execute-reopen-cta, #form-execute-reopen-cta-alt');
+  var csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+  var csrfToken = csrf ? csrf.value : '';
+  forms.forEach(function(form) {
+    if (!form) return;
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      var url = form.action;
+      var redirectUrl = form.getAttribute('data-redirect-url') || '';
+      var fd = new FormData(form);
+      fetch(url, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.ok && redirectUrl) window.location.href = redirectUrl;
+          else if (data.ok) window.location.reload();
+          else alert(data.error || '처리에 실패했습니다.');
+        })
+        .catch(function() { alert('요청에 실패했습니다.'); });
+    });
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

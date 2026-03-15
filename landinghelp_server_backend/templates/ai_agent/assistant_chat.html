@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{{ assistant_i18n.title|default:"AI 어시스턴트" }} – LifeAI US{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="card" style="max-width: 720px; margin: 0 auto;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+      <h1 style="margin: 0; font-size: 1.25rem;">{{ assistant_i18n.title|default:"AI 어시스턴트" }}</h1>
+      <a href="{% url 'app_customer_dashboard' %}" class="btn btn-outline" style="padding: 0.35rem 0.75rem;">{{ assistant_i18n.back|default:"돌아가기" }}</a>
+    </div>
+    <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1rem;">
+      {% trans "이사·정착 서비스 관련 질문을 입력하시면 플랜과 안내 자료를 바탕으로 답변드립니다. 추가로 필요한 사항은 메시지함으로 문의해 주세요." %}
+    </p>
+    <div id="assistantMessages" style="min-height: 200px; max-height: 50vh; overflow-y: auto; border: 1px solid var(--color-border); border-radius: var(--radius); padding: 1rem; background: #fafafa; margin-bottom: 1rem;">
+      {% for msg in messages %}
+      <div class="assistant-msg" data-role="{{ msg.sender.id|default:0 }}" style="margin-bottom: 0.75rem;">
+        <strong style="font-size: 0.8rem; color: var(--color-muted);">
+          {% if msg.sender == request.user %}{% trans "나" %}{% else %}{{ assistant_i18n.title|default:"AI" }}{% endif %}
+        </strong>
+        <div style="margin-top: 0.25rem; white-space: pre-wrap; font-size: 0.95rem;">{{ msg.body }}</div>
+      </div>
+      {% empty %}
+      <p class="text-muted" style="margin: 0;">{% trans "대화를 시작해 보세요." %}</p>
+      {% endfor %}
+    </div>
+    <form id="assistantForm" method="post" action="{% url 'ai_agent:assistant_send' %}">
+      {% csrf_token %}
+      <div style="display: flex; gap: 0.5rem;">
+        <textarea name="body" id="assistantBody" rows="2" placeholder="{{ assistant_i18n.placeholder|default:'질문을 입력하세요...' }}" style="flex: 1; padding: 0.5rem; border: 1px solid var(--color-border); border-radius: var(--radius); resize: vertical; min-height: 44px;" maxlength="4000"></textarea>
+        <button type="submit" class="btn btn-primary" id="assistantSubmit" style="align-self: flex-end; padding: 0.5rem 1rem;">{{ assistant_i18n.send|default:"보내기" }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+(function() {
+  var form = document.getElementById('assistantForm');
+  var bodyEl = document.getElementById('assistantBody');
+  var container = document.getElementById('assistantMessages');
+  if (!form || !bodyEl) return;
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    var text = (bodyEl.value || '').trim();
+    if (!text) return;
+    var btn = document.getElementById('assistantSubmit');
+    if (btn) btn.disabled = true;
+    var csrf = form.querySelector('[name=csrfmiddlewaretoken]');
+    var fd = new FormData();
+    fd.append('body', text);
+    if (csrf) fd.append('csrfmiddlewaretoken', csrf.value);
+    fetch(form.action, {
+      method: 'POST',
+      body: fd,
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin',
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.ok) {
+          var emptyNote = container.querySelector('.text-muted');
+          if (emptyNote) emptyNote.remove();
+          var myDiv = document.createElement('div');
+          myDiv.className = 'assistant-msg';
+          myDiv.innerHTML = '<strong style="font-size: 0.8rem; color: var(--color-muted);">{% trans "나" %}</strong>';
+          var myContent = document.createElement('div');
+          myContent.style.marginTop = '0.25rem'; myContent.style.whiteSpace = 'pre-wrap'; myContent.style.fontSize = '0.95rem';
+          myContent.textContent = text;
+          myDiv.appendChild(myContent);
+          container.appendChild(myDiv);
+          var botDiv = document.createElement('div');
+          botDiv.className = 'assistant-msg';
+          botDiv.innerHTML = '<strong style="font-size: 0.8rem; color: var(--color-muted);">{{ assistant_i18n.title|default:"AI"|escapejs }}</strong>';
+          var botContent = document.createElement('div');
+          botContent.style.marginTop = '0.25rem'; botContent.style.whiteSpace = 'pre-wrap'; botContent.style.fontSize = '0.95rem';
+          botContent.textContent = data.assistant_body || '';
+          botDiv.appendChild(botContent);
+          container.appendChild(botDiv);
+          container.scrollTop = container.scrollHeight;
+          bodyEl.value = '';
+        } else {
+          if (btn) btn.disabled = false;
+          alert(data.error || '{% trans "전송에 실패했습니다." %}');
+        }
+      })
+      .catch(function() {
+        if (btn) btn.disabled = false;
+        alert('{% trans "전송에 실패했습니다." %}');
+      })
+      .then(function() {
+        if (btn) btn.disabled = false;
+      });
+  });
+})();
+</script>
+{% endblock %}

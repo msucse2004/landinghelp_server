@@ -1,0 +1,63 @@
+{% extends "adminsortable2/change_list.html" %}
+{% load i18n admin_urls admin_list %}
+
+{% block object-tools-items %}
+    {# Add 버튼 제거 - 저장 버튼 옆으로 이동 #}
+{% endblock %}
+
+{% block pagination %}
+<div class="changelist-footer" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+  <div style="display: flex; align-items: center; gap: 0.5rem;">
+    <a href="{% url cl.opts|admin_urlname:'add' %}" class="addlink" style="display: inline-block; padding: 0.5rem 0.75rem; text-decoration: none; background: var(--button-bg, #417690); color: var(--button-fg, #fff); border-radius: 4px;">추가</a>
+  </div>
+  <div style="flex: 1;">{% pagination cl %}</div>
+</div>
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<script>
+(function() {
+  function renumberOrderColumn() {
+    var tbody = document.querySelector('#result_list tbody');
+    if (!tbody) return;
+    var headers = document.querySelectorAll('#result_list thead th');
+    var colIndex = -1;
+    for (var i = 0; i < headers.length; i++) {
+      if (headers[i].className && headers[i].className.indexOf('column-order_index') >= 0) {
+        colIndex = i;
+        break;
+      }
+    }
+    if (colIndex < 0) return;
+    var allRows = tbody.querySelectorAll('tr');
+    var rows = Array.prototype.filter.call(allRows, function(tr) { return tr.querySelector('.handle'); });
+    if (rows.length === 0) rows = allRows;
+    rows.forEach(function(row, idx) {
+      var cells = row.querySelectorAll('td');
+      if (cells[colIndex]) cells[colIndex].textContent = idx + 1;
+    });
+  }
+  function init() {
+    renumberOrderColumn();
+    var tbody = document.querySelector('#result_list tbody');
+    if (!tbody) return;
+    var observer = new MutationObserver(function(mutations) {
+      for (var i = 0; i < mutations.length; i++) {
+        if (mutations[i].type === 'attributes' && mutations[i].attributeName === 'order') {
+          renumberOrderColumn();
+          break;
+        }
+      }
+    });
+    var handles = tbody.querySelectorAll('.handle');
+    handles.forEach(function(h) { observer.observe(h, { attributes: true, attributeFilter: ['order'] }); });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}인증 실패 – LifeAI US{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 480px; margin: 0 auto;">
+  <h2>인증할 수 없습니다</h2>
+  {% if reason == 'expired_or_invalid' %}
+  <p>인증 링크가 만료되었거나 잘못되었습니다.</p>
+  <p class="text-muted">24시간이 지났다면 다시 회원가입해주세요.</p>
+  {% elif reason == 'already_verified' %}
+  <p>이미 인증된 계정이거나 잘못된 링크입니다.</p>
+  {% else %}
+  <p>잘못된 인증 요청입니다.</p>
+  {% endif %}
+  <p><a href="{% url 'home' %}" class="btn btn-primary">홈으로</a> <a href="{% url 'signup' %}" class="btn btn-outline">다시 가입</a></p>
+</div>
+{% endblock %}

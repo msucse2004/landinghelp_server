@@ -1,0 +1,5 @@
+Document Type: CONSENT_FORM
+Submission ID: 2
+Customer Email: accept_customer@test.com
+Quote ID: 2
+Quote Total: 1200

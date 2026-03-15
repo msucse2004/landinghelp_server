@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "설문 제출 완료" %} – LifeAI US{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="card" style="max-width: 560px; margin: 0 auto; text-align: center;">
+    <h1>{% trans "제출이 완료되었습니다" %}</h1>
+    <p class="text-muted" style="margin: 1rem 0;">{% trans "Admin 검토 후 견적/답변을 보내드리겠습니다. 잠시만 기다려 주세요." %}</p>
+    <a href="{% url 'settlement_services' %}" class="btn btn-primary">{% trans "정착서비스로 돌아가기" %}</a>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,499 @@
+{% load i18n %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE|default:'en' }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}LifeAI US{% endblock %}</title>
+  <style>
+    :root {
+      --max-w: 980px;
+      --space: clamp(1rem, 4vw, 1.5rem);
+      --gap: clamp(1rem, 3vw, 2rem);
+      --radius: 8px;
+      --color-text: #1a1a1a;
+      --color-muted: #555;
+      --color-border: #ddd;
+      --color-bg: #f8f9fa;
+      --color-primary: #2563eb;
+      --color-primary-hover: #1d4ed8;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+      font-size: clamp(15px, 2vw, 16px);
+      line-height: 1.6;
+      color: var(--color-text);
+      margin: 0;
+      background: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .container {
+      width: 100%;
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 0 var(--space);
+    }
+    nav {
+      background: #fff;
+      border-bottom: 1px solid var(--color-border);
+      padding: var(--space) 0 0 0;
+    }
+    nav .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: var(--gap);
+    }
+    .brand {
+      font-weight: 700;
+      font-size: clamp(1.1rem, 2.5vw, 1.25rem);
+      color: var(--color-text);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+    }
+    .brand-logo {
+      height: 96px;
+      max-width: 420px;
+      object-fit: contain;
+      object-position: left center;
+      display: block;
+    }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: clamp(0.5rem, 2vw, 1rem);
+      flex-wrap: wrap;
+    }
+    .nav-links a {
+      color: var(--color-muted);
+      text-decoration: none;
+      padding: 0.5rem 0.75rem;
+      border-radius: var(--radius);
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .nav-links a:hover { color: var(--color-primary); background: var(--color-bg); }
+    .nav-links .btn { min-height: 44px; padding: 0.6rem 1.25rem; }
+    .nav-links .btn-primary { color: #fff; }
+    .nav-links .btn-primary:hover { color: #fff; }
+    main.main-content { flex: 1 1 auto; padding: clamp(2rem, 6vw, 4rem) 0; min-height: 0; }
+    .card {
+      background: #fff;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      padding: var(--gap);
+      margin-bottom: var(--gap);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.75rem 1.5rem;
+      min-height: 44px;
+      font-size: 1rem;
+      font-weight: 500;
+      text-decoration: none;
+      border-radius: var(--radius);
+      border: none;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-primary {
+      background: var(--color-primary);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--color-primary-hover); }
+    .btn-outline {
+      background: transparent;
+      color: var(--color-primary);
+      border: 2px solid var(--color-primary);
+    }
+    .btn-outline:hover { background: var(--color-bg); }
+    .btn-block { width: 100%; }
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    input[type="date"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      min-height: 44px;
+      font-size: 16px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      margin-bottom: 1rem;
+      box-sizing: border-box;
+    }
+    textarea { min-height: 100px; resize: vertical; }
+    select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 1rem center; padding-right: 2.25rem; }
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+    }
+    label {
+      display: block;
+      margin-bottom: 0.35rem;
+      font-weight: 500;
+      color: var(--color-text);
+    }
+    .form-group { margin-bottom: 1.25rem; }
+    .form-errors { color: #dc2626; margin-bottom: 1rem; font-size: 0.9rem; }
+    .form-errors ul { margin: 0; padding-left: 1.25rem; }
+    h1 { font-size: clamp(1.5rem, 4vw, 2.25rem); margin: 0 0 0.5em; line-height: 1.3; }
+    h2 { font-size: clamp(1.25rem, 3vw, 1.5rem); margin: 0 0 0.5em; }
+    .text-muted, .meta, .summary { color: var(--color-muted); font-size: 0.95rem; }
+    .body { margin-top: 1rem; line-height: 1.6; }
+    ul.content-list { list-style: none; padding: 0; }
+    ul.content-list li { margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--color-border); }
+    .user-info-bar {
+      background: var(--color-bg);
+      border-bottom: 1px solid var(--color-border);
+      padding: 0.5rem var(--space);
+      font-size: 0.9rem;
+      color: var(--color-muted);
+      overflow: visible;
+    }
+    .user-info-bar .container {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      overflow: visible;
+    }
+    .user-info-bar strong { color: var(--color-text); }
+    .user-info-bar a { color: inherit; text-decoration: none; }
+    .user-info-bar a:hover { text-decoration: underline; }
+    .user-info-bar .top-link { padding: 0.25rem 0.5rem; border-radius: var(--radius); }
+    .user-info-bar .top-link.btn-primary { color: #fff; }
+    .icon-mail-wrap {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: visible;
+    }
+    .icon-mail {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2rem;
+      height: 2rem;
+      padding: 0.15rem;
+    }
+    .icon-mail svg { width: 100%; height: 100%; fill: currentColor; }
+    .icon-mail-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      min-width: 18px;
+      min-height: 18px;
+      padding: 0 5px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      line-height: 1;
+      text-align: center;
+      background: #dc2626;
+      color: #fff !important;
+      border-radius: 999px;
+      border: 2px solid var(--color-bg);
+      box-sizing: border-box;
+      z-index: 10;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}" data-lang="{{ LANGUAGE_CODE|default:'en' }}" {% if user.is_authenticated %}data-logged-in="true"{% endif %}>
+  {% if email_config_warning %}
+  <div id="email-warning-banner" style="background:#fef3c7;border-bottom:2px solid #f59e0b;padding:0.75rem 1rem;text-align:center;font-size:0.9rem;position:relative;" data-alert-message="{% trans '이메일 설정 경고' %}&#10;&#10;{% trans 'EMAIL_HOST_USER, EMAIL_HOST_PASSWORD 환경변수가 설정되지 않았습니다.' %}&#10;{% trans '이메일 발송이 동작하지 않습니다.' %}">
+    <span>⚠️ <span data-i18n-key="이메일 설정 경고: EMAIL_HOST_USER, EMAIL_HOST_PASSWORD 환경변수가 설정되지 않았습니다. 이메일 발송이 동작하지 않습니다.">{% trans "이메일 설정 경고: EMAIL_HOST_USER, EMAIL_HOST_PASSWORD 환경변수가 설정되지 않았습니다. 이메일 발송이 동작하지 않습니다." %}</span></span>
+    <button type="button" onclick="document.getElementById('email-warning-banner').style.display='none'" style="position:absolute;right:1rem;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;font-size:1.2rem;">&times;</button>
+  </div>
+  <script>if (!sessionStorage.getItem('emailWarningDismissed')) { var b=document.getElementById('email-warning-banner'); if(b&&b.dataset.alertMessage){ setTimeout(function(){ alert(b.dataset.alertMessage.replace(/\u000a/g,'\n')); sessionStorage.setItem('emailWarningDismissed', '1'); }, 100); } }</script>
+  {% endif %}
+  <header class="user-info-bar">
+    <div class="container">
+      {% if user.is_authenticated %}
+        <span><strong>ID</strong>: {{ user_id }}</span>
+        <span><strong data-i18n-key="플랜">{{ plan_label|default:"Plan" }}</strong>: <a href="{% url 'billing:subscription_plan' %}">{{ user_plan_display }}</a></span>
+        <a href="{% url 'messages_inbox' %}" class="top-link icon-mail-wrap" title="{% trans '메시지 함' %}" aria-label="{% trans '메시지 함' %}" id="header-mail-link" data-aria-label-key="메시지 함">
+          <span class="icon-mail">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+          </span>
+          <span class="icon-mail-badge" id="header-mail-badge" aria-label="{% trans '읽지 않은 메시지' %}" data-unread-label="{% trans '읽지 않은 메시지' %}" data-unread-suffix="{% trans '건' %}" data-unread-label-key="읽지 않은 메시지" data-unread-suffix-key="건" style="{% if not messaging_unread_count or messaging_unread_count <= 0 %}display:none;{% else %}display:inline-flex;{% endif %}">{% if messaging_unread_count and messaging_unread_count > 99 %}99+{% else %}{{ messaging_unread_count|default:0 }}{% endif %}</span>
+        </a>
+        <form action="{% url 'logout' %}" method="post" style="display:inline; margin:0;">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline" style="padding:0.25rem 0.5rem; font-size:0.9rem;" data-i18n-key="로그아웃">{% trans "로그아웃" %}</button>
+        </form>
+      {% else %}
+        <a href="{% url 'login' %}" class="top-link" data-i18n-key="로그인">{% trans "로그인" %}</a>
+        <a href="{% url 'signup' %}" class="btn btn-primary top-link" data-i18n-key="회원가입">{% trans "회원가입" %}</a>
+      {% endif %}
+      <form action="{% url 'set_language' %}" method="post" style="display:inline; margin:0;" id="langForm">
+        {% csrf_token %}
+        <input name="next" type="hidden" value="{{ request.get_full_path|default:'/' }}">
+        <select name="language" id="langSelect" style="padding:0.25rem 0.5rem; font-size:0.9rem; border:1px solid var(--color-border); border-radius:var(--radius); background:#fff; min-height:36px;">
+          <option value="ko" {% if LANGUAGE_CODE == 'ko' %}selected{% endif %}>KR 한국어</option>
+          <option value="en" {% if LANGUAGE_CODE == 'en' %}selected{% endif %}>EN English</option>
+          <option value="es" {% if LANGUAGE_CODE == 'es' %}selected{% endif %}>ES Español</option>
+          <option value="zh-hans" {% if LANGUAGE_CODE == 'zh-hans' %}selected{% endif %}>ZH 中文(简体)</option>
+          <option value="zh-hant" {% if LANGUAGE_CODE == 'zh-hant' %}selected{% endif %}>ZH 中文(繁體)</option>
+          <option value="vi" {% if LANGUAGE_CODE == 'vi' %}selected{% endif %}>VI Tiếng Việt</option>
+        </select>
+      </form>
+    </div>
+  </header>
+  <nav>
+    <div class="container">
+      <a href="{% url 'home' %}" class="brand">
+        {% load static %}
+        <img src="{% static 'images/logo.png' %}" alt="LifeAI US" class="brand-logo">
+        <span class="brand-name visually-hidden">LifeAI US</span>
+      </a>
+      <div class="nav-links">
+        {% if user.is_authenticated %}
+        <a href="{% url 'settlement_services' %}" data-i18n-key="정착서비스">{% trans "정착서비스" %}</a>
+        <a href="{% url 'corporate_services' %}" data-i18n-key="기업서비스">{% trans "기업서비스" %}</a>
+        <a href="{% url 'community:region_select' %}" data-i18n-key="지역 게시판">{% trans "지역 게시판" %}</a>
+        {% if user.is_staff %}
+        <a href="/admin/" data-i18n-key="관리">{% trans "관리" %}</a>
+        {% endif %}
+        {% else %}
+        <a href="{% url 'settlement_services' %}" data-i18n-key="정착서비스">{% trans "정착서비스" %}</a>
+        <a href="{% url 'corporate_services' %}" data-i18n-key="기업서비스">{% trans "기업서비스" %}</a>
+        <a href="{% url 'community:region_select' %}" data-i18n-key="지역 게시판">{% trans "지역 게시판" %}</a>
+        {% endif %}
+      </div>
+    </div>
+  </nav>
+  {% block below_nav %}{% endblock %}
+  <main class="main-content">
+    <div class="container">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+  {% block ad_carousel %}
+  {% if ad_carousel_slides %}
+  <section class="ad-carousel-wrap" aria-label="{% trans '기업 광고' %}" data-aria-label-key="기업 광고" data-slide-aria="{% trans '번째 슬라이드' %}" data-slide-aria-key="번째 슬라이드">
+    <div class="ad-carousel" id="adCarousel" data-auto-interval="3000">
+      <div class="ad-carousel-track" id="adCarouselTrack">
+        {% with slide=ad_carousel_slides|last %}
+        <div class="ad-carousel-slide ad-carousel-clone" data-clone="last" style="{% if slide.background_type == 'IMAGE' and slide.image %}background-image: url('{{ slide.image.url }}');{% elif slide.gradient_css %}background-image: {{ slide.gradient_css }};{% else %}background-image: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);{% endif %}">
+          {% if slide.link_url %}<a href="{{ slide.link_url }}" target="_blank" rel="noopener" class="ad-slide-link">{% endif %}
+          <h3 data-i18n-key="{{ slide.title|escapejs }}">{{ slide.title_display|default:slide.title }}</h3>{% if slide.subtitle_display or slide.subtitle %}<p data-i18n-key="{{ slide.subtitle|escapejs }}">{{ slide.subtitle_display|default:slide.subtitle }}</p>{% endif %}
+          {% if slide.link_url %}</a>{% endif %}
+        </div>
+        {% endwith %}
+        {% for slide in ad_carousel_slides %}
+        <div class="ad-carousel-slide" style="{% if slide.background_type == 'IMAGE' and slide.image %}background-image: url('{{ slide.image.url }}');{% elif slide.gradient_css %}background-image: {{ slide.gradient_css }};{% else %}background-image: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);{% endif %}">
+          {% if slide.link_url %}<a href="{{ slide.link_url }}" target="_blank" rel="noopener" class="ad-slide-link">{% endif %}
+          <h3 data-i18n-key="{{ slide.title|escapejs }}">{{ slide.title_display|default:slide.title }}</h3>{% if slide.subtitle_display or slide.subtitle %}<p data-i18n-key="{{ slide.subtitle|escapejs }}">{{ slide.subtitle_display|default:slide.subtitle }}</p>{% endif %}
+          {% if slide.link_url %}</a>{% endif %}
+        </div>
+        {% endfor %}
+        {% with slide=ad_carousel_slides|first %}
+        <div class="ad-carousel-slide ad-carousel-clone" data-clone="first" style="{% if slide.background_type == 'IMAGE' and slide.image %}background-image: url('{{ slide.image.url }}');{% elif slide.gradient_css %}background-image: {{ slide.gradient_css }};{% else %}background-image: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);{% endif %}">
+          {% if slide.link_url %}<a href="{{ slide.link_url }}" target="_blank" rel="noopener" class="ad-slide-link">{% endif %}
+          <h3 data-i18n-key="{{ slide.title|escapejs }}">{{ slide.title_display|default:slide.title }}</h3>{% if slide.subtitle_display or slide.subtitle %}<p data-i18n-key="{{ slide.subtitle|escapejs }}">{{ slide.subtitle_display|default:slide.subtitle }}</p>{% endif %}
+          {% if slide.link_url %}</a>{% endif %}
+        </div>
+        {% endwith %}
+      </div>
+      <div class="ad-carousel-dots" id="adCarouselDots"></div>
+    </div>
+  </section>
+  <style>
+    .ad-carousel-wrap { margin-top: auto; flex-shrink: 0; }
+    .ad-carousel {
+      width: 100vw; margin-left: calc(-50vw + 50%);
+      overflow: hidden; position: relative;
+    }
+    .ad-carousel-track { display: flex; transition: transform 0.35s ease-out; }
+    .ad-carousel-slide {
+      flex: 0 0 100%; min-width: 100%;
+      height: clamp(60px, 12.5vw, 90px);
+      background-size: cover; background-position: center;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      position: relative;
+    }
+    .ad-carousel-slide::before {
+      content: ''; position: absolute; inset: 0;
+      background: rgba(30, 58, 95, 0.5);
+    }
+    .ad-slide-link { position: relative; z-index: 1; color: #fff; text-decoration: none; text-align: center; padding: 1rem; display: block; width: 100%; }
+    .ad-carousel-slide h3, .ad-carousel-slide p { margin: 0; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.4); position: relative; z-index: 1; }
+    .ad-carousel-slide h3 { font-size: clamp(0.85rem, 2vw, 1rem); }
+    .ad-carousel-slide p { font-size: clamp(0.75rem, 1.5vw, 0.85rem); opacity: 0.95; }
+    .ad-carousel-dots { display: flex; justify-content: center; gap: 0.5rem; padding: 0.5rem; }
+    .ad-carousel-dots button { width: 8px; height: 8px; border-radius: 50%; border: 2px solid #fff; background: transparent; cursor: pointer; padding: 0; }
+    .ad-carousel-dots button.active { background: #fff; }
+  </style>
+  <script>
+  (function(){
+    var c=document.getElementById('adCarousel'); if(!c) return;
+    var track=document.getElementById('adCarouselTrack'); var dots=document.getElementById('adCarouselDots');
+    var slides=track.querySelectorAll('.ad-carousel-slide'); var total=slides.length; var realCount=total-2; var cur=0;
+    var singleSlide=realCount<=1;
+    if(singleSlide&&dots)dots.style.display='none';
+    for(var i=0;i<realCount;i++){
+      var b=document.createElement('button'); var slideAria=c.getAttribute('data-slide-aria')||'번째 슬라이드'; b.setAttribute('aria-label',(i+1)+slideAria);
+      b.addEventListener('click',(function(idx){return function(){goTo(idx);};})(i));
+      if(i===0)b.classList.add('active'); dots.appendChild(b);
+    }
+    function up(){ dots.querySelectorAll('button').forEach(function(x,i){x.classList.toggle('active',i===cur);}); }
+    function goTo(i){ cur=Math.max(0,Math.min(i,realCount-1)); track.style.transition='transform 0.35s ease-out'; track.style.transform='translateX(-'+((cur+1)*100)+'%)'; up(); }
+    function next(){
+      if(cur===realCount-1){
+        track.style.transition='transform 0.35s ease-out'; track.style.transform='translateX(-'+(total*100)+'%)';
+        track.addEventListener('transitionend',function fn(){ track.removeEventListener('transitionend',fn); track.style.transition='none'; cur=0; track.style.transform='translateX(-100%)'; up(); track.offsetHeight; track.style.transition='transform 0.35s ease-out'; },{once:true});
+      } else{ cur++; track.style.transition='transform 0.35s ease-out'; track.style.transform='translateX(-'+((cur+1)*100)+'%)'; up(); }
+    }
+    track.style.transform='translateX(-100%)';
+    var iv=parseInt(c.getAttribute('data-auto-interval')||'3000',10);
+    if(iv>0&&!singleSlide) setInterval(next,iv);
+  })();
+  </script>
+  {% endif %}
+  {% endblock %}
+  {% if user.is_authenticated %}
+  <script>
+  (function(){
+    var badge = document.getElementById('header-mail-badge');
+    if (!badge) return;
+    function updateUnread() {
+      fetch('/api/messaging/unread-count/', { method: 'GET', headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var n = (data && typeof data.unread_count === 'number') ? data.unread_count : 0;
+          badge.textContent = n > 99 ? '99+' : n;
+          badge.style.display = n > 0 ? 'inline-flex' : 'none';
+          var ul=badge.getAttribute('data-unread-label')||'읽지 않은 메시지'; var ux=badge.getAttribute('data-unread-suffix')||'건'; badge.setAttribute('aria-label', n > 0 ? ul + ' ' + n + ux : ul);
+        })
+        .catch(function() {});
+    }
+    updateUnread();
+    setInterval(updateUnread, 20000);
+    document.addEventListener('visibilitychange', function() { if (document.visibilityState === 'visible') updateUnread(); });
+    window.updateHeaderUnreadCount = updateUnread;
+  })();
+  </script>
+  {% endif %}
+  {% if user.is_authenticated and show_new_message_popup and messaging_unread_count and messaging_unread_count > 0 %}
+  <div id="new-message-popup-backdrop" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem;">
+    <div id="new-message-popup" role="dialog" aria-labelledby="new-message-popup-title" aria-modal="true" style="background:#fff;border-radius:var(--radius);box-shadow:0 8px 32px rgba(0,0,0,0.2);max-width:360px;width:100%;padding:1.5rem;">
+      <h2 id="new-message-popup-title" style="margin:0 0 0.75rem;font-size:1.15rem;" data-i18n-key="새 메시지가 도착했습니다">{% trans "새 메시지가 도착했습니다" %}</h2>
+      <p id="new-message-popup-body" style="margin:0 0 1.25rem;color:var(--color-muted);font-size:0.95rem;">{% blocktrans with count=messaging_unread_count %}읽지 않은 메시지 {{ count }}건이 있습니다. 메시지함에서 확인하세요.{% endblocktrans %}</p>
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
+        <button type="button" class="btn btn-outline" id="new-message-popup-close" data-i18n-key="닫기">{% trans "닫기" %}</button>
+        <a href="{% url 'messages_inbox' %}" class="btn btn-primary" id="new-message-popup-inbox" data-i18n-key="메시지함으로 이동">{% trans "메시지함으로 이동" %}</a>
+      </div>
+    </div>
+  </div>
+  <script>
+  (function(){
+    var backdrop = document.getElementById('new-message-popup-backdrop');
+    var inboxLink = document.getElementById('new-message-popup-inbox');
+    var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]') && document.querySelector('[name=csrfmiddlewaretoken]').value;
+    function hidePopupNow() {
+      var el = document.getElementById('new-message-popup-backdrop');
+      if (el) { el.style.display = 'none'; el.setAttribute('aria-hidden', 'true'); }
+    }
+    function sendDismissRequest() {
+      if (csrfToken) {
+        fetch('/api/messaging/dismiss-login-popup/', {
+          method: 'POST',
+          headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: '{}',
+          credentials: 'same-origin',
+          keepalive: true,
+        }).catch(function(){});
+      }
+    }
+    function dismissPopup() {
+      hidePopupNow();
+      sendDismissRequest();
+    }
+    if (document.getElementById('new-message-popup-close')) {
+      document.getElementById('new-message-popup-close').addEventListener('click', function() { dismissPopup(); });
+    }
+    if (inboxLink) {
+      inboxLink.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        hidePopupNow();
+        sendDismissRequest();
+        var href = inboxLink.getAttribute('href');
+        if (href) window.location.href = href;
+      });
+    }
+    if (backdrop) {
+      backdrop.addEventListener('click', function(e) { if (e.target === backdrop) dismissPopup(); });
+    }
+    sendDismissRequest();
+  })();
+  </script>
+  {% endif %}
+  {% if translation_failed %}
+  <div id="translation-failed-popup-backdrop" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1001;display:flex;align-items:center;justify-content:center;padding:1rem;">
+    <div id="translation-failed-popup" role="alertdialog" aria-labelledby="translation-failed-title" aria-modal="true" style="background:#fff;border-radius:var(--radius);box-shadow:0 8px 32px rgba(0,0,0,0.2);max-width:380px;width:100%;padding:1.25rem;">
+      <h2 id="translation-failed-title" style="margin:0 0 0.5rem;font-size:1rem;color:var(--color-muted);font-weight:600;">{{ translation_failed_title }}</h2>
+      <p id="translation-failed-body" style="margin:0 0 1rem;color:var(--color-muted);font-size:0.9rem;">{{ translation_failed_message }}</p>
+      <div style="display:flex;justify-content:flex-end;">
+        <button type="button" class="btn btn-primary" id="translation-failed-popup-close">{% trans "Close" %}</button>
+      </div>
+    </div>
+  </div>
+  <script>
+  (function(){
+    var backdrop = document.getElementById('translation-failed-popup-backdrop');
+    var btn = document.getElementById('translation-failed-popup-close');
+    if (backdrop && btn) {
+      function closePopup() { backdrop.style.display = 'none'; }
+      btn.addEventListener('click', closePopup);
+      backdrop.addEventListener('click', function(e) { if (e.target === backdrop) closePopup(); });
+    }
+  })();
+  </script>
+  {% endif %}
+  <script>
+  (function(){
+    var form = document.getElementById('langForm');
+    var select = document.getElementById('langSelect');
+    if (form && select) {
+      select.addEventListener('change', function() {
+        var nextInput = form.querySelector('input[name="next"]');
+        if (nextInput) nextInput.value = window.location.href;
+        form.submit();
+      });
+    }
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,694 @@
+{% extends "base.html" %}
+{% load i18n survey_extras %}
+{% block title %}{% if use_cards %}{% trans "설문" %} – {% trans "카드" %} {{ step }}/{{ steps|length }}{% else %}{% trans "설문" %} – {{ step }}단계{% endif %} – LifeAI US{% endblock %}
+
+{% block extra_head %}
+<style>
+  .survey-page { --survey-prime: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%); --survey-prime-solid: #7c3aed; --survey-glow: rgba(124, 58, 237, 0.15); --survey-bg: linear-gradient(180deg, #faf5ff 0%, #f5f3ff 100%); }
+  .survey-page .survey-hero-progress { margin-top: 0; margin-bottom: 1rem; }
+  .survey-page .survey-section-card { border-radius: 16px; padding: 1.75rem; box-shadow: 0 4px 24px rgba(99, 102, 241, 0.12), 0 0 0 1px rgba(99, 102, 241, 0.06); background: #fff; position: relative; overflow: hidden; animation: surveyCardIn 0.4s ease; }
+  .survey-page .survey-section-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--survey-prime); }
+  @keyframes surveyCardIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .survey-page .survey-card-title { font-size: 1.5rem; margin: 0 0 0.5rem; font-weight: 700; color: #1f2937; letter-spacing: -0.02em; }
+  .survey-page .survey-card-description { font-size: 1rem; margin: 0 0 1.5rem; line-height: 1.6; color: #6b7280; }
+  .survey-page .form-group { margin-bottom: 1.35rem; transition: transform 0.2s ease; }
+  .survey-page .form-group:focus-within { transform: translateX(2px); }
+  .survey-page .survey-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.75rem; padding-top: 1.25rem; border-top: 2px solid #f3e8ff; }
+  .survey-page .btn-survey-next { background: var(--survey-prime); color: #fff; border: none; padding: 0.85rem 1.75rem; border-radius: 12px; font-weight: 600; font-size: 1rem; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4); }
+  .survey-page .btn-survey-next:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(124, 58, 237, 0.45); }
+  .survey-page .btn-survey-submit { background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: #fff; border: none; padding: 0.85rem 1.75rem; border-radius: 12px; font-weight: 600; font-size: 1rem; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; box-shadow: 0 4px 14px rgba(5, 150, 105, 0.4); }
+  .survey-page .btn-survey-submit:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(5, 150, 105, 0.5); }
+  .survey-page #save-status.saved { color: #059669; font-weight: 600; animation: savePulse 0.5s ease; }
+  @keyframes savePulse { 0% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.02); } 100% { opacity: 1; transform: scale(1); } }
+  .survey-page main.main-content { background: var(--survey-bg); }
+  .survey-page input:focus, .survey-page textarea:focus, .survey-page select:focus { border-color: #8b5cf6; box-shadow: 0 0 0 3px var(--survey-glow); }
+  .survey-page label { color: #374151; font-weight: 600; }
+  .survey-page .survey-delivery-option:hover { border-color: #c4b5fd; background: #faf5ff; }
+  .survey-page .survey-delivery-option:has(input:checked) { border-color: #7c3aed; background: #f5f3ff; box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.2); }
+  .survey-runner-wrap { margin: 0 0 0.5rem; }
+  .survey-runner-track { position: relative; height: 56px; margin: 0 auto; max-width: 100%; }
+  .survey-runner-track-path { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); height: 28px; background: #e5e7eb; border-radius: 999px; overflow: visible; }
+  .survey-runner-track-fill { position: absolute; left: 0; top: 50%; transform: translateY(-50%); height: 28px; border-radius: 999px; background: var(--survey-prime); transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1; }
+  .survey-runner-progress-text { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 3; font-size: 0.95rem; font-weight: 800; color: #fff; letter-spacing: 0.04em; text-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 0 1px rgba(0,0,0,0.8); pointer-events: none; }
+  .survey-runner { position: absolute; top: 50%; left: 0; width: 44px; height: 44px; margin-left: -22px; transform: translateY(-50%); transition: left 0.5s cubic-bezier(0.4, 0, 0.2, 1); z-index: 2; display: flex; align-items: center; justify-content: center; }
+  .survey-runner svg { width: 44px; height: 44px; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.12)); }
+  .survey-runner-leg-left { transform-origin: 14px 26px; animation: surveyLegLeft 0.4s ease-in-out infinite; }
+  .survey-runner-leg-right { transform-origin: 14px 26px; animation: surveyLegRight 0.4s ease-in-out infinite; }
+  @keyframes surveyLegLeft { 0%, 100% { transform: rotate(-28deg); } 50% { transform: rotate(22deg); } }
+  @keyframes surveyLegRight { 0%, 100% { transform: rotate(28deg); } 50% { transform: rotate(-22deg); } }
+  #survey-agent-selection-wrap { display: none; }
+  #survey-agent-selection-wrap.survey-agent-wrap-visible { display: block !important; }
+  .revision-feedback-wrap { margin-bottom: 1.25rem; padding: 0.75rem 0; border-top: 1px solid rgba(245,158,11,0.25); }
+  .revision-feedback-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+  .revision-feedback-btn { font-size: 0.8rem; padding: 0.35rem 0.65rem; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; color: #6b7280; cursor: pointer; transition: background 0.15s, color 0.15s; }
+  .revision-feedback-btn:hover { background: #f3f4f6; color: #374151; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container survey-page">
+  <div class="survey-card-wrapper" style="max-width: 640px; margin: 0 auto;">
+    <div class="survey-hero-progress">
+      <div class="survey-runner-wrap" role="img" aria-label="{% trans '진행 중' %}">
+        <div class="survey-runner-track">
+          <div class="survey-runner-track-path"></div>
+          <div class="survey-runner-track-fill" style="width: {{ progress_pct }}%;"></div>
+          <span class="survey-runner-progress-text" aria-hidden="true">{{ step }} / {{ steps|length }}</span>
+          <div class="survey-runner" style="left: {{ progress_pct }}%;">
+            <svg viewBox="0 0 28 44" fill="none" stroke="#7c3aed" stroke-width="2.2" stroke-linecap="round" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="14" cy="10" r="6" fill="#8b5cf6"/>
+              <line x1="14" y1="16" x2="14" y2="26" class="survey-runner-body"/>
+              <line x1="14" y1="26" x2="8" y2="42" class="survey-runner-leg-left"/>
+              <line x1="14" y1="26" x2="20" y2="42" class="survey-runner-leg-right"/>
+              <line x1="14" y1="18" x2="22" y2="24" class="survey-runner-arm"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% if use_cards and current_section %}
+    <div class="card survey-section-card">
+      <h1 class="survey-card-title">{{ current_section.title }}</h1>
+      {% if current_section.description %}
+      <p class="survey-card-description">{{ current_section.description }}</p>
+      {% endif %}
+    {% else %}
+    <div class="card survey-section-card">
+      <h1 class="survey-card-title">{% trans "설문" %}</h1>
+    {% endif %}
+
+    {% if use_cards and current_section.title == '서비스 진행 방식' %}
+    <div class="survey-selected-services-summary" style="margin-bottom: 1.5rem; padding: 1.25rem; border-radius: 12px; background: #f0fdf4; border: 1px solid #86efac;">
+      <p style="font-weight: 600; margin: 0 0 0.75rem; color: #166534; font-size: 1rem;">✓ {% trans "선택하신 서비스" %}</p>
+      {% if selected_services_display %}
+      <ul style="list-style: none; padding: 0; margin: 0;">
+        {% for code, name in selected_services_display %}
+        <li style="padding: 0.5rem 0; border-bottom: 1px solid #bbf7d0; display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem;">
+          <span style="color: #15803d;" aria-hidden="true">✓</span> <span>{{ name }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      <p style="margin: 0.75rem 0 0; font-size: 0.9rem; color: #166534;">{% trans "아래에서 이 서비스들을 어떻게 진행하고 싶은지 선택해 주세요." %}</p>
+      {% else %}
+      <p class="text-muted" style="margin: 0; font-size: 0.9rem;">{% trans "이전 단계(희망 서비스)에서 서비스를 선택해 주시면 여기에 표시됩니다." %}</p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% if submission %}
+    <p class="text-muted" style="margin-bottom: 1rem; font-size: 0.9rem;">💾 {% trans "마지막 저장" %}: {{ submission.updated_at|date:"Y-m-d H:i" }}</p>
+    {% endif %}
+    {% if is_revision_requested %}
+    <div class="revision-requested-notice" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 1px solid #f59e0b; border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1.25rem; font-size: 0.95rem; box-shadow: 0 2px 8px rgba(245,158,11,0.15);">
+      <strong>✏️ {% trans "수정이 요청되었습니다." %}</strong>
+      {% if revision_requested_message %}<p style="margin: 0.35rem 0 0;">{{ revision_requested_message }}</p>{% endif %}
+      {% if sections_need_update_titles %}
+      <p style="margin: 0.5rem 0 0;"><strong>{% trans "수정할 카드" %}:</strong> {{ sections_need_update_titles|join:", " }}</p>
+      {% endif %}
+      <p style="margin: 0.35rem 0 0; color: var(--color-muted); font-size: 0.9rem;">{% trans "다른 카드도 함께 수정할 수 있습니다." %}</p>
+    </div>
+    {% if request_id %}
+    <div class="revision-feedback-wrap" id="revision-feedback-wrap" data-request-id="{{ request_id }}" data-page-key="{{ revision_feedback_page_key|default:'' }}" data-feedback-url="{% url 'survey:survey_revision_feedback' %}">
+      <p class="revision-feedback-label" style="margin: 0 0 0.4rem; font-size: 0.85rem; color: var(--color-muted);">{% trans "피드백 (선택)" %}:</p>
+      <div class="revision-feedback-buttons" id="revision-feedback-buttons">
+        <button type="button" class="revision-feedback-btn" data-feedback-value="corrected_here" aria-label="{% trans '여기서 수정했어요' %}">{% trans "여기서 수정했어요" %}</button>
+        <span class="revision-feedback-btn-wrap" data-extension="other-pages">
+          <button type="button" class="revision-feedback-btn" data-feedback-value="used_other_page" data-extension-trigger="other-pages" aria-label="{% trans '다른 페이지에서 했어요' %}">{% trans "다른 페이지에서 했어요" %}</button>
+          {% comment %} 확장: 클릭 시 이 영역에 다른 수정 페이지 링크 목록을 채울 수 있음 (data-extension-placeholder="other-pages") {% endcomment %}
+          <div class="js-feedback-other-pages-links revision-feedback-other-pages" data-extension-placeholder="other-pages" style="display: none; margin-top: 0.5rem;"></div>
+        </span>
+        <button type="button" class="revision-feedback-btn" data-feedback-value="could_not_find" data-fallback-flow="admin_review" aria-label="{% trans '못 찾겠어요' %}">{% trans "못 찾겠어요" %}</button>
+      </div>
+      <p class="revision-feedback-thanks" id="revision-feedback-thanks" style="display: none; margin: 0.35rem 0 0; font-size: 0.9rem; color: var(--color-muted);">{% trans "감사합니다." %}</p>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <form id="survey-form" method="post" action="{% url 'survey:survey_step_save' step=step %}">
+      {% csrf_token %}
+      <input type="hidden" name="email" id="id_email" value="{{ submission.email|default:request.user.email|default:'' }}">
+      {% if request_id %}<input type="hidden" name="request_id" value="{{ request_id }}">{% endif %}
+
+      {% for q in questions %}
+      {% if q.key != 'airport_pickup_date' and q.key != 'flight_number' and q.key != 'airport_arrival_time' %}
+      <div class="form-group {% if q.key == 'desired_housing_type' %}desired-housing-type-group{% endif %} {% if q.key == 'airport_name' %}airport-pickup-details-group{% endif %}{% if q.key == 'chat_app_type' or q.key == 'chat_app_id' %} survey-field-hidden{% endif %}" data-key="{{ q.key }}" id="{% if q.key == 'airport_name' %}airport-pickup-details-wrap{% endif %}" style="{% if q.key == 'airport_name' %}display: none; margin-top: 1rem; padding: 1rem; border-radius: 12px; background: #eff6ff; border: 1px solid #93c5fd;{% endif %}{% if q.key == 'chat_app_type' or q.key == 'chat_app_id' %} display: none !important;{% endif %}">
+        {% if q.key != 'airport_name' %}
+        <label for="id_{{ q.key }}">
+          {{ q.label }}{% if q.required %} <span style="color:#dc2626;">*</span>{% endif %}
+        </label>
+        {% if q.help_text %}<p class="text-muted" style="font-size:0.9rem; margin:0.25rem 0 0.5rem;">{{ q.help_text }}</p>{% endif %}
+        {% endif %}
+
+        {% if q.key == 'airport_name' %}
+        {% comment %} 공항 픽업 선택 시에만 노출: 공항 이름, 날짜, 항공편, 도착 시간 {% endcomment %}
+        <p style="font-weight:600; margin:0 0 0.75rem;">공항 픽업 상세 정보</p>
+        {% for aq in questions %}
+        {% if aq.key == 'airport_name' or aq.key == 'airport_pickup_date' or aq.key == 'flight_number' or aq.key == 'airport_arrival_time' %}
+        <div class="form-group" style="margin-bottom:0.75rem;">
+          <label for="id_{{ aq.key }}">{{ aq.label }}</label>
+          {% if aq.field_type == 'text' %}
+          <input type="text" name="{{ aq.key }}" id="id_{{ aq.key }}" class="form-input" value="{{ answers|get_item:aq.key }}" placeholder="{{ aq.placeholder|default:'' }}">
+          {% elif aq.field_type == 'date' %}
+          <input type="date" name="{{ aq.key }}" id="id_{{ aq.key }}" class="form-input" value="{{ answers|get_item:aq.key }}">
+          {% endif %}
+        </div>
+        {% endif %}
+        {% endfor %}
+        {% elif q.field_type == 'text' or q.field_type == 'email' %}
+        <input type="{{ q.field_type }}" name="{{ q.key }}" id="id_{{ q.key }}" class="form-input"
+          value="{{ answers|get_item:q.key }}"
+          {% if q.placeholder %}placeholder="{{ q.placeholder }}"{% endif %}
+          {% if q.required %}required{% endif %}>
+
+        {% elif q.field_type == 'textarea' %}
+        <textarea name="{{ q.key }}" id="id_{{ q.key }}" class="form-input" rows="4"
+          {% if q.placeholder %}placeholder="{{ q.placeholder }}"{% endif %}
+          {% if q.required %}required{% endif %}>{{ answers|get_item:q.key }}</textarea>
+
+        {% elif q.field_type == 'number' %}
+        <input type="number" name="{{ q.key }}" id="id_{{ q.key }}" class="form-input"
+          value="{{ answers|get_item:q.key }}"
+          {% if q.placeholder %}placeholder="{{ q.placeholder }}"{% endif %}
+          {% if q.required %}required{% endif %}>
+
+        {% elif q.field_type == 'date' %}
+        <input type="date" name="{{ q.key }}" id="id_{{ q.key }}" class="form-input"
+          value="{{ answers|get_item:q.key }}"
+          {% if q.required %}required{% endif %}>
+
+        {% elif q.field_type == 'select' %}
+        <select name="{{ q.key }}" id="id_{{ q.key }}" class="form-input" {% if q.required %}required{% endif %}>
+          <option value="">{% trans "선택하세요" %}</option>
+          {% for opt in q.choices %}
+          <option value="{{ opt.value|default:opt }}" {% if answers|get_item:q.key == opt.value or answers|get_item:q.key == opt %}selected{% endif %}>{{ opt.label|default:opt }}</option>
+          {% endfor %}
+        </select>
+
+        {% elif q.key == 'service_delivery_mode' %}
+        {% comment %} 일괄 vs 서비스별 선택 (필수) {% endcomment %}
+        <div class="survey-delivery-mode-options" style="display:flex; flex-direction:column; gap:0.75rem;">
+          {% for opt in q.choices %}
+          <label class="survey-delivery-option" style="display:flex; align-items:flex-start; gap:0.75rem; padding:1rem 1.25rem; border:2px solid #e5e7eb; border-radius:12px; cursor:pointer; transition: border-color 0.2s, background 0.2s; background:#fff;">
+            <input type="radio" name="{{ q.key }}" value="{{ opt.value|default:opt }}" style="margin-top:0.25rem;" class="js-delivery-mode" required
+              {% if answers|get_item:q.key == opt.value or answers|get_item:q.key == opt %}checked{% endif %}>
+            <span><strong>{{ opt.label|default:opt }}</strong></span>
+          </label>
+          {% endfor %}
+        </div>
+        {% elif q.key == 'service_delivery_preference' %}
+        {% comment %} 일괄 적용 선택 시에만 노출: 직접 검색 / AI / Agent 카드형 선택 {% endcomment %}
+        <div id="service-delivery-bulk-wrap" class="survey-delivery-bulk" style="margin-top:0.5rem; display:none;">
+        {% if q.help_text %}<p class="text-muted" style="font-size:0.9rem; margin:0 0 0.75rem;">{{ q.help_text }}</p>{% endif %}
+        <div class="survey-delivery-options" style="display:flex; flex-direction:column; gap:0.75rem;">
+          {% for opt in q.choices %}
+          <label class="survey-delivery-option" style="display:flex; align-items:flex-start; gap:0.75rem; padding:1rem 1.25rem; border:2px solid #e5e7eb; border-radius:12px; cursor:pointer; transition: border-color 0.2s, background 0.2s; background:#fff;">
+            <input type="radio" name="{{ q.key }}" value="{{ opt.value|default:opt }}" style="margin-top:0.25rem;"
+              {% if answers|get_item:q.key == opt.value or answers|get_item:q.key == opt %}checked{% endif %}
+              {% if q.required %}required{% endif %}>
+            <span>
+              <strong style="display:block; margin-bottom:0.25rem;">{{ opt.label|default:opt }}</strong>
+              {% if opt.value == 'direct_search' %}<span style="font-size:0.9rem; color:#6b7280;">스스로 검색·준비하시는 방식이에요.</span>{% endif %}
+              {% if opt.value == 'ai_service' %}<span style="font-size:0.9rem; color:#6b7280;">AI가 단계별 안내와 추천을 해 드려요.</span>{% endif %}
+              {% if opt.value == 'agent_direct' %}<span style="font-size:0.9rem; color:#6b7280;">에이전트가 직접 만나거나 대행해 드려요.</span>{% endif %}
+            </span>
+          </label>
+          {% endfor %}
+        </div>
+        </div>
+        {% elif q.field_type == 'radio' %}
+        <div style="display:flex; flex-direction:column; gap:0.5rem;">
+          {% for opt in q.choices %}
+          <label style="display:flex; align-items:center; gap:0.5rem; font-weight:400; cursor:pointer;">
+            <input type="radio" name="{{ q.key }}" value="{{ opt.value|default:opt }}"
+              {% if answers|get_item:q.key == opt.value or answers|get_item:q.key == opt %}checked{% endif %}
+              {% if q.required %}required{% endif %}>
+            <span>{{ opt.label|default:opt }}</span>
+          </label>
+          {% endfor %}
+        </div>
+
+        {% elif q.field_type == 'checkbox' and q.key == 'requested_required_services' %}
+        {% comment %} 희망 서비스: 카테고리별 카드, 중복 체크 가능 {% endcomment %}
+        <div class="survey-service-list survey-service-by-category" data-key="{{ q.key }}">
+          {% for cat, items in services_by_category.items %}
+          <div class="survey-category-card" data-category="{{ cat }}" style="border: 1px solid #e5e7eb; border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1rem; background: #fafafa;">
+            <strong class="survey-category-title" style="display: block; margin-bottom: 0.75rem; font-size: 1rem; color: #374151;">{{ cat }}</strong>
+            <ul style="list-style:none; padding:0; margin:0;">
+              {% for code, name in items %}
+              <li style="margin-bottom:0.5rem;">
+                <label style="display:flex; align-items:center; gap:0.5rem; font-weight:400; cursor:pointer;">
+                  <input type="checkbox" name="requested_required_services_cb" value="{{ code }}" data-key="requested_required_services" data-category="{{ cat }}" {% if code|in_list:selected_required_services %}checked{% endif %}>
+                  <span>{{ name }}</span>
+                  <span class="text-muted" style="font-size:0.85rem;"> – {{ price_masked_label }}</span>
+                </label>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% empty %}
+          <p class="text-muted">{% trans "등록된 서비스가 없습니다." %}</p>
+          {% endfor %}
+        </div>
+        <input type="hidden" name="requested_required_services" id="id_requested_required_services_json" value="{{ selected_required_services|json_dumps }}">
+
+        {% elif q.key == 'desired_housing_type' %}
+        {% comment %} 주거/임대 서비스 선택 시에만 노출 {% endcomment %}
+        <div id="desired-housing-type-wrap" class="survey-conditional-housing" style="display: none; margin-top: 1rem; padding: 1rem; border-radius: 12px; background: #f5f3ff; border: 1px solid #c4b5fd;">
+          <label for="id_desired_housing_type" style="display:block; margin-bottom:0.5rem; font-weight:600;">{{ q.label }}</label>
+          {% if q.help_text %}<p class="text-muted" style="font-size:0.9rem; margin:0 0 0.5rem;">{{ q.help_text }}</p>{% endif %}
+          <select name="{{ q.key }}" id="id_{{ q.key }}" class="form-input">
+            <option value="">{% trans "선택하세요" %}</option>
+            {% for opt in q.choices %}
+            <option value="{{ opt.value|default:opt }}" {% if answers|get_item:q.key == opt.value or answers|get_item:q.key == opt %}selected{% endif %}>{{ opt.label|default:opt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        {% elif q.key == 'airport_pickup_date' or q.key == 'flight_number' or q.key == 'airport_arrival_time' %}
+        {% comment %} 공항 픽업 상세는 airport_name 블록에서 한 번에 렌더 {% endcomment %}
+        {% elif q.field_type == 'checkbox' and q.key == 'requested_optional_services' %}
+        {% comment %} 서비스 선택: 가격 노출 금지, 견적 후 공개 마스킹 {% endcomment %}
+        <div class="survey-service-list" data-key="{{ q.key }}">
+          {% for cat, items in services_by_category.items %}
+          <div style="margin-bottom:1rem;">
+            <strong>{{ cat }}</strong>
+            <ul style="list-style:none; padding:0; margin:0.25rem 0 0;">
+              {% for code, name in items %}
+              <li style="margin-bottom:0.35rem;">
+                <label style="display:flex; align-items:center; gap:0.5rem; font-weight:400; cursor:pointer;">
+                  <input type="checkbox" name="requested_optional_services_cb" value="{{ code }}" data-key="requested_optional_services" {% if code|in_list:selected_optional_services %}checked{% endif %}>
+                  <span>{{ name }}</span>
+                  <span class="text-muted" style="font-size:0.85rem;"> – {{ price_masked_label }}</span>
+                </label>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% empty %}
+          <p class="text-muted">{% trans "등록된 서비스가 없습니다." %}</p>
+          {% endfor %}
+        </div>
+        <input type="hidden" name="requested_optional_services" id="id_requested_optional_services_json" value="{{ selected_optional_services|json_dumps }}">
+
+        {% elif q.key == 'chat_app_type' or q.key == 'chat_app_id' %}
+        <input type="hidden" name="{{ q.key }}" id="id_{{ q.key }}" value="{{ answers|get_item:q.key }}">
+        {% else %}
+        <input type="text" name="{{ q.key }}" id="id_{{ q.key }}" class="form-input"
+          value="{{ answers|get_item:q.key }}"
+          {% if q.required %}required{% endif %}>
+        {% endif %}
+      </div>
+      {% endif %}
+      {% empty %}
+      <p class="text-muted">{% trans "이 단계에 문항이 없습니다. 이전/다음으로 이동하세요." %}</p>
+      {% endfor %}
+
+      {% if use_cards and current_section.title == '서비스 진행 방식' and selected_services_with_delivery %}
+      <div id="service-delivery-per-service-wrap" class="survey-delivery-per-service" style="display: none; margin-top: 1rem; padding: 1.25rem; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0;">
+        <p style="font-weight: 600; margin: 0 0 1rem; font-size: 1rem;">{% trans "서비스별 진행 방식" %}</p>
+        {% for code, name, current_val in selected_services_with_delivery %}
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label for="id_service_delivery_{{ code }}" style="display:block; margin-bottom:0.35rem; font-weight:500;">{{ name }}</label>
+          <select name="service_delivery_{{ code }}" id="id_service_delivery_{{ code }}" class="form-input">
+            <option value="">{% trans "선택하세요" %}</option>
+            <option value="direct_search" {% if current_val == 'direct_search' %}selected{% endif %}>{% trans "직접 검색" %}</option>
+            <option value="ai_service" {% if current_val == 'ai_service' %}selected{% endif %}>{% trans "AI 서비스" %}</option>
+            <option value="agent_direct" {% if current_val == 'agent_direct' %}selected{% endif %}>{% trans "Agent 직접 도움" %}</option>
+          </select>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if on_delivery_step %}
+      <input type="hidden" id="id_requested_required_services_json" value="{{ selected_required_services|json_dumps }}">
+      <input type="hidden" name="preferred_agent_id" id="id_preferred_agent_id" value="{{ preferred_agent_id|default:'' }}">
+      {% endif %}
+
+      <div class="survey-actions">
+        {% if is_revision_requested %}
+        {% if prev_step %}
+        <a href="{% url 'survey:survey_step' step=prev_step %}{% if request_id %}?request_id={{ request_id }}{% endif %}" class="btn btn-outline">← {% trans "이전" %}</a>
+        {% else %}
+        <span class="btn btn-outline" style="opacity:0.5; cursor:default; pointer-events:none;">← {% trans "이전" %}</span>
+        {% endif %}
+        {% if next_step %}
+        <button type="button" id="btn-next" class="btn btn-survey-next" data-next="{{ next_step }}">{% trans "다음" %} →</button>
+        {% else %}
+        <span class="btn btn-survey-next" style="opacity:0.5; cursor:default; pointer-events:none;">{% trans "다음" %} →</span>
+        {% endif %}
+        <button type="button" id="btn-submit" class="btn btn-survey-submit">✓ {% trans "최종 제출" %}</button>
+        {% else %}
+        {% if prev_step %}
+        <a href="{% url 'survey:survey_step' step=prev_step %}{% if request_id %}?request_id={{ request_id }}{% endif %}" class="btn btn-outline">← {% trans "이전" %}</a>
+        {% endif %}
+        {% if next_step %}
+        <button type="button" id="btn-next" class="btn btn-survey-next" data-next="{{ next_step }}">{% trans "다음" %} →</button>
+        {% else %}
+        <button type="button" id="btn-submit" class="btn btn-survey-submit">✓ {% trans "최종 제출" %}</button>
+        {% endif %}
+        {% endif %}
+      </div>
+    </form>
+
+    <p id="save-status" class="text-muted" style="margin-top:0.75rem; font-size:0.9rem;"></p>
+    {% if use_cards and current_section %}</div>{% endif %}
+    {% if not use_cards %}</div>{% endif %}
+  </div>
+</div>
+
+<script>
+(function() {
+  var form = document.getElementById('survey-form');
+  var step = {{ step }};
+  var saveUrl = "{% url 'survey:survey_step_save' step=step %}";
+  var submitUrl = "{% url 'survey:survey_submit' %}";
+  var stepBaseUrl = "{% url 'survey:survey_step' step=1 %}".replace(/\/1\/$/, '/');
+  var statusEl = document.getElementById('save-status');
+  var autosaveTimer = null;
+  var AUTOSAVE_DELAY_MS = 3000;
+
+  function getFormData() {
+    var fd = new FormData(form);
+    fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+    var visibleEmail = form.querySelector('input[name="email"]:not([type="hidden"])');
+    var emailVal = visibleEmail ? visibleEmail.value : (document.getElementById('id_email') && document.getElementById('id_email').value);
+    if (emailVal !== undefined && emailVal !== null) fd.set('email', emailVal);
+    var hidReq = document.getElementById('id_requested_required_services_json');
+    var hidOpt = document.getElementById('id_requested_optional_services_json');
+    if (hidReq) {
+      var reqRequired = [];
+      var reqCbs = form.querySelectorAll('input[name="requested_required_services_cb"]:checked');
+      if (reqCbs.length) {
+        reqCbs.forEach(function(cb) { reqRequired.push(cb.value); });
+      } else if (hidReq.value) {
+        try { reqRequired = JSON.parse(hidReq.value); } catch (e) { reqRequired = []; }
+        if (!Array.isArray(reqRequired)) reqRequired = [];
+      }
+      fd.set('requested_required_services', JSON.stringify(reqRequired));
+    }
+    if (hidOpt) {
+      var reqOptional = [];
+      var optCbs = form.querySelectorAll('input[name="requested_optional_services_cb"]:checked');
+      if (optCbs.length) {
+        optCbs.forEach(function(cb) { reqOptional.push(cb.value); });
+      } else if (hidOpt.value) {
+        try { reqOptional = JSON.parse(hidOpt.value); } catch (e) { reqOptional = []; }
+        if (!Array.isArray(reqOptional)) reqOptional = [];
+      }
+      fd.set('requested_optional_services', JSON.stringify(reqOptional));
+    }
+    return fd;
+  }
+
+  function syncServiceCheckboxesToHidden() {
+    var keys = ['requested_required_services', 'requested_optional_services'];
+    keys.forEach(function(key) {
+      var checkboxes = form.querySelectorAll('input[name="' + key + '_cb"]');
+      if (!checkboxes.length) return;
+      var arr = Array.from(form.querySelectorAll('input[name="' + key + '_cb"]:checked')).map(function(c) { return c.value; });
+      var hid = document.getElementById('id_' + key + '_json');
+      if (hid) hid.value = JSON.stringify(arr);
+    });
+  }
+
+  form.querySelectorAll('input[type=checkbox][data-key]').forEach(function(cb) {
+    cb.addEventListener('change', function() { syncServiceCheckboxesToHidden(); });
+  });
+
+  var HOUSING_CATEGORY = '주거/임대';
+  var housingWrap = document.getElementById('desired-housing-type-wrap');
+  var housingGroup = document.querySelector('.desired-housing-type-group');
+  function toggleHousingTypeVisibility() {
+    var anyHousingChecked = form.querySelectorAll('input[name="requested_required_services_cb"][data-category="' + HOUSING_CATEGORY + '"]:checked').length > 0;
+    if (housingWrap) housingWrap.style.display = anyHousingChecked ? 'block' : 'none';
+    if (housingGroup) housingGroup.style.display = anyHousingChecked ? 'block' : 'none';
+  }
+  form.querySelectorAll('input[name="requested_required_services_cb"]').forEach(function(cb) {
+    cb.addEventListener('change', toggleHousingTypeVisibility);
+  });
+  toggleHousingTypeVisibility();
+
+  var AIRPORT_PICKUP_CODE = 'AIRPORT_PICKUP';
+  var airportWrap = document.getElementById('airport-pickup-details-wrap');
+  function toggleAirportPickupVisibility() {
+    var airportChecked = form.querySelectorAll('input[name="requested_required_services_cb"][value="' + AIRPORT_PICKUP_CODE + '"]:checked').length > 0;
+    if (airportWrap) airportWrap.style.display = airportChecked ? 'block' : 'none';
+  }
+  form.querySelectorAll('input[name="requested_required_services_cb"]').forEach(function(cb) {
+    cb.addEventListener('change', toggleAirportPickupVisibility);
+  });
+  toggleAirportPickupVisibility();
+
+  var bulkWrap = document.getElementById('service-delivery-bulk-wrap');
+  var perServiceWrap = document.getElementById('service-delivery-per-service-wrap');
+  var prefFormGroup = form.querySelector('.form-group[data-key="service_delivery_preference"]');
+  function toggleDeliveryModeVisibility() {
+    var checked = form.querySelector('input[name="service_delivery_mode"]:checked');
+    var mode = checked ? checked.value : '';
+    if (bulkWrap) bulkWrap.style.display = mode === 'bulk' ? 'block' : 'none';
+    if (perServiceWrap) perServiceWrap.style.display = mode === 'per_service' ? 'block' : 'none';
+    if (prefFormGroup) prefFormGroup.style.display = mode === 'bulk' ? '' : 'none';
+    var prefRadios = form.querySelectorAll('input[name="service_delivery_preference"]');
+    if (mode === 'bulk') {
+      prefRadios.forEach(function(r) { r.setAttribute('required', 'required'); });
+    } else {
+      prefRadios.forEach(function(r) { r.removeAttribute('required'); });
+    }
+  }
+  toggleDeliveryModeVisibility();
+
+  function toggleAgentWrapVisibility() {
+    var wrap = document.getElementById('survey-agent-selection-wrap');
+    var modeEl = form.querySelector('input[name="service_delivery_mode"]:checked');
+    var mode = modeEl ? String(modeEl.value) : '';
+    var shouldShow = false;
+    if (mode === 'per_service') {
+      var selects = form.querySelectorAll('select[name^="service_delivery_"]');
+      for (var i = 0; i < selects.length; i++) {
+        if (selects[i].name === 'service_delivery_mode') continue;
+        if (String(selects[i].value) === 'agent_direct') { shouldShow = true; break; }
+      }
+    } else {
+      var pref = form.querySelector('input[name="service_delivery_preference"]:checked');
+      if (pref && String(pref.value) === 'agent_direct') shouldShow = true;
+    }
+    var preferredAgentInput = document.getElementById('id_preferred_agent_id');
+    if (preferredAgentInput) {
+      preferredAgentInput.value = shouldShow ? 'admin_assign' : '';
+    }
+    if (wrap) {
+      wrap.style.setProperty('display', 'none', 'important');
+    }
+  }
+  form.addEventListener('change', function(e) {
+    var t = e.target;
+    if (!t || !t.name) return;
+    if (t.name === 'service_delivery_mode') {
+      toggleDeliveryModeVisibility();
+      toggleAgentWrapVisibility();
+    } else if (t.name === 'service_delivery_preference') {
+      toggleAgentWrapVisibility();
+    } else if (t.name.indexOf('service_delivery_') === 0) {
+      toggleAgentWrapVisibility();
+    }
+  });
+  toggleAgentWrapVisibility();
+
+  (function initAgentSelectionHandlers() {
+    var root = document.getElementById('survey-agent-selection-root');
+    if (!root) return;
+
+    function getAgentsJson() {
+      var el = document.getElementById('survey-agents-json');
+      if (!el || !el.textContent) return [];
+      try { return JSON.parse(el.textContent); } catch (e) { return []; }
+    }
+
+    function openAgentModal(agent, onSelect) {
+      var backdrop = document.getElementById('survey-agent-modal-backdrop');
+      var body = document.getElementById('survey-agent-modal-body');
+      var selectBtn = document.getElementById('survey-agent-modal-select');
+      if (!backdrop || !body) return;
+      var name = (agent && (agent.name || agent.username)) || '';
+      body.innerHTML =
+        '<div style="text-align:center;margin-bottom:1rem;">' +
+          (agent && agent.profile_image_url
+            ? '<img src="' + agent.profile_image_url + '" alt="" style="width:100px;height:100px;border-radius:50%;object-fit:cover;">'
+            : '<div style="width:100px;height:100px;border-radius:50%;background:#e5e7eb;margin:0 auto;line-height:100px;font-size:2rem;color:#6b7280;">' + (name[0] || '?') + '</div>') +
+        '</div>' +
+        '<p style="margin:0 0 0.5rem;font-weight:600;font-size:1.1rem;">' + name + '</p>' +
+        (agent && agent.states && agent.states.length ? '<p style="margin:0 0 0.5rem;font-size:0.9rem;color:#64748b;">{% trans "커버 지역" %}: ' + agent.states.join(', ') + '</p>' : '') +
+        (agent && agent.service_names && agent.service_names.length ? '<p style="margin:0 0 0.5rem;font-size:0.9rem;color:#64748b;">{% trans "담당 서비스" %}: ' + agent.service_names.join(', ') + '</p>' : '') +
+        '<p style="margin:0 0 0.25rem;font-size:0.9rem;">{% trans "수락률" %}: ' + (agent && agent.accept_rate_display || '-') + '</p>' +
+        (agent && agent.rating_avg ? '<p style="margin:0;font-size:0.9rem;">★ ' + agent.rating_avg + (agent.rating_count ? ' ({% trans "평가" %} ' + agent.rating_count + ')' : '') + '</p>' : '');
+      selectBtn.onclick = function() {
+        if (typeof onSelect === 'function') onSelect();
+        backdrop.style.display = 'none';
+      };
+      backdrop.style.display = 'flex';
+    }
+
+    function rebindAgentSelectionHandlers() {
+      var backdrop = document.getElementById('survey-agent-modal-backdrop');
+      var modalEl = document.getElementById('survey-agent-modal');
+      if (backdrop && modalEl) {
+        function closeModal() { backdrop.style.display = 'none'; }
+        var closeBtn = document.getElementById('survey-agent-modal-close');
+        var closeBtn2 = document.getElementById('survey-agent-modal-close-btn');
+        if (closeBtn) closeBtn.onclick = closeModal;
+        if (closeBtn2) closeBtn2.onclick = closeModal;
+        backdrop.onclick = function(e) { if (e.target === backdrop) closeModal(); };
+        modalEl.onclick = function(e) { e.stopPropagation(); };
+      }
+      var listEl = document.getElementById('survey-agent-list');
+      var hidEl = document.getElementById('id_preferred_agent_id');
+      if (!listEl || !hidEl) return;
+      var agents = getAgentsJson();
+      listEl.querySelectorAll('.survey-agent-card').forEach(function(card) {
+        var agentId = card.getAttribute('data-agent-id');
+        card.onclick = function(e) {
+          if (e.target.closest('button')) return;
+          listEl.querySelectorAll('.survey-agent-card').forEach(function(c) { c.style.borderColor = '#e5e7eb'; c.style.boxShadow = 'none'; });
+          card.style.borderColor = '#16a34a';
+          card.style.boxShadow = '0 0 0 1px #16a34a';
+          hidEl.value = String(agentId || '');
+        };
+        var detailBtn = card.querySelector('.survey-agent-detail-btn');
+        if (detailBtn) {
+          detailBtn.onclick = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var a = agents.filter(function(x) { return String(x.id) === String(agentId); })[0];
+            openAgentModal(a, function() {
+              listEl.querySelectorAll('.survey-agent-card').forEach(function(c) { c.style.borderColor = '#e5e7eb'; c.style.boxShadow = 'none'; });
+              card.style.borderColor = '#16a34a';
+              card.style.boxShadow = '0 0 0 1px #16a34a';
+              hidEl.value = String(agentId || '');
+            });
+          };
+        }
+      });
+    }
+
+    rebindAgentSelectionHandlers();
+  })();
+
+  function showStatus(msg, isError, isSaved) {
+    if (!statusEl) return;
+    statusEl.textContent = msg;
+    statusEl.className = 'text-muted' + (isSaved ? ' saved' : '');
+    statusEl.style.color = isError ? '#dc2626' : (isSaved ? '#059669' : 'var(--color-muted)');
+  }
+
+  function doSave(cb) {
+    syncServiceCheckboxesToHidden();
+    var fd = getFormData();
+    if (!cb) showStatus('저장 중…', false, false);
+    fetch(saveUrl, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.ok) { showStatus('✓ 저장되었어요!', false, true); if (cb) cb(); }
+        else { showStatus(data.error || '저장 실패', true); if (cb) cb(true); }
+      })
+      .catch(function() { showStatus('저장 중 오류', true); if (cb) cb(true); });
+  }
+
+  var requestIdEl = form.querySelector('input[name="request_id"]');
+  var requestId = requestIdEl ? requestIdEl.value : '';
+  var btnNext = document.getElementById('btn-next');
+  if (btnNext) btnNext.addEventListener('click', function() {
+    if (!form.checkValidity()) { form.reportValidity(); return; }
+    var next = this.getAttribute('data-next');
+    doSave(function(err) {
+      if (!err && next) {
+        var url = stepBaseUrl + next + '/';
+        if (requestId) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'request_id=' + encodeURIComponent(requestId);
+        window.location.href = url;
+      }
+    });
+  });
+
+  var submitForm = document.createElement('form');
+  submitForm.method = 'POST';
+  submitForm.action = submitUrl;
+  submitForm.style.display = 'none';
+  var csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+  if (csrf) submitForm.appendChild(csrf.cloneNode(true));
+  var ridInput = form.querySelector('input[name="request_id"]');
+  if (ridInput && ridInput.value) {
+    var r = document.createElement('input');
+    r.type = 'hidden';
+    r.name = 'request_id';
+    r.value = ridInput.value;
+    submitForm.appendChild(r);
+  }
+  document.body.appendChild(submitForm);
+
+  var btnSubmit = document.getElementById('btn-submit');
+  if (btnSubmit) btnSubmit.addEventListener('click', function() {
+    if (!form.checkValidity()) { form.reportValidity(); return; }
+    doSave(function(err) {
+      if (!err) submitForm.submit();
+    });
+  });
+
+  (function initRevisionFeedback() {
+    var wrap = document.getElementById('revision-feedback-wrap');
+    if (!wrap) return;
+    var buttons = document.getElementById('revision-feedback-buttons');
+    var thanks = document.getElementById('revision-feedback-thanks');
+    var feedbackUrl = wrap.getAttribute('data-feedback-url');
+    var requestId = wrap.getAttribute('data-request-id');
+    var pageKey = wrap.getAttribute('data-page-key') || '';
+    var csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (!feedbackUrl || !requestId || !csrfInput) return;
+    wrap.querySelectorAll('.revision-feedback-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var value = btn.getAttribute('data-feedback-value');
+        if (!value) return;
+        btn.disabled = true;
+        var body = JSON.stringify({ request_id: requestId, value: value, page_key: pageKey || undefined });
+        var req = new XMLHttpRequest();
+        req.open('POST', feedbackUrl);
+        req.setRequestHeader('Content-Type', 'application/json');
+        req.setRequestHeader('X-CSRFToken', csrfInput.value);
+        req.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        req.onload = function() {
+          if (buttons) buttons.style.display = 'none';
+          if (thanks) thanks.style.display = 'block';
+          if (value === 'used_other_page') {
+            var otherLinks = wrap.querySelector('.js-feedback-other-pages-links');
+            if (otherLinks && typeof window.revisionFeedbackShowOtherPages === 'function') {
+              window.revisionFeedbackShowOtherPages(otherLinks, wrap);
+            }
+          }
+          if (value === 'could_not_find') {
+            var fallbackUrl = wrap.getAttribute('data-fallback-url');
+            if (fallbackUrl && typeof window.revisionFeedbackCouldNotFind === 'function') {
+              window.revisionFeedbackCouldNotFind(wrap, fallbackUrl);
+            }
+          }
+        };
+        req.onerror = function() { btn.disabled = false; };
+        req.send(body);
+      });
+    });
+  })();
+
+  if (AUTOSAVE_DELAY_MS > 0) {
+    form.querySelectorAll('input, textarea, select').forEach(function(el) {
+      el.addEventListener('input', function() {
+        clearTimeout(autosaveTimer);
+        autosaveTimer = setTimeout(function() { doSave(); }, AUTOSAVE_DELAY_MS);
+      });
+      el.addEventListener('change', function() {
+        clearTimeout(autosaveTimer);
+        autosaveTimer = setTimeout(function() { doSave(); }, 500);
+      });
+    });
+  }
+})();
+</script>
+{% endblock %}

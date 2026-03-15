@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: landinghelp
+      POSTGRES_USER: landinghelp
+      POSTGRES_PASSWORD: landinghelp
+    ports:
+      - "5432:5432"
+
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: sh -c "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.local
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: landinghelp
+      DB_USER: landinghelp
+      DB_PASSWORD: landinghelp
+    volumes:
+      - ..:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db

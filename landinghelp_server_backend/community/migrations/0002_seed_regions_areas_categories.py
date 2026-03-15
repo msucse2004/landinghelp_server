@@ -1,0 +1,97 @@
+# Data migration: 지역, 카테고리 시드
+
+from django.db import migrations
+
+
+def seed(apps, schema_editor):
+    Region = apps.get_model('community', 'Region')
+    Area = apps.get_model('community', 'Area')
+    PostCategory = apps.get_model('community', 'PostCategory')
+
+    regions_data = [
+        ('WEST', '서부지역', 1),
+        ('CENTRAL', '중부지역', 2),
+        ('EAST', '동부지역', 3),
+    ]
+    region_map = {}
+    for code, name, order in regions_data:
+        r, _ = Region.objects.get_or_create(code=code, defaults={'name': name, 'order': order})
+        region_map[code] = r
+
+    areas_data = [
+        ('WEST', 'AZ', 'Arizona', 'phoenix', 'Phoenix', 1),
+        ('WEST', 'CA', 'California', 'san-francisco', 'San Francisco', 2),
+        ('WEST', 'CA', 'California', 'sacramento', 'Sacramento', 3),
+        ('WEST', 'CA', 'California', 'san-jose', 'San Jose', 4),
+        ('WEST', 'CA', 'California', 'los-angeles', 'Los Angeles', 5),
+        ('WEST', 'CA', 'California', 'irvine', 'Irvine', 6),
+        ('WEST', 'CA', 'California', 'san-diego', 'San Diego', 7),
+        ('WEST', 'CO', 'Colorado', 'colorado-springs', 'Colorado Springs', 8),
+        ('WEST', 'HI', 'Hawaii', 'honolulu', 'Honolulu', 9),
+        ('WEST', 'NV', 'Nevada', 'las-vegas', 'Las Vegas', 10),
+        ('WEST', 'OR', 'Oregon', 'portland', 'Portland', 11),
+        ('WEST', 'UT', 'Utah', 'salt-lake-city', 'Salt Lake City', 12),
+        ('WEST', 'WA', 'Washington', 'seattle', 'Seattle', 13),
+        ('CENTRAL', 'IL', 'Illinois', 'chicago', 'Chicago', 1),
+        ('CENTRAL', 'IL', 'Illinois', 'champaign', 'Champaign', 2),
+        ('CENTRAL', 'KS', 'Kansas', 'kansas-city', 'Kansas City', 3),
+        ('CENTRAL', 'KY', 'Kentucky', 'louisville', 'Louisville', 4),
+        ('CENTRAL', 'MI', 'Michigan', 'detroit', 'Detroit', 5),
+        ('CENTRAL', 'MN', 'Minnesota', 'minneapolis', 'Minneapolis', 6),
+        ('CENTRAL', 'MO', 'Missouri', 'st-louis', 'St. Louis', 7),
+        ('CENTRAL', 'NE', 'Nebraska', 'omaha', 'Omaha', 8),
+        ('CENTRAL', 'OH', 'Ohio', 'columbus', 'Columbus', 9),
+        ('CENTRAL', 'OH', 'Ohio', 'cleveland', 'Cleveland', 10),
+        ('CENTRAL', 'OK', 'Oklahoma', 'oklahoma-city', 'Oklahoma City', 11),
+        ('CENTRAL', 'TN', 'Tennessee', 'nashville', 'Nashville', 12),
+        ('CENTRAL', 'TN', 'Tennessee', 'memphis', 'Memphis', 13),
+        ('CENTRAL', 'TX', 'Texas', 'dallas', 'Dallas', 14),
+        ('EAST', 'IN', 'Indiana', 'indianapolis', 'Indianapolis', 1),
+        ('EAST', 'CT', 'Connecticut', 'new-haven', 'New Haven', 2),
+        ('EAST', 'FL', 'Florida', 'miami', 'Miami', 3),
+        ('EAST', 'FL', 'Florida', 'orlando', 'Orlando', 4),
+        ('EAST', 'FL', 'Florida', 'tampa', 'Tampa', 5),
+        ('EAST', 'FL', 'Florida', 'jacksonville-gainesville', 'Jacksonville/Gainesville', 6),
+        ('EAST', 'GA', 'Georgia', 'atlanta', 'Atlanta', 7),
+        ('EAST', 'GA', 'Georgia', 'savannah', 'Savannah', 8),
+        ('EAST', 'MA', 'Massachusetts', 'boston', 'Boston', 9),
+        ('EAST', 'MD', 'Maryland', 'baltimore-dc', 'Baltimore/DC', 10),
+        ('EAST', 'NC', 'North Carolina', 'charlotte', 'Charlotte', 11),
+        ('EAST', 'NC', 'North Carolina', 'raleigh', 'Raleigh', 12),
+        ('EAST', 'NJ', 'New Jersey', 'bergen-hudson', 'Bergen/Hudson', 13),
+        ('EAST', 'NJ', 'New Jersey', 'middlesex-mercer', 'Middlesex/Mercer', 14),
+        ('EAST', 'NY', 'New York', 'manhattan-queens', 'Manhattan/Queens', 15),
+    ]
+    for reg_code, state_code, state_name, slug, city_name, order in areas_data:
+        Area.objects.get_or_create(
+            slug=slug,
+            defaults={
+                'region': region_map[reg_code],
+                'state_code': state_code,
+                'state_name': state_name,
+                'city_name': city_name,
+                'order': order,
+            },
+        )
+
+    cats_data = [
+        ('RENT', '렌트/룸메이트', 1),
+        ('BUYSELL', '사고팔고', 2),
+        ('JOB', '구인구직', 3),
+        ('LIFE_QA', '생활 Q&A', 4),
+        ('TRAVEL', '여행/맛집/쇼핑', 5),
+        ('FREE', '자유글', 6),
+        ('INFO', '정보나눔', 7),
+        ('PROMO', '홍보하기', 8),
+    ]
+    for code, name, order in cats_data:
+        PostCategory.objects.get_or_create(code=code, defaults={'name': name, 'order': order})
+
+
+def noop(apps, schema_editor):
+    pass
+
+
+class Migration(migrations.Migration):
+    dependencies = [('community', '0001_initial')]
+    operations = [migrations.RunPython(seed, noop)]

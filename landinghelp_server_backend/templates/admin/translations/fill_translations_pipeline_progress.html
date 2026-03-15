@@ -1,0 +1,115 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block title %}{{ title }}{% endblock %}
+{% block extrahead %}
+{{ block.super }}
+<style>
+  .fill-pipeline-page .page-heading { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem; white-space: nowrap; }
+  .fill-pipeline-page .page-intro { margin-bottom: 1.25rem; font-size: 0.95rem; opacity: 0.9; }
+  .fill-pipeline-progress { margin: 1.5rem 0; padding: 1.25rem; background: #fff; border: 1px solid #dee2e6; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .fill-pipeline-progress .progress-wrap { background: #e9ecef; border-radius: 8px; height: 26px; overflow: hidden; position: relative; }
+  .fill-pipeline-progress .progress-bar { background: #0d6efd; height: 100%; transition: width 0.3s ease; width: 0%; }
+  .fill-pipeline-progress .progress-wrap.indeterminate .progress-bar { width: 30% !important; animation: fillIndeterminate 1.2s ease-in-out infinite; }
+  @keyframes fillIndeterminate { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
+  .fill-pipeline-progress .progress-text { margin-top: 0.75rem; font-size: 1rem; font-weight: 600; color: #1a1a1a; }
+  .fill-pipeline-progress .progress-text.waiting { color: #0d6efd; }
+  .fill-pipeline-progress .progress-sub { margin-top: 0.35rem; font-size: 0.9rem; color: #495057; }
+  .fill-pipeline-progress .progress-done { margin-top: 1.25rem; padding: 1.25rem; background: #f0f4f8; border: 1px solid #dee2e6; border-radius: 8px; color: #1a1a1a; font-size: 1rem; }
+  .fill-pipeline-progress .progress-done strong { color: #0d0d0d; font-size: 1.05rem; }
+  .fill-pipeline-progress .progress-done pre { margin: 0.75rem 0 0; font-size: 0.95rem; white-space: pre-wrap; color: #212529; font-weight: 500; }
+  .fill-pipeline-progress .progress-done.error { background: #f8d7da; border-color: #f5c2c7; color: #721c24; }
+  .fill-pipeline-progress .progress-done.error strong { color: #58151c; }
+  .fill-pipeline-progress .progress-done.error pre { color: #721c24; }
+  .fill-pipeline-progress .spinner { display: inline-block; width: 1em; height: 1em; border: 2px solid #e9ecef; border-top-color: #0d6efd; border-radius: 50%; animation: fillSpin 0.8s linear infinite; vertical-align: middle; margin-right: 0.35rem; }
+  @keyframes fillSpin { to { transform: rotate(360deg); } }
+</style>
+{% endblock %}
+{% block content %}
+<div class="fill-pipeline-page">
+  <h1 class="page-heading">진행 상황</h1>
+  <p class="page-intro">번역 파이프라인을 실행했습니다. 아래 진행률을 확인하세요.</p>
+<div class="fill-pipeline-progress">
+  <div class="progress-wrap" id="fillProgressWrap">
+    <div class="progress-bar" id="fillProgressBar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+  </div>
+  <div class="progress-text waiting" id="fillProgressText"><span class="spinner" id="fillSpinner"></span><span id="fillProgressLabel">실행 준비 중…</span></div>
+  <div class="progress-sub" id="fillProgressSub">상태를 확인하고 있습니다. 첫 행이 나올 때까지 10~30초 걸릴 수 있습니다.</div>
+  <div class="progress-done" id="fillProgressDone" style="display: none;"></div>
+</div>
+<p><a href="{% url 'admin:translations_statictranslation_changelist' %}" id="fillBackLink" style="display: none;">고정 번역 목록으로 돌아가기</a></p>
+</div>
+<script>
+(function() {
+  var statusUrl = '{{ status_url|escapejs }}';
+  var wrap = document.getElementById('fillProgressWrap');
+  var bar = document.getElementById('fillProgressBar');
+  var text = document.getElementById('fillProgressText');
+  var label = document.getElementById('fillProgressLabel');
+  var sub = document.getElementById('fillProgressSub');
+  var spinner = document.getElementById('fillSpinner');
+  var doneEl = document.getElementById('fillProgressDone');
+  var backLink = document.getElementById('fillBackLink');
+  var pollCount = 0;
+
+  function poll() {
+    pollCount++;
+    fetch(statusUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var total = data.total || 0;
+        var current = data.current || 0;
+        var filled = data.filled || 0;
+        var done = data.done || false;
+
+        if (done) {
+          wrap.classList.remove('indeterminate');
+          bar.style.width = '100%';
+          bar.setAttribute('aria-valuenow', 100);
+          if (spinner) spinner.style.display = 'none';
+          if (label) label.textContent = '완료.';
+          text.className = 'progress-text';
+          if (sub) sub.style.display = 'none';
+          doneEl.style.display = 'block';
+          if (data.error) {
+            doneEl.className = 'progress-done error';
+            doneEl.innerHTML = '<strong>오류</strong><pre>' + (data.error || '').replace(/</g, '&lt;') + '</pre>';
+          } else {
+            doneEl.className = 'progress-done';
+            doneEl.innerHTML = '<strong>완료</strong><pre>' + (data.output || '').replace(/</g, '&lt;') + '</pre>';
+          }
+          backLink.style.display = 'inline';
+          return;
+        }
+
+        if (total > 0) {
+          wrap.classList.remove('indeterminate');
+          var pct = Math.min(100, Math.round((current / total) * 100));
+          bar.style.width = pct + '%';
+          bar.setAttribute('aria-valuenow', pct);
+          if (spinner) spinner.style.display = 'none';
+          if (label) label.textContent = current + ' / ' + total + ' 행 처리 중 (채움: ' + filled + '개)';
+          text.className = 'progress-text';
+          if (sub) { sub.style.display = 'block'; sub.textContent = '진행 중입니다. 행이 바뀌지 않아도 API 호출 중일 수 있습니다.'; }
+        } else {
+          wrap.classList.add('indeterminate');
+          if (spinner) spinner.style.display = 'inline-block';
+          if (label) label.textContent = '실행 준비 중…';
+          text.className = 'progress-text waiting';
+          if (sub) {
+            sub.style.display = 'block';
+            sub.textContent = pollCount > 3 ? '백그라운드에서 파이프라인을 시작 중입니다. 잠시만 기다려 주세요.' : '상태를 확인하고 있습니다. 첫 행이 나올 때까지 10~30초 걸릴 수 있습니다.';
+          }
+        }
+        setTimeout(poll, total > 0 ? 1500 : 1000);
+      })
+      .catch(function() {
+        if (label) label.textContent = '상태 조회 중…';
+        if (spinner) spinner.style.display = 'inline-block';
+        if (sub) { sub.style.display = 'block'; sub.textContent = '연결 재시도 중…'; }
+        setTimeout(poll, 2000);
+      });
+  }
+  poll();
+})();
+</script>
+{% endblock %}

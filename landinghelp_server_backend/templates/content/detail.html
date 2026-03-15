@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{{ content.title_display|default:content.title }}{% endblock %}
+{% block content %}
+<article>
+  <h1>{{ content.title_display|default:content.title }}</h1>
+  {% if content.category %}<p class="meta"><span data-i18n-key="카테고리">{% trans "카테고리" %}</span>: {{ content.category }}</p>{% endif %}
+  <p class="meta"><span data-i18n-key="수정일">{% trans "수정일" %}</span>: {{ content.updated_at|date:"Y-m-d" }}</p>
+  {% if content.summary_display or content.summary %}<p class="summary">{{ content.summary_display|default:content.summary }}</p>{% endif %}
+  <div class="body">{{ content.body|linebreaks }}</div>
+</article>
+<p><a href="{% url 'content:list' %}">← <span data-i18n-key="목록으로">{% trans "목록으로" %}</span></a></p>
+{% endblock %}

@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "회원가입" %} – LifeAI US{% endblock %}
+{% block content %}
+<div class="signup-wrap" style="max-width: 900px; margin: 0 auto;" data-title-remove="{% trans '클릭하여 선택 해제' %}" data-checking="{% trans '확인 중...' %}">
+  <h2 data-i18n-key="회원가입">{% trans "회원가입" %}</h2>
+  {% if form.errors %}
+  <div class="form-errors">
+    {% for field, errors in form.errors.items %}
+      {% for error in errors %}
+        <p>{{ error }}</p>
+      {% endfor %}
+    {% endfor %}
+  </div>
+  {% endif %}
+  <div class="signup-layout" style="display: flex; gap: 2rem; flex-wrap: wrap;">
+    <div class="signup-form-col" style="flex: 1; min-width: 320px;">
+      <form method="post" action="{% url 'signup' %}" id="signupForm" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="card" style="margin-bottom: 1rem;">
+          <div class="form-group">
+            <label for="id_role" data-i18n-key="계정 유형">{% trans "계정 유형" %}</label>
+            <select name="role" id="id_role" required autofocus style="width:100%; padding:0.75rem 1rem; min-height:44px; font-size:16px; border:1px solid #ddd; border-radius:8px; margin-bottom:0; background:#fff;">
+              <option value="" data-i18n-key="선택하세요">{% trans "선택하세요" %}</option>
+              <option value="CUSTOMER" {% if form.role.value == 'CUSTOMER' %}selected{% endif %} data-i18n-key="고객 (Customer)">{% trans "고객 (Customer)" %}</option>
+              <option value="AGENT" {% if form.role.value == 'AGENT' %}selected{% endif %} data-i18n-key="에이전트 (Agent)">{% trans "에이전트 (Agent)" %}</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="id_first_name" data-i18n-key="이름">{% trans "이름" %}</label>
+            <input type="text" name="first_name" id="id_first_name" value="{{ form.first_name.value|default:'' }}" required autocomplete="given-name" maxlength="150">
+          </div>
+          <div class="form-group">
+            <label for="id_birth_date" data-i18n-key="생년월일">{% trans "생년월일" %}</label>
+            <input type="date" name="birth_date" id="id_birth_date" value="{{ form.birth_date.value|default:'' }}" required>
+          </div>
+          <div class="form-group">
+            <label for="id_gender" data-i18n-key="성별">{% trans "성별" %}</label>
+            <select name="gender" id="id_gender" style="width:100%; padding:0.75rem 1rem; min-height:44px; font-size:16px; border:1px solid #ddd; border-radius:8px; margin-bottom:0; background:#fff;">
+              <option value="" data-i18n-key="선택하세요">{% trans "선택하세요" %}</option>
+              <option value="M" {% if form.gender.value == 'M' %}selected{% endif %} data-i18n-key="남성">{% trans "남성" %}</option>
+              <option value="F" {% if form.gender.value == 'F' %}selected{% endif %} data-i18n-key="여성">{% trans "여성" %}</option>
+              <option value="O" {% if form.gender.value == 'O' %}selected{% endif %} data-i18n-key="기타">{% trans "기타" %}</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="id_preferred_language" data-i18n-key="선호 언어">{% trans "선호 언어" %}</label>
+            <select name="preferred_language" id="id_preferred_language" required style="width:100%; padding:0.75rem 1rem; min-height:44px; font-size:16px; border:1px solid #ddd; border-radius:8px; margin-bottom:0; background:#fff;">
+              <option value="ko" {% if form.preferred_language.value == 'ko' or not form.preferred_language.value %}selected{% endif %} data-i18n-key="KR 한국어">{% trans "KR 한국어" %}</option>
+              <option value="en" {% if form.preferred_language.value == 'en' %}selected{% endif %}>EN English</option>
+              <option value="es" {% if form.preferred_language.value == 'es' %}selected{% endif %}>ES Español</option>
+              <option value="zh-hans" {% if form.preferred_language.value == 'zh-hans' %}selected{% endif %}>ZH 中文(简体)</option>
+              <option value="zh-hant" {% if form.preferred_language.value == 'zh-hant' %}selected{% endif %}>ZH 中文(繁體)</option>
+              <option value="vi" {% if form.preferred_language.value == 'vi' %}selected{% endif %}>VI Tiếng Việt</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="id_username" data-i18n-key="아이디">{% trans "아이디" %}</label>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <input type="text" name="username" id="id_username" value="{{ form.username.value|default:'' }}" required autocomplete="username" maxlength="150" style="flex: 1; margin-bottom: 0;">
+              <span id="username-status" aria-live="polite"></span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="id_email" data-i18n-key="이메일">{% trans "이메일" %}</label>
+            <input type="email" name="email" id="id_email" value="{{ form.email.value|default:'' }}" required autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label for="id_phone" data-i18n-key="휴대폰 번호">{% trans "휴대폰 번호" %}</label>
+            <input type="tel" name="phone" id="id_phone" value="{{ form.phone.value|default:'' }}" autocomplete="tel" placeholder="+1 234 567 8900">
+          </div>
+          <div class="form-group">
+            <label for="id_password1" data-i18n-key="비밀번호">{% trans "비밀번호" %}</label>
+            <input type="password" name="password1" id="id_password1" required autocomplete="new-password">
+          </div>
+          <div class="form-group">
+            <label for="id_password2" data-i18n-key="비밀번호 확인">{% trans "비밀번호 확인" %}</label>
+            <input type="password" name="password2" id="id_password2" required autocomplete="new-password">
+          </div>
+        </div>
+
+        <div id="agentProfileSection" class="card" style="display: none; margin-bottom: 1rem;">
+          <h3 style="margin: 0 0 1rem; font-size: 1rem;" data-i18n-key="프로필 사진">{% trans "프로필 사진" %}</h3>
+          <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1rem;" data-i18n-key="프로필에 표시될 사진을 등록하세요.">{% trans "프로필에 표시될 사진을 등록하세요." %}</p>
+          <div class="form-group">
+            <label for="id_agent_profile_image" data-i18n-key="사진 선택">{% trans "사진 선택" %}</label>
+            <input type="file" name="agent_profile_image" id="id_agent_profile_image" accept="image/*" style="padding: 0.5rem;">
+          </div>
+        </div>
+
+        <div id="agentServicesSection" class="card" style="display: none; margin-bottom: 1rem;">
+          <h3 style="margin: 0 0 1rem; font-size: 1rem;" data-i18n-key="서비스 선택 (복수 선택)">{% trans "서비스 선택 (복수 선택)" %}</h3>
+          <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1rem;" data-i18n-key="제공할 서비스를 선택하세요.">{% trans "제공할 서비스를 선택하세요." %}</p>
+          {% if services_by_category %}
+          {% for category, items in services_by_category.items %}
+          <div style="margin-bottom: 1rem;">
+            <h4 style="font-size: 0.9rem; color: var(--color-muted); margin: 0 0 0.5rem; padding-bottom: 0.25rem; border-bottom: 1px solid #eee;">{{ category }}</h4>
+            <div class="service-cards" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+              {% for s in items %}
+              <label class="agent-service-card" data-id="{{ s.id }}" data-name="{{ s.name }}">
+                <input type="checkbox" name="agent_services" value="{{ s.id }}" style="display: none;">
+                <span class="card-name">{{ s.name }}</span>
+                <span class="card-check">✓</span>
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+          {% endfor %}
+          {% else %}
+          <p class="text-muted" data-i18n-key="등록된 서비스가 없습니다.">{% trans "등록된 서비스가 없습니다." %}</p>
+          {% endif %}
+        </div>
+
+        <div id="agentCitiesSection" class="card" style="display: none; margin-bottom: 1rem;">
+          <h3 style="margin: 0 0 1rem; font-size: 1rem;" data-i18n-key="커버 도시 (복수 선택)">{% trans "커버 도시 (복수 선택)" %}</h3>
+          <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1rem;" data-i18n-key="주(State)를 선택한 후 해당 주의 도시를 선택하세요. 여러 주에서 도시를 선택할 수 있습니다.">{% trans "주(State)를 선택한 후 해당 주의 도시를 선택하세요. 여러 주에서 도시를 선택할 수 있습니다." %}</p>
+
+          <div id="selectedCitiesPanel" class="selected-cities-panel" style="display: none; margin-bottom: 1.5rem; padding: 1rem; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+            <h4 style="margin: 0 0 0.75rem; font-size: 0.9rem; color: var(--color-primary);" data-i18n-key="선택된 도시">{% trans "선택된 도시" %}</h4>
+            <div id="selectedCitiesList"></div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label for="id_state_select" data-i18n-key="주(State) 선택">{% trans "주(State) 선택" %}</label>
+            <select id="id_state_select" style="width:100%; padding:0.75rem 1rem; min-height:44px; font-size:16px; border:1px solid #ddd; border-radius:8px; background:#fff;">
+              <option value="" data-i18n-key="주를 선택하세요">{% trans "주를 선택하세요" %}</option>
+              {% for state_code, state_data in areas_by_state.items %}
+              <option value="{{ state_code }}" data-name="{{ state_data.name }}">{{ state_code }} - {{ state_data.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div id="cityListContainer" style="margin-top: 1rem;">
+            {% for state_code, state_data in areas_by_state.items %}
+            <div class="city-group" data-state="{{ state_code }}" data-state-name="{{ state_data.name }}" style="display: none;">
+              <h4 style="font-size: 0.9rem; color: var(--color-muted); margin: 0 0 0.75rem; padding-bottom: 0.25rem; border-bottom: 1px solid #eee;">{{ state_code }} - {{ state_data.name }}</h4>
+              <div class="city-cards" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                {% for a in state_data.cities %}
+                <label class="agent-city-card" data-id="{{ a.id }}" data-name="{{ a.name }}" data-state="{{ state_code }}" data-state-name="{{ state_data.name }}">
+                  <input type="checkbox" name="agent_cities" value="{{ a.id }}" style="display: none;">
+                  <span class="card-name">{{ a.name }}</span>
+                  <span class="card-check">✓</span>
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% if not areas_by_state %}
+          <p class="text-muted" data-i18n-key="등록된 도시가 없습니다.">{% trans "등록된 도시가 없습니다." %}</p>
+          {% endif %}
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block" data-i18n-key="가입하기">{% trans "가입하기" %}</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var roleSelect = document.getElementById('id_role');
+  var agentProfileSection = document.getElementById('agentProfileSection');
+  var agentSection = document.getElementById('agentServicesSection');
+  var agentCitiesSection = document.getElementById('agentCitiesSection');
+
+  function toggleAgentUI() {
+    var isAgent = roleSelect && roleSelect.value === 'AGENT';
+    if (agentProfileSection) agentProfileSection.style.display = isAgent ? 'block' : 'none';
+    agentSection.style.display = isAgent ? 'block' : 'none';
+    if (agentCitiesSection) agentCitiesSection.style.display = isAgent ? 'block' : 'none';
+  }
+
+  if (roleSelect) {
+    roleSelect.addEventListener('change', toggleAgentUI);
+    toggleAgentUI();
+  }
+
+  document.querySelectorAll('.agent-service-card').forEach(function(card) {
+    var cb = card.querySelector('input[type="checkbox"]');
+    if (!cb) return;
+    card.addEventListener('click', function(e) {
+      e.preventDefault();
+      cb.checked = !cb.checked;
+      card.classList.toggle('selected', cb.checked);
+    });
+    cb.addEventListener('change', function() {
+      card.classList.toggle('selected', cb.checked);
+    });
+  });
+
+  var stateSelect = document.getElementById('id_state_select');
+  var cityGroups = document.querySelectorAll('.city-group');
+  if (stateSelect && cityGroups.length) {
+    stateSelect.addEventListener('change', function() {
+      var val = stateSelect.value;
+      cityGroups.forEach(function(g) {
+        g.style.display = g.dataset.state === val ? 'block' : 'none';
+      });
+    });
+  }
+
+  function updateSelectedCitiesPanel() {
+    var panel = document.getElementById('selectedCitiesPanel');
+    var listEl = document.getElementById('selectedCitiesList');
+    if (!panel || !listEl) return;
+    var cards = document.querySelectorAll('.agent-city-card');
+    var byState = {};
+    cards.forEach(function(card) {
+      var cb = card.querySelector('input[type="checkbox"]');
+      if (!cb || !cb.checked) return;
+      var state = card.dataset.state || '';
+      var stateName = card.dataset.stateName || state;
+      var id = card.dataset.id;
+      var name = card.dataset.name;
+      if (!state || !id) return;
+      if (!byState[state]) byState[state] = { name: stateName, cities: [] };
+      byState[state].cities.push({ id: id, name: name });
+    });
+    var stateCodes = Object.keys(byState).sort();
+    if (stateCodes.length === 0) {
+      panel.style.display = 'none';
+      return;
+    }
+    panel.style.display = 'block';
+    var html = '';
+    var titleRemove = (document.querySelector('.signup-wrap') && document.querySelector('.signup-wrap').getAttribute('data-title-remove')) || '클릭하여 선택 해제';
+    stateCodes.forEach(function(sc) {
+      var g = byState[sc];
+      html += '<div class="selected-state-group" style="margin-bottom: 0.75rem;">';
+      html += '<strong style="font-size: 0.85rem; color: #475569;">' + sc + ' - ' + (g.name || sc) + '</strong> ';
+      html += '<span class="selected-cities-tags">';
+      g.cities.forEach(function(c) {
+        html += '<span class="selected-city-tag" data-id="' + c.id + '" title="' + titleRemove.replace(/"/g, '&quot;') + '">' + c.name + '</span> ';
+      });
+      html += '</span></div>';
+    });
+    listEl.innerHTML = html;
+    listEl.querySelectorAll('.selected-city-tag').forEach(function(tag) {
+      tag.addEventListener('click', function() {
+        var id = tag.dataset.id;
+        var card = document.querySelector('.agent-city-card[data-id="' + id + '"]');
+        if (card) {
+          var cb = card.querySelector('input[type="checkbox"]');
+          if (cb) { cb.checked = false; card.classList.remove('selected'); updateSelectedCitiesPanel(); }
+        }
+      });
+    });
+  }
+
+  document.querySelectorAll('.agent-city-card').forEach(function(card) {
+    var cb = card.querySelector('input[type="checkbox"]');
+    if (!cb) return;
+    card.addEventListener('click', function(e) {
+      e.preventDefault();
+      cb.checked = !cb.checked;
+      card.classList.toggle('selected', cb.checked);
+      updateSelectedCitiesPanel();
+    });
+    cb.addEventListener('change', function() {
+      card.classList.toggle('selected', cb.checked);
+      updateSelectedCitiesPanel();
+    });
+  });
+
+  var input = document.getElementById('id_username');
+  var status = document.getElementById('username-status');
+  var timer = null;
+  if (input && status) {
+    var checkingLabel = (document.querySelector('.signup-wrap') && document.querySelector('.signup-wrap').getAttribute('data-checking')) || '확인 중...';
+    function check() {
+      var val = (input.value || '').trim();
+      status.textContent = '';
+      status.className = '';
+      if (val.length < 2) return;
+      status.textContent = checkingLabel;
+      status.className = 'username-checking';
+      fetch('/api/check-username/?username=' + encodeURIComponent(val))
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+          if (data.available === true) { status.textContent = '\u2713'; status.className = 'username-ok'; }
+          else if (data.available === false) { status.textContent = '\u2717'; status.className = 'username-dup'; }
+          else { status.textContent = ''; status.className = ''; }
+        })
+        .catch(function(){ status.textContent = ''; status.className = ''; });
+    }
+    input.addEventListener('blur', function(){ if ((input.value||'').trim().length>=2) check(); });
+    input.addEventListener('input', function(){
+      clearTimeout(timer);
+      var val = (input.value||'').trim();
+      if (val.length < 2) { status.textContent = ''; status.className = ''; return; }
+      timer = setTimeout(check, 400);
+    });
+  }
+})();
+</script>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .username-ok { color: #16a34a; font-size: 1.25rem; }
+  .username-dup { color: #dc2626; font-size: 1.25rem; }
+  .username-checking { color: #94a3b8; font-size: 0.9rem; }
+  .agent-service-card {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.5rem 0.85rem; background: #fff; border: 2px solid #ddd;
+    border-radius: 8px; cursor: pointer; font-size: 0.9rem; transition: all 0.2s;
+  }
+  .agent-service-card .card-check {
+    display: none; font-weight: bold; color: var(--color-primary); font-size: 1em;
+  }
+  .agent-service-card.selected .card-check { display: inline; }
+  .agent-service-card:hover { border-color: var(--color-primary); background: #f8fafc; box-shadow: 0 2px 6px rgba(37,99,235,0.15); }
+  .agent-service-card.selected {
+    border-color: var(--color-primary); background: #eff6ff;
+    box-shadow: 0 0 0 2px rgba(37,99,235,0.2);
+  }
+  .agent-city-card {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.5rem 0.85rem; background: #fff; border: 2px solid #ddd;
+    border-radius: 8px; cursor: pointer; font-size: 0.9rem; transition: all 0.2s;
+  }
+  .agent-city-card .card-check { display: none; font-weight: bold; color: var(--color-primary); font-size: 1em; }
+  .agent-city-card.selected .card-check { display: inline; }
+  .agent-city-card:hover { border-color: var(--color-primary); background: #f8fafc; box-shadow: 0 2px 6px rgba(37,99,235,0.15); }
+  .agent-city-card.selected { border-color: var(--color-primary); background: #eff6ff; box-shadow: 0 0 0 2px rgba(37,99,235,0.2); }
+  .selected-city-tag {
+    display: inline-block; padding: 0.25rem 0.5rem; margin: 0.15rem 0.15rem 0 0;
+    background: var(--color-primary); color: #fff; border-radius: 6px;
+    font-size: 0.8rem; cursor: pointer;
+  }
+  .selected-city-tag:hover { opacity: 0.85; }
+</style>
+{% endblock %}

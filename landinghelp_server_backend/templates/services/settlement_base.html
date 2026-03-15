@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block body_class %}page-settlement{% endblock %}
+{% block below_nav %}
+<nav class="settlement-sub-nav" style="background:var(--color-bg);border-bottom:1px solid var(--color-border);padding:0.75rem 0;">
+  <div class="container" style="display:flex;flex-wrap:wrap;gap:0.5rem;">
+    <a href="{% url 'settlement_services' %}" class="{% if request.resolver_match.url_name == 'settlement_services' %}active{% endif %}" style="padding:0.5rem 0.75rem;text-decoration:none;color:var(--color-muted);border-radius:var(--radius);">{{ settlement_nav.nav_settlement|default:'정착서비스' }}</a>
+    <a href="{% url 'settlement_intro' %}" class="{% if request.resolver_match.url_name == 'settlement_intro' %}active{% endif %}" style="padding:0.5rem 0.75rem;text-decoration:none;color:var(--color-muted);border-radius:var(--radius);">{{ settlement_nav.nav_intro|default:'정착 서비스 소개' }}</a>
+    {% if user.is_authenticated and user.role == 'AGENT' %}
+    <a href="{% url 'app_agent_appointments' %}" class="{% if request.resolver_match.url_name == 'app_agent_appointments' %}active{% endif %}" style="padding:0.5rem 0.75rem;text-decoration:none;color:var(--color-muted);border-radius:var(--radius);">{{ settlement_nav.nav_calendar|default:'고객예약 달력' }}</a>
+    {% elif not user.is_authenticated or user.role == 'CUSTOMER' %}
+    <a href="{% url 'survey:survey_start' %}" class="{% if request.resolver_match.url_name == 'survey_start' %}active{% endif %}" style="padding:0.5rem 0.75rem;text-decoration:none;color:var(--color-muted);border-radius:var(--radius);">{{ settlement_nav.nav_survey|default:'정착 설문' }}</a>
+    {% elif user.is_staff %}
+    <a href="{% url 'app_submission_review_list' %}" class="{% if request.resolver_match.url_name == 'app_submission_review_list' or request.resolver_match.url_name == 'app_submission_review' %}active{% endif %}" style="padding:0.5rem 0.75rem;text-decoration:none;color:var(--color-muted);border-radius:var(--radius);">{% trans "고객 설문 확인 요청" %}</a>
+    {% else %}
+    <a href="{% url 'settlement_quote' %}" class="{% if request.resolver_match.url_name == 'settlement_quote' %}active{% endif %}" style="padding:0.5rem 0.75rem;text-decoration:none;color:var(--color-muted);border-radius:var(--radius);">{{ settlement_nav.nav_plan|default:'정착 플랜' }}</a>
+    {% endif %}
+    <a href="{% url 'settlement_reviews' %}" class="{% if request.resolver_match.url_name == 'settlement_reviews' %}active{% endif %}" style="padding:0.5rem 0.75rem;text-decoration:none;color:var(--color-muted);border-radius:var(--radius);">{{ settlement_nav.nav_reviews|default:'고객 후기' }}</a>
+    <a href="{% url 'settlement_cost_estimate' %}" class="{% if request.resolver_match.url_name == 'settlement_cost_estimate' %}active{% endif %}" style="padding:0.5rem 0.75rem;text-decoration:none;color:var(--color-muted);border-radius:var(--radius);">{{ settlement_nav.nav_cost_estimate|default:'셀프 정착 비용 예상' }}</a>
+  </div>
+</nav>
+{% endblock %}
+{% block content %}
+<style>
+.settlement-sub-nav a:hover { color:var(--color-primary); background:rgba(37,99,235,0.08); }
+.settlement-sub-nav a.active { color:var(--color-primary); font-weight:600; }
+body.page-settlement .main-content { padding-top: 0; }
+</style>
+{% block settlement_content %}{% endblock %}
+{% endblock %}

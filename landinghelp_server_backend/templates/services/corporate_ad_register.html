@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}광고 등록 – 기업서비스 – LifeAI US{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>광고 등록</h1>
+  <p class="text-muted">사이트 하단 광고 캐러셀에 기업 광고를 등록할 수 있습니다. 신청 후 검토하여 연락드립니다.</p>
+
+  {% if messages %}
+  <ul style="list-style:none;padding:0;color:#059669;">
+    {% for m in messages %}<li>{{ m }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  <form method="post" style="margin-top:1.5rem;">
+    {% csrf_token %}
+    <div class="form-group">
+      <label>회사/업체명 *</label>
+      {{ form.company_name }}
+      {% if form.company_name.errors %}<span class="form-errors">{{ form.company_name.errors.0 }}</span>{% endif %}
+    </div>
+    <div class="form-group">
+      <label>담당자명 *</label>
+      {{ form.contact_name }}
+      {% if form.contact_name.errors %}<span class="form-errors">{{ form.contact_name.errors.0 }}</span>{% endif %}
+    </div>
+    <div class="form-group">
+      <label>이메일 *</label>
+      {{ form.email }}
+      {% if form.email.errors %}<span class="form-errors">{{ form.email.errors.0 }}</span>{% endif %}
+    </div>
+    <div class="form-group">
+      <label>연락처</label>
+      {{ form.phone }}
+    </div>
+    <div class="form-group">
+      <label>광고 제목 *</label>
+      {{ form.ad_title }}
+      {% if form.ad_title.errors %}<span class="form-errors">{{ form.ad_title.errors.0 }}</span>{% endif %}
+    </div>
+    <div class="form-group">
+      <label>광고 부제목</label>
+      {{ form.ad_subtitle }}
+    </div>
+    <div class="form-group">
+      <label>링크 URL *</label>
+      {{ form.link_url }}
+      <p class="text-muted" style="font-size:0.85rem;margin-top:0.25rem;">광고 클릭 시 이동할 웹사이트 주소</p>
+      {% if form.link_url.errors %}<span class="form-errors">{{ form.link_url.errors.0 }}</span>{% endif %}
+    </div>
+    <div class="form-group">
+      <label>추가 요청사항</label>
+      {{ form.memo }}
+    </div>
+    <button type="submit" class="btn btn-primary">신청하기</button>
+    <a href="{% url 'corporate_services' %}" class="btn btn-outline" style="margin-left:0.5rem;">목록으로</a>
+  </form>
+</section>
+{% endblock %}

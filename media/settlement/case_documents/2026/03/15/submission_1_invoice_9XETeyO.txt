@@ -1,0 +1,5 @@
+Document Type: INVOICE
+Submission ID: 1
+Customer Email: accept_customer@test.com
+Quote ID: 1
+Quote Total: 1200

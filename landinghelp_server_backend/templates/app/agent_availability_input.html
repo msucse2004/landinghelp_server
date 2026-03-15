@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "가용 시간 입력" %} – LifeAI US{% endblock %}
+{% block content %}
+<style>
+  .avail-page { max-width: 900px; margin: 0 auto; }
+  .avail-grid-wrap { overflow-x: auto; margin: 1rem 0; }
+  .avail-grid { display: grid; grid-template-columns: 60px repeat(7, 1fr); border: 1px solid var(--color-border); border-radius: var(--radius); font-size: 0.85rem; }
+  .avail-cell { min-width: 44px; min-height: 28px; border-right: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); padding: 2px; }
+  .avail-cell.header { background: #f1f5f9; font-weight: 600; text-align: center; }
+  .avail-cell.slot { cursor: pointer; background: #f8fafc; }
+  .avail-cell.slot.selected { background: #86efac; }
+  .avail-cell.slot:hover { background: #e2e8f0; }
+  .avail-cell.slot.selected:hover { background: #4ade80; }
+  .avail-actions { margin-top: 1rem; }
+</style>
+<div class="container avail-page">
+  <div class="card">
+    <h1 style="margin-top: 0;">{% trans "가용 시간 입력" %}</h1>
+    {% if error == 'invalid_link' %}
+    <p class="text-danger">{% trans "유효하지 않은 링크입니다. 메시지함의 링크를 사용해 주세요." %}</p>
+    {% elif error == 'invalid_or_expired' %}
+    <p class="text-danger">{% trans "링크가 만료되었거나 본인만 접근할 수 있는 페이지입니다. 로그인 후 다시 시도해 주세요." %}</p>
+    {% else %}
+    <p class="text-muted">{% trans "가능한 시간대를 클릭해 선택하세요. 여러 번 수정하여 제출할 수 있습니다." %}</p>
+
+    <div class="avail-grid-wrap">
+      <div id="availGrid" class="avail-grid"></div>
+    </div>
+    <div class="avail-actions">
+      <button type="button" id="btnSubmit" class="btn btn-primary">{% trans "제출" %}</button>
+      <span id="availStatus" style="margin-left: 0.5rem; font-size: 0.9rem; color: var(--color-muted);"></span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if not error %}
+<form style="display:none;" id="tokenForm">{% csrf_token %}<input type="hidden" name="token" value="{{ request.GET.token|default:'' }}"></form>
+<script>
+(function() {
+  var existing = {{ existing_slots_json|safe }};
+  var planId = {{ plan.id }};
+  var startDate = new Date();
+  startDate.setHours(0,0,0,0);
+  var days = 14;
+  var firstHour = 8;
+  var lastHour = 21;
+
+  function pad(n) { return n < 10 ? '0' + n : n; }
+  function dateStr(d) { return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }
+
+  var selected = {};
+  existing.forEach(function(s) {
+    var key = s.date + 'T' + s.start_hour;
+    selected[key] = true;
+  });
+
+  var grid = document.getElementById('availGrid');
+  if (!grid) return;
+
+  function render() {
+    grid.innerHTML = '';
+    var headerRow = document.createElement('div');
+    headerRow.style.display = 'contents';
+    var empty = document.createElement('div');
+    empty.className = 'avail-cell header';
+    headerRow.appendChild(empty);
+    for (var i = 0; i < days; i++) {
+      var d = new Date(startDate);
+      d.setDate(d.getDate() + i);
+      var cell = document.createElement('div');
+      cell.className = 'avail-cell header';
+      cell.textContent = (d.getMonth()+1) + '/' + d.getDate();
+      headerRow.appendChild(cell);
+    }
+    grid.appendChild(headerRow);
+
+    for (var h = firstHour; h < lastHour; h++) {
+      var row = document.createElement('div');
+      row.style.display = 'contents';
+      var timeCell = document.createElement('div');
+      timeCell.className = 'avail-cell header';
+      timeCell.textContent = pad(h) + ':00';
+      row.appendChild(timeCell);
+      for (var i = 0; i < days; i++) {
+        var d = new Date(startDate);
+        d.setDate(d.getDate() + i);
+        var key = dateStr(d) + 'T' + h;
+        var cell = document.createElement('div');
+        cell.className = 'avail-cell slot' + (selected[key] ? ' selected' : '');
+        cell.dataset.date = dateStr(d);
+        cell.dataset.hour = h;
+        cell.dataset.key = key;
+        cell.addEventListener('click', function() {
+          var k = this.dataset.key;
+          selected[k] = !selected[k];
+          this.classList.toggle('selected', selected[k]);
+        });
+        row.appendChild(cell);
+      }
+      grid.appendChild(row);
+    }
+  }
+
+  document.getElementById('btnSubmit').addEventListener('click', function() {
+    var windows = [];
+    for (var k in selected) {
+      if (!selected[k]) continue;
+      var parts = k.split('T');
+      if (parts.length !== 2) continue;
+      windows.push({ date: parts[0], start_hour: parseInt(parts[1], 10), end_hour: parseInt(parts[1], 10) + 1 });
+    }
+    var statusEl = document.getElementById('availStatus');
+    statusEl.textContent = '제출 중...';
+    var form = document.getElementById('tokenForm');
+    var token = form && form.querySelector('input[name=token]') ? form.querySelector('input[name=token]').value : '';
+    var csrf = document.querySelector('[name=csrfmiddlewaretoken]') ? document.querySelector('[name=csrfmiddlewaretoken]').value : '';
+    fetch('/agent/availability/' + planId + '/submit/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+      body: JSON.stringify({ windows: windows, token: token }),
+      credentials: 'same-origin',
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      statusEl.textContent = data.ok ? (data.message || '저장됨.') : (data.error || '실패');
+      statusEl.style.color = data.ok ? 'var(--color-muted)' : '#b91c1c';
+    })
+    .catch(function() { statusEl.textContent = '오류'; statusEl.style.color = '#b91c1c'; });
+  });
+
+  render();
+})();
+</script>
+{% endif %}
+{% endblock %}

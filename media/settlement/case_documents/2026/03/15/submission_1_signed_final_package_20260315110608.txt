@@ -1,0 +1,14 @@
+Document Type: SIGNED_FINAL_PACKAGE
+Submission ID: 1
+Customer Email: it_customer@test.com
+Generated At: 2026-03-15T11:06:08.364931+00:00
+
+[Source Documents]
+- doc_id=1 type=INVOICE version=1 status=GENERATED
+- doc_id=2 type=CONSENT_FORM version=1 status=GENERATED
+- doc_id=3 type=POWER_OF_ATTORNEY version=1 status=GENERATED
+
+[Signatures]
+- signature_id=1 doc_id=2 signer_role=CUSTOMER signer_id=4 signed_at=2026-03-15T11:06:08.299293+00:00
+- signature_id=2 doc_id=3 signer_role=CUSTOMER signer_id=4 signed_at=2026-03-15T11:06:08.317989+00:00
+- signature_id=3 doc_id=1 signer_role=INTERNAL signer_id=1 signed_at=2026-03-15T11:06:08.331994+00:00

@@ -1,0 +1,44 @@
+# Spanish
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: es\n"
+
+msgid "로그아웃"
+msgstr "Cerrar sesión"
+
+msgid "로그인"
+msgstr "Iniciar sesión"
+
+msgid "회원가입"
+msgstr "Registrarse"
+
+msgid "플랜"
+msgstr "Plan"
+
+msgid "메시지 함"
+msgstr "Mensajes"
+
+msgid "정착서비스"
+msgstr "Servicios de asentamiento"
+
+msgid "기업서비스"
+msgstr "Servicios corporativos"
+
+msgid "지역 게시판"
+msgstr "Comunidad"
+
+msgid "관리"
+msgstr "Administrar"
+
+msgid "새 메시지가 도착했습니다"
+msgstr "Tienes nuevos mensajes"
+
+msgid "닫기"
+msgstr "Cerrar"
+
+msgid "메시지함으로 이동"
+msgstr "Ir a mensajes"
+
+msgid "읽지 않은 메시지 %(count)s건이 있습니다. 메시지함에서 확인하세요."
+msgstr "Tienes %(count)s mensaje(s) sin leer. Revisa tu bandeja de entrada."

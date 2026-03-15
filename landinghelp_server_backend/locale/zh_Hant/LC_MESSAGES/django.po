@@ -1,0 +1,59 @@
+# Chinese Traditional
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh-Hant\n"
+
+msgid "로그아웃"
+msgstr "登出"
+
+msgid "로그인"
+msgstr "登入"
+
+msgid "회원가입"
+msgstr "註冊"
+
+msgid "플랜"
+msgstr "方案"
+
+msgid "메시지 함"
+msgstr "訊息"
+
+msgid "정착서비스"
+msgstr "安家服務"
+
+msgid "기업서비스"
+msgstr "企業服務"
+
+msgid "지역 게시판"
+msgstr "社區"
+
+msgid "관리"
+msgstr "管理"
+
+msgid "새 메시지가 도착했습니다"
+msgstr "您有新訊息"
+
+msgid "닫기"
+msgstr "關閉"
+
+msgid "메시지함으로 이동"
+msgstr "前往訊息"
+
+msgid "읽지 않은 메시지 %(count)s건이 있습니다. 메시지함에서 확인하세요."
+msgstr "您有 %(count)s 則未讀訊息，請在收件匣中查看。"
+
+msgid "아이디와 비밀번호를 확인해주세요."
+msgstr "請檢查您的用戶名和密碼。"
+
+msgid "아이디"
+msgstr "用戶名"
+
+msgid "비밀번호"
+msgstr "密碼"
+
+msgid "아이디 찾기"
+msgstr "找回用戶名"
+
+msgid "비밀번호 찾기"
+msgstr "找回密碼"
